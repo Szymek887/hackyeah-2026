@@ -4,19 +4,20 @@ import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { filterRequestsAlongRoute } from '@/features/commute/route-matching';
-import { KRAKOW_COMMUTE_ROUTE, KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
-import { useNearbyRequests } from '@/features/requests/hooks';
+import { KRAKOW_COMMUTE_LINE } from '@/features/map/krakow-map-data';
+import { useRequestsAlongRoute } from '@/features/requests/hooks';
 
 import { LeafletMap } from '../map/leaflet-map';
 
 export function RoutePlannerScreen() {
-  const { data: requests = [] } = useNearbyRequests({
-    lat: KRAKOW_INITIAL_REGION.latitude,
-    lng: KRAKOW_INITIAL_REGION.longitude,
-    radiusKm: 5,
+  const {
+    data: matchingRequests = [],
+    isPending,
+    error,
+  } = useRequestsAlongRoute({
+    route: KRAKOW_COMMUTE_LINE,
+    bufferMeters: 450,
   });
-  const matchingRequests = filterRequestsAlongRoute(requests, KRAKOW_COMMUTE_ROUTE, 450);
 
   return (
     <Screen scroll>
@@ -29,19 +30,19 @@ export function RoutePlannerScreen() {
 
       <LeafletMap
         matchingRequests={matchingRequests}
-        requests={requests}
+        requests={matchingRequests}
         showAreas={false}
         showRouteBuffer
       />
 
       <Card highlighted>
-        <ThemedText type="smallBold">
-          W korytarzu 450 m: {matchingRequests.length}/{requests.length}
-        </ThemedText>
+        <ThemedText type="smallBold">W korytarzu 450 m: {matchingRequests.length}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          To jest frontendowy fallback na mockach, dopóki backend nie wystawi endpointu wzdłuż
-          trasy.
+          Na mockach filtr działa po stronie frontendu, a z backendem używa PostGIS endpointu
+          /api/help-requests/along-route.
         </ThemedText>
+        {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
+        {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
       </Card>
     </Screen>
   );

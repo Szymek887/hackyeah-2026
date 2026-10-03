@@ -6,9 +6,9 @@ import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { filterRequestsAlongRoute } from '@/features/commute/route-matching';
 import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
+import { filterRequestsAlongRoute } from '@/lib/route-matching';
 import {
   KRAKOW_CENTER_GEOJSON,
   KRAKOW_COMMUTE_ROUTE,

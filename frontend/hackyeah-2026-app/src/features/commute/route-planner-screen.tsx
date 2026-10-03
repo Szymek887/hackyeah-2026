@@ -5,10 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Spacing } from '@/constants/theme';
-import { filterRequestsAlongRoute } from '@/features/commute/route-matching';
-import { useNearbyRequests } from '@/features/requests/hooks';
+import { useRequestsAlongRoute } from '@/features/requests/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  KRAKOW_COMMUTE_LINE,
   KRAKOW_COMMUTE_ROUTE,
   KRAKOW_INITIAL_REGION,
   KRAKOW_ROUTE_BUFFER,
@@ -18,12 +18,14 @@ import {
 export function RoutePlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { data: requests = [] } = useNearbyRequests({
-    lat: KRAKOW_INITIAL_REGION.latitude,
-    lng: KRAKOW_INITIAL_REGION.longitude,
-    radiusKm: 5,
+  const {
+    data: matchingRequests = [],
+    isPending,
+    error,
+  } = useRequestsAlongRoute({
+    route: KRAKOW_COMMUTE_LINE,
+    bufferMeters: 450,
   });
-  const matchingRequests = filterRequestsAlongRoute(requests, KRAKOW_COMMUTE_ROUTE, 450);
 
   return (
     <ThemedView style={styles.root}>
@@ -59,9 +61,10 @@ export function RoutePlannerScreen() {
         <ThemedView type="backgroundElement" style={styles.summary}>
           <ThemedText type="smallBold">Test korytarza trasy</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Niebieski obszar to bufor do filtrowania zgłoszeń po drodze. Pasujące:{' '}
-            {matchingRequests.length}/{requests.length}.
+            Niebieski obszar to bufor 450 m. Pasujące zgłoszenia: {matchingRequests.length}.
           </ThemedText>
+          {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
+          {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
         </ThemedView>
       </View>
     </ThemedView>
