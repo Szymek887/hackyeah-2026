@@ -119,3 +119,41 @@ Content-Type: application/json
         client.assert(response.status === 400, "Expected status 400");
     });
 %}
+
+### Format transcript: messy dictation from a senior
+POST {{host}}/api/requests/format-transcript
+Content-Type: application/json
+
+{
+  "transcript": "dzień dobry yyy no bo ja bym chciała żeby ktoś mi kupił chleb i mleko i jeszcze masło we wtorek nie nie we wtorek w środę bo wie pani ja nie wychodzę z domu od kiedy mi kolano wysiadło"
+}
+
+> {%
+    client.test("Transcript is formatted", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.title.length > 0 && response.body.title.length <= 120, "Expected a short title");
+        client.assert(response.body.description.length > 0, "Expected a description");
+    });
+%}
+
+### Format transcript: personal data is left out
+POST {{host}}/api/requests/format-transcript
+Content-Type: application/json
+
+{
+  "transcript": "halo potrzebuję pomocy z wypełnieniem wniosku do ZUS mój telefon to 600 123 456 mieszkam na Długiej 5"
+}
+
+### Format transcript: validation error (blank transcript)
+POST {{host}}/api/requests/format-transcript
+Content-Type: application/json
+
+{
+  "transcript": " "
+}
+
+> {%
+    client.test("Blank transcript is rejected", function () {
+        client.assert(response.status === 400, "Expected status 400");
+    });
+%}

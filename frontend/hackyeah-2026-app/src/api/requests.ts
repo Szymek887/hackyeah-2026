@@ -8,6 +8,8 @@ import type {
   AlongRouteQuery,
   ClassifyRequestDto,
   CreateHelpRequestDto,
+  FormatTranscriptDto,
+  FormattedRequest,
   HandoffToken,
   HelpRequestFull,
   HelpRequestListItem,
@@ -39,6 +41,10 @@ export const getMyRequests = () => apiRequest<HelpRequestView[]>(`${BASE}/mine`)
 /** AI preview for the form; nothing is saved. */
 export const classifyRequest = (dto: ClassifyRequestDto) =>
   apiRequest<AiClassification>('/api/requests/classify', { method: 'POST', body: dto });
+
+/** AI rewrite of a dictated request into a title and description; nothing is saved. */
+export const formatTranscript = (dto: FormatTranscriptDto) =>
+  apiRequest<FormattedRequest>('/api/requests/format-transcript', { method: 'POST', body: dto });
 
 /** Category, priority and tags are set by the backend. Suspected scams start as UNDER_REVIEW. */
 export const createRequest = (dto: CreateHelpRequestDto) =>

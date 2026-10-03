@@ -10,9 +10,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClassificationController {
 
     private final RequestClassificationService classificationService;
+    private final TranscriptFormattingService formattingService;
 
-    public ClassificationController(RequestClassificationService classificationService) {
+    public ClassificationController(
+            RequestClassificationService classificationService,
+            TranscriptFormattingService formattingService
+    ) {
         this.classificationService = classificationService;
+        this.formattingService = formattingService;
     }
 
     /**
@@ -21,5 +26,14 @@ public class ClassificationController {
     @PostMapping("/api/requests/classify")
     public RequestClassification classify(@Valid @RequestBody ClassificationInput input) {
         return classificationService.classify(input);
+    }
+
+    /**
+     * Rewrites a dictated request (speech-to-text) into a title and description for the request form.
+     * Nothing is saved; the person reviews the text before submitting.
+     */
+    @PostMapping("/api/requests/format-transcript")
+    public FormattedRequest formatTranscript(@Valid @RequestBody TranscriptInput input) {
+        return formattingService.format(input);
     }
 }
