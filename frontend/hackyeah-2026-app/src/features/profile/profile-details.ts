@@ -1,8 +1,10 @@
 import type { Category } from '@/api/types';
+import type { DisabilityType } from '@/features/accessibility/accessibility-settings';
 
 /**
  * Self-description shown on the profile. Client-only: the backend has no such fields yet
- * (TODO(backend): add to `UserProfileResponse`). Kept in the session, lost on logout.
+ * (TODO(backend): add to `UserProfileResponse`). Kept per user in the session (and in
+ * `localStorage` on web).
  */
 export type ProfileDetails = {
   about: string;
@@ -10,7 +12,9 @@ export type ProfileDetails = {
   availability: string;
   /** Requester: what they usually need. Volunteer: what they can help with. */
   helpTopics: Category[];
-  /** Accessibility notes for the volunteer. */
+  /** Declared disabilities / special needs (sign-up or profile). */
+  disabilities: DisabilityType[];
+  /** Extra needs described in the person's own words, for the volunteer. */
   accessibilityNotes: string;
 };
 
@@ -19,5 +23,6 @@ export const emptyProfileDetails: ProfileDetails = {
   district: '',
   availability: '',
   helpTopics: [],
+  disabilities: [],
   accessibilityNotes: '',
 };

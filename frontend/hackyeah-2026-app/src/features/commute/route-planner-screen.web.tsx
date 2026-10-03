@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import {
   formatRouteCoordinate,
   formatRouteDistance,
@@ -18,6 +18,7 @@ import {
   toRouteLineString,
 } from '@/features/commute/route-geometry';
 import { useDrivingRoute } from '@/features/commute/hooks';
+import { useTheme } from '@/hooks/use-theme';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { useUserLocation } from '@/features/map/use-user-location';
 import { KRAKOW_COMMUTE_ROUTE } from '@/features/map/krakow-map-data';
@@ -31,6 +32,7 @@ const DEFAULT_START = KRAKOW_COMMUTE_ROUTE[0];
 const DEFAULT_END = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
 
 export function RoutePlannerScreen() {
+  const theme = useTheme();
   const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
   const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
 
@@ -86,6 +88,9 @@ export function RoutePlannerScreen() {
       durationSeconds: drivingRoute?.durationSeconds ?? 0,
       isActive: true,
     });
+    // The map tab reads the same store, so the new route is already drawn there.
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
   };
 
   return (
@@ -114,11 +119,12 @@ export function RoutePlannerScreen() {
           <View style={styles.endpointRow}>
             <ThemedText type="small">A: {formatRouteCoordinate(start)}</ThemedText>
             <Pressable
+              accessibilityRole="button"
               onPress={setStartToUserLocation}
               disabled={isLocating}
               style={({ pressed }) => [styles.myLocationBtn, pressed && styles.pressed]}>
-              <ThemedText type="caption" style={{ color: Colors.light.primary, fontWeight: '700' }}>
-                {isLocating ? 'Pobieram...' : '🎯 Użyj mojej pozycji jako Start'}
+              <ThemedText type="smallBold" style={{ color: theme.primary }}>
+                {isLocating ? 'Pobieram...' : '🎯 Użyj mojej pozycji jako start'}
               </ThemedText>
             </Pressable>
           </View>
@@ -132,17 +138,10 @@ export function RoutePlannerScreen() {
 
         <View style={styles.actions}>
           <Button
-            title={isRouteConfirmed ? '✓ Trasa zapisana (aktywna)' : 'Zatwierdź trasę'}
-            disabled={isRouting || isPending}
+            title="Zapisz trasę i pokaż na mapie"
+            disabled={isRouting}
             onPress={handleConfirmRoute}
           />
-          {isRouteConfirmed && (
-            <Button
-              title="Wróć do mapy z tą trasą"
-              variant="secondary"
-              onPress={() => router.push('/(tabs)')}
-            />
-          )}
           <Button title="Przywróć trasę demo" variant="ghost" inline onPress={resetRoute} />
         </View>
 
@@ -163,6 +162,7 @@ export function RoutePlannerScreen() {
       <LeafletMap
         matchingRequests={matchingRequests}
         requests={matchingRequests}
+        height={480}
         showAreas={false}
         showRouteBuffer
         editableRoute
@@ -178,7 +178,7 @@ export function RoutePlannerScreen() {
         <ThemedText type="small" themeColor="textSecondary">
           {isRouteConfirmed
             ? 'Trasa jest aktywna – te zgłoszenia możesz obsłużyć po drodze.'
-            : 'Zatwierdź trasę, żeby zapisać ją na mapie głównej i przejść do wyboru zgłoszenia.'}
+            : 'Zapisz trasę – pojawi się na mapie głównej razem ze zgłoszeniami po drodze.'}
         </ThemedText>
         {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
         {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
@@ -229,7 +229,8 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   myLocationBtn: {
-    paddingVertical: 2,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: Spacing.one,
   },
   pressed: {

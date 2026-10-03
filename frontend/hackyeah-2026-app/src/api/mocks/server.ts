@@ -28,6 +28,7 @@ import type {
   RatingResult,
   RequestStatus,
   UserProfile,
+  UpdateLanguagesDto,
   UserSummary,
   ViewerRole,
 } from '@/api/types';
@@ -68,6 +69,11 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
   ['GET', /^\/api\/users\/demo$/, () => demoAccounts()],
   ['POST', /^\/api\/users$/, ({ req }) => createUser(req.body as CreateUserDto)],
   ['GET', /^\/api\/users\/me$/, ({ req }) => currentUser(req)],
+  [
+    'PUT',
+    /^\/api\/users\/me\/languages$/,
+    ({ req }) => updateLanguages(currentUser(req), req.body as UpdateLanguagesDto),
+  ],
   ['GET', /^\/api\/help-requests\/nearby$/, ({ req }) => nearby(req.query)],
   ['POST', /^\/api\/help-requests\/along-route$/, ({ req }) => alongRoute(req.body)],
   [
@@ -172,8 +178,31 @@ function createUser(body: CreateUserDto): UserProfile {
     ratingCount: 0,
     ratingAverage: null,
     cityPoints: 0,
+    languages: body.languages ? normalizeLanguages(body.languages) : ['pl'],
   };
   users.push(user);
+  return user;
+}
+
+// SpokenLanguages.normalize: trimmed, lower-case, de-duplicated 2-letter codes, max 10.
+const MAX_LANGUAGES = 10;
+
+function normalizeLanguages(codes: string[]) {
+  const normalized = [...new Set(codes.map((code) => (code ?? '').trim().toLowerCase()))];
+  const unknown = normalized.find((code) => !/^[a-z]{2}$/.test(code));
+  if (unknown !== undefined) throw badRequest(`Unknown language code: ${unknown}`);
+  if (normalized.length > MAX_LANGUAGES)
+    throw badRequest(`At most ${MAX_LANGUAGES} languages are allowed`);
+  return normalized.sort();
+}
+
+function updateLanguages(user: UserProfile, body: UpdateLanguagesDto) {
+  const languages = body?.languages;
+  if (!Array.isArray(languages) || languages.length < 1 || languages.length > MAX_LANGUAGES)
+    throw new ApiError(400, 'Request validation failed', {
+      languages: `size must be between 1 and ${MAX_LANGUAGES}`,
+    });
+  user.languages = normalizeLanguages(languages);
   return user;
 }
 
@@ -202,8 +231,9 @@ const publicTitle = (r: MockHelpRequest) =>
 function summaryOf(userId: number | null): UserSummary | null {
   const user = users.find((u) => u.id === userId);
   if (!user) return null;
-  const { id, displayName, trustScore, identityVerified, ratingAverage, ratingCount } = user;
-  return { id, displayName, trustScore, identityVerified, ratingAverage, ratingCount };
+  const { id, displayName, trustScore, identityVerified, ratingAverage, ratingCount, languages } =
+    user;
+  return { id, displayName, trustScore, identityVerified, ratingAverage, ratingCount, languages };
 }
 
 /** LocationObfuscationService: 300 m grid cell containing the point. */

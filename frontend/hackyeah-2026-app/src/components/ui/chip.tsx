@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useTheme } from '@/hooks/use-theme';
 
 type ChipProps = {
@@ -17,6 +18,7 @@ type ChipProps = {
 /** Selectable pill used for categories and other short option lists. */
 export function Chip({ label, selected, onPress, hint, mode = 'radio' }: ChipProps) {
   const theme = useTheme();
+  const { minTouchSize } = useAccessibility();
 
   return (
     <Pressable
@@ -27,6 +29,7 @@ export function Chip({ label, selected, onPress, hint, mode = 'radio' }: ChipPro
         const { hovered } = state as typeof state & { hovered?: boolean };
         return [
           styles.chip,
+          { minHeight: minTouchSize - 4 },
           {
             borderColor: selected ? theme.primary : theme.border,
             backgroundColor: selected

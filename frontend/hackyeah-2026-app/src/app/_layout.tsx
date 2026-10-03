@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { ThemedView } from '@/components/themed-view';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useAuth } from '@/features/auth/session-context';
 import { useTheme } from '@/hooks/use-theme';
 import { AppProviders } from '@/providers/app-providers';
@@ -17,6 +18,7 @@ export default function RootLayout() {
 function RootNavigator() {
   const { status, user } = useAuth();
   const theme = useTheme();
+  const { settings } = useAccessibility();
 
   if (status === 'restoring') {
     return (
@@ -35,7 +37,7 @@ function RootNavigator() {
       screenOptions={{
         headerBackButtonDisplayMode: 'minimal',
         headerShadowVisible: false,
-        animation: 'slide_from_right',
+        animation: settings.reduceMotion ? 'none' : 'slide_from_right',
         animationDuration: 250,
         contentStyle: { backgroundColor: theme.background },
       }}>

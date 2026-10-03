@@ -6,17 +6,30 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { CategoryColors, Spacing } from '@/constants/theme';
+import { DisabilityLabels } from '@/features/accessibility/accessibility-settings';
+import { languageName } from '@/features/profile/languages';
 import { CategoryLabels } from '@/features/requests/labels';
+import { useTheme } from '@/hooks/use-theme';
 
 /** Read-only view of who the person is and what they need / offer. */
 export function ProfileAbout({ user, profile }: { user: UserProfile; profile: ProfileDetails }) {
+  const theme = useTheme();
   const isVolunteer = user.role === 'VOLUNTEER';
 
   return (
     <>
       <Card>
-        <ThemedText type="subtitle">O mnie</ThemedText>
+        <ThemedText type="subtitle" accessibilityRole="header">
+          O mnie
+        </ThemedText>
         <Value text={profile.about} empty="Dodaj kilka słów o sobie – sąsiadom łatwiej zaufać." />
+        <View style={styles.field}>
+          <ThemedText type="smallBold">Języki</ThemedText>
+          <Value
+            text={user.languages.map(languageName).join(', ')}
+            empty="Nie podano – dodaj w edycji profilu."
+          />
+        </View>
       </Card>
 
       <Card>
@@ -38,22 +51,32 @@ export function ProfileAbout({ user, profile }: { user: UserProfile; profile: Pr
           <Value text="" empty="Nie wybrano jeszcze żadnych kategorii." />
         )}
 
-        {!isVolunteer && (
-          <View style={styles.field}>
-            <ThemedText type="smallBold">Wsparcie dostępności</ThemedText>
-            <Value
-              text={profile.accessibilityNotes}
-              empty={
-                user.specialNeeds
-                  ? 'Opisz, na co wolontariusz powinien zwrócić uwagę.'
-                  : 'Brak szczególnych potrzeb.'
-              }
-            />
-            <ThemedText type="caption" themeColor="textSecondary">
-              Widoczne tylko dla wolontariusza, którego pomoc zaakceptujesz.
-            </ThemedText>
-          </View>
-        )}
+        <View style={styles.field}>
+          <ThemedText type="smallBold">Niepełnosprawność i szczególne potrzeby</ThemedText>
+          {profile.disabilities.length > 0 && (
+            <View style={styles.badges}>
+              {profile.disabilities.map((d) => (
+                <Badge
+                  key={d}
+                  label={DisabilityLabels[d]}
+                  color={theme.accent}
+                  backgroundColor={theme.accentSoft}
+                />
+              ))}
+            </View>
+          )}
+          <Value
+            text={profile.accessibilityNotes}
+            empty={
+              user.specialNeeds || profile.disabilities.length > 0
+                ? 'Opisz, na co wolontariusz powinien zwrócić uwagę.'
+                : 'Brak szczególnych potrzeb.'
+            }
+          />
+          <ThemedText type="caption" themeColor="textSecondary">
+            Widoczne tylko dla wolontariusza, którego pomoc zaakceptujesz.
+          </ThemedText>
+        </View>
       </Card>
 
       <Card>

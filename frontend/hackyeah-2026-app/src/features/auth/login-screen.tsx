@@ -20,6 +20,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
 import { Radius, Spacing } from '@/constants/theme';
+import { AccessibilityPanel } from '@/features/accessibility/components/accessibility-panel';
 import { AccountSelect } from '@/features/auth/components/account-select';
 import { RoleChoice, type ResidentRole } from '@/features/auth/components/role-choice';
 import { SignUpForm } from '@/features/auth/components/sign-up-form';
@@ -51,6 +52,18 @@ export function LoginScreen() {
                   ? 'Panel miasta: mapa potrzeb i statystyki pomocy sąsiedzkiej.'
                   : 'Sąsiedzka pomoc po drodze. Poproś o pomoc albo pomóż komuś na swojej trasie.'}
               </ThemedText>
+            </View>
+
+            {/* First step: make the screen readable for this person before anything else. */}
+            <View
+              style={[
+                styles.panel,
+                { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+              ]}>
+              <ThemedText type="subtitle" accessibilityRole="header">
+                Dopasuj aplikację do siebie
+              </ThemedText>
+              <AccessibilityPanel />
             </View>
 
             <Animated.View
@@ -187,7 +200,7 @@ function SignInForm({ roles, buttonLabel }: SignInFormProps) {
       </View>
 
       {error && (
-        <ThemedText type="small" themeColor="danger">
+        <ThemedText type="small" themeColor="danger" accessibilityRole="alert">
           {error}
         </ThemedText>
       )}
@@ -222,7 +235,7 @@ const styles = StyleSheet.create({
   },
   container: {
     width: '100%',
-    maxWidth: 460,
+    maxWidth: 520,
     gap: Spacing.four,
   },
   header: {

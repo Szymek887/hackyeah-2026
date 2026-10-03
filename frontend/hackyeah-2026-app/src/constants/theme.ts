@@ -64,7 +64,62 @@ export const Colors = {
   },
 } as const;
 
+/**
+ * High-contrast variant (accessibility setting, default for seniors): near-black text, darker
+ * secondary text, strong borders and deeper brand colors. Text colors meet WCAG AAA (≥ 7:1)
+ * on the backgrounds.
+ */
+export const HighContrastColors = {
+  light: {
+    text: '#000000',
+    textSecondary: '#28323F',
+    background: '#FFFFFF',
+    backgroundElement: '#FFFFFF',
+    backgroundMuted: '#EEF2F7',
+    backgroundSelected: '#D2E4FA',
+    primary: '#0A4A92',
+    primaryStrong: '#06366D',
+    primarySoft: '#D2E4FA',
+    onPrimary: '#FFFFFF',
+    accent: '#9A2F00',
+    accentStrong: '#772400',
+    accentSoft: '#FFE3D2',
+    onAccent: '#FFFFFF',
+    border: '#3A4757',
+    danger: '#961A1A',
+    dangerSoft: '#FBDEDE',
+    warning: '#6E3E00',
+    warningSoft: '#FFE9BD',
+    success: '#165231',
+    successSoft: '#D5EFDF',
+  },
+  dark: {
+    text: '#FFFFFF',
+    textSecondary: '#D6E1EE',
+    background: '#000000',
+    backgroundElement: '#0C141E',
+    backgroundMuted: '#111D2A',
+    backgroundSelected: '#1C3A5E',
+    primary: '#93CCFF',
+    primaryStrong: '#BCE0FF',
+    primarySoft: '#1C3A5E',
+    onPrimary: '#000000',
+    accent: '#FFB48F',
+    accentStrong: '#FFCCB2',
+    accentSoft: '#3D2414',
+    onAccent: '#000000',
+    border: '#93A8C0',
+    danger: '#FFA3A3',
+    dangerSoft: '#3D1A1E',
+    warning: '#FFD27F',
+    warningSoft: '#3A2C12',
+    success: '#8EE6B4',
+    successSoft: '#143324',
+  },
+} as const;
+
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemePalette = Record<ThemeColor, string>;
 
 /** Category accent colors (pins, badges), keys = backend `HelpCategory`. `soft` is a badge background. */
 export const CategoryColors = {

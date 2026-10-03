@@ -5,9 +5,11 @@ import { ApiError, errorMessage } from '@/api/errors';
 import type { CreateUserDto } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Spacing } from '@/constants/theme';
+import type { DisabilityType } from '@/features/accessibility/accessibility-settings';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
+import { NeedsPicker } from '@/features/accessibility/components/needs-picker';
 import { useAuth } from '@/features/auth/session-context';
 
 const DISPLAY_NAME_MAX = 60;
@@ -15,8 +17,10 @@ const DISPLAY_NAME_MAX = 60;
 /** `POST /api/users` – a new, unverified account. The account type is chosen above the form. */
 export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
   const { signUp } = useAuth();
+  const { applyDisabilities } = useAccessibility();
   const [displayName, setDisplayName] = useState('');
-  const [specialNeeds, setSpecialNeeds] = useState(false);
+  const [disabilities, setDisabilities] = useState<DisabilityType[]>([]);
+  const [needsNotes, setNeedsNotes] = useState('');
   const [nameError, setNameError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -31,7 +35,14 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
     setError(null);
     setPending(true);
     try {
-      await signUp({ displayName: name, role, specialNeeds: role === 'REQUESTER' && specialNeeds });
+      const notes = needsNotes.trim();
+      const specialNeeds = disabilities.length > 0 || notes.length > 0;
+      await signUp(
+        { displayName: name, role, specialNeeds: role === 'REQUESTER' && specialNeeds },
+        { disabilities, accessibilityNotes: notes },
+      );
+      // E.g. a visual impairment switches on large text and high contrast right away.
+      applyDisabilities(disabilities);
       // Route guard in app/_layout.tsx switches to the app automatically.
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors?.displayName) {
@@ -61,22 +72,15 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
         error={nameError}
       />
 
-      {role === 'REQUESTER' && (
-        <View style={styles.field}>
-          <Chip
-            mode="checkbox"
-            label="Mam szczególne potrzeby"
-            selected={specialNeeds}
-            onPress={() => setSpecialNeeds((current) => !current)}
-          />
-          <ThemedText type="small" themeColor="textSecondary">
-            Np. niepełnosprawność, choroba albo wiek. Twoje zgłoszenia dostaną wyższy priorytet.
-          </ThemedText>
-        </View>
-      )}
+      <NeedsPicker
+        disabilities={disabilities}
+        onDisabilitiesChange={setDisabilities}
+        notes={needsNotes}
+        onNotesChange={setNeedsNotes}
+      />
 
       {error && (
-        <ThemedText type="small" themeColor="danger">
+        <ThemedText type="small" themeColor="danger" accessibilityRole="alert">
           {error}
         </ThemedText>
       )}
@@ -97,8 +101,5 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
 const styles = StyleSheet.create({
   form: {
     gap: Spacing.three,
-  },
-  field: {
-    gap: Spacing.one,
   },
 });

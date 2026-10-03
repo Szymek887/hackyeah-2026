@@ -3,6 +3,7 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useTheme } from '@/hooks/use-theme';
 
 type InputProps = TextInputProps & {
@@ -12,6 +13,7 @@ type InputProps = TextInputProps & {
 
 export function Input({ label, error, multiline, style, onFocus, onBlur, ...rest }: InputProps) {
   const theme = useTheme();
+  const { textScale, minTouchSize, settings } = useAccessibility();
   const [focused, setFocused] = useState(false);
   const borderColor = error ? theme.danger : focused ? theme.primary : theme.border;
 
@@ -20,6 +22,8 @@ export function Input({ label, error, multiline, style, onFocus, onBlur, ...rest
       {label && <ThemedText type="smallBold">{label}</ThemedText>}
       <TextInput
         placeholderTextColor={theme.textSecondary}
+        accessibilityLabel={label}
+        accessibilityHint={error}
         multiline={multiline}
         onFocus={(e) => {
           setFocused(true);
@@ -33,12 +37,17 @@ export function Input({ label, error, multiline, style, onFocus, onBlur, ...rest
           styles.input,
           multiline && styles.multiline,
           { color: theme.text, backgroundColor: theme.backgroundElement, borderColor },
+          {
+            fontSize: Math.round(16 * textScale),
+            minHeight: minTouchSize,
+            borderWidth: settings.highContrast || focused ? 2 : 1,
+          },
           style,
         ]}
         {...rest}
       />
       {error && (
-        <ThemedText type="caption" themeColor="danger">
+        <ThemedText type="caption" themeColor="danger" accessibilityLiveRegion="polite">
           {error}
         </ThemedText>
       )}

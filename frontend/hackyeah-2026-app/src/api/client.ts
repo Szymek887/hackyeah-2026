@@ -12,7 +12,7 @@ export function setApiUserId(userId: number | null) {
   currentUserId = userId;
 }
 
-export type HttpMethod = 'GET' | 'POST';
+export type HttpMethod = 'GET' | 'POST' | 'PUT';
 
 export type ApiRequest = {
   method: HttpMethod;

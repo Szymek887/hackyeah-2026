@@ -53,27 +53,28 @@ type SeedUser = [
   verified: boolean,
   specialNeeds: boolean,
   trust: number,
+  languages: string[],
 ];
 
 // Same order as the seeder, so ids match the real database (1 = Anna K. … 13 = Miasto Kraków).
 const SEED_USERS: SeedUser[] = [
-  ['Anna K.', 'REQUESTER', true, true, 72],
-  ['Marek S.', 'REQUESTER', true, false, 66],
-  ['Ewa P.', 'REQUESTER', false, false, 45],
-  ['Zofia M.', 'REQUESTER', true, true, 81],
-  ['Jan B.', 'REQUESTER', true, false, 58],
-  ['Halina R.', 'REQUESTER', true, true, 77],
-  ['Piotr N.', 'REQUESTER', false, false, 40],
-  ['Maria T.', 'REQUESTER', true, false, 69],
-  ['Kuba W.', 'VOLUNTEER', true, false, 91],
-  ['Ola D.', 'VOLUNTEER', true, false, 88],
-  ['Bartek L.', 'VOLUNTEER', true, false, 84],
-  ['Nadia P.', 'VOLUNTEER', false, false, 63],
-  ['Miasto Kraków', 'CITY_ADMIN', true, false, 100],
+  ['Anna K.', 'REQUESTER', true, true, 72, ['pl']],
+  ['Marek S.', 'REQUESTER', true, false, 66, ['pl', 'en']],
+  ['Ewa P.', 'REQUESTER', false, false, 45, ['pl']],
+  ['Zofia M.', 'REQUESTER', true, true, 81, ['pl', 'de']],
+  ['Jan B.', 'REQUESTER', true, false, 58, ['pl']],
+  ['Halina R.', 'REQUESTER', true, true, 77, ['pl', 'ru']],
+  ['Piotr N.', 'REQUESTER', false, false, 40, ['pl', 'uk']],
+  ['Maria T.', 'REQUESTER', true, false, 69, ['pl', 'en']],
+  ['Kuba W.', 'VOLUNTEER', true, false, 91, ['pl', 'en', 'uk']],
+  ['Ola D.', 'VOLUNTEER', true, false, 88, ['pl', 'en', 'de']],
+  ['Bartek L.', 'VOLUNTEER', true, false, 84, ['pl', 'en']],
+  ['Nadia P.', 'VOLUNTEER', false, false, 63, ['uk', 'ru', 'pl']],
+  ['Miasto Kraków', 'CITY_ADMIN', true, false, 100, ['pl', 'en']],
 ];
 
 export const users: UserProfile[] = SEED_USERS.map(
-  ([displayName, role, identityVerified, specialNeeds, trustScore], index) => ({
+  ([displayName, role, identityVerified, specialNeeds, trustScore, languages], index) => ({
     id: index + 1,
     displayName,
     role,
@@ -83,6 +84,7 @@ export const users: UserProfile[] = SEED_USERS.map(
     ratingCount: 0,
     ratingAverage: null,
     cityPoints: 0,
+    languages: [...languages].sort(),
   }),
 );
 

@@ -1,124 +1,122 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { errorMessage } from '@/api/errors';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Spacing } from '@/constants/theme';
-import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
+import { Spacing } from '@/constants/theme';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
+import { formatRouteDistance, ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
+import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { filterRequestsAlongRoute } from '@/lib/route-matching';
-import { RequestCard } from '@/features/requests/components/request-card';
-import { KRAKOW_COMMUTE_ROUTE, KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 
+type Filter = 'all' | 'route';
+
+/**
+ * Web map: only the map itself. Request details appear on hover (tooltip) and on click (popup);
+ * no list below the map. The route is shown only once the user has set and confirmed their own.
+ */
 export function MapScreen() {
-  const { savedRoute } = useSavedCommuteRoute();
-  const [onlyAlongRoute, setOnlyAlongRoute] = useState(false);
+  const { savedRoute, toggleRouteActive } = useSavedCommuteRoute();
+  const [filter, setFilter] = useState<Filter>('all');
 
-  const { data: allRequests = [] } = useNearbyRequests({
+  const { data: allRequests = [], error } = useNearbyRequests({
     lat: KRAKOW_INITIAL_REGION.latitude,
     lng: KRAKOW_INITIAL_REGION.longitude,
     radiusKm: 5,
   });
 
-  const activeRouteCoordinates = savedRoute?.isActive
-    ? savedRoute.coordinates
-    : KRAKOW_COMMUTE_ROUTE;
+  const activeRoute = savedRoute?.isActive ? savedRoute : null;
 
   const matchingRequests = useMemo(
-    () => filterRequestsAlongRoute(allRequests, activeRouteCoordinates, ROUTE_BUFFER_METERS),
-    [allRequests, activeRouteCoordinates],
+    () =>
+      activeRoute
+        ? filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS)
+        : [],
+    [activeRoute, allRequests],
   );
 
-  const displayedRequests = onlyAlongRoute ? matchingRequests : allRequests;
+  const displayedRequests = activeRoute && filter === 'route' ? matchingRequests : allRequests;
 
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <ThemedText type="subtitle">Mapa zgłoszeń</ThemedText>
+        <ThemedText type="subtitle" accessibilityRole="header">
+          Mapa zgłoszeń
+        </ThemedText>
         <ThemedText themeColor="textSecondary">
-          Zgłoszenia w Krakowie są grupowane, żeby mapa pozostała czytelna.
+          Najedź na punkt, aby zobaczyć, czego dotyczy. Kliknij, aby otworzyć szczegóły.
         </ThemedText>
       </View>
+
+      <View style={styles.toolbar}>
+        {activeRoute ? (
+          <>
+            <ThemedText type="smallBold" style={styles.routeLabel}>
+              Twoja trasa
+              {activeRoute.distanceMeters > 0
+                ? ` · ${formatRouteDistance(activeRoute.distanceMeters)}`
+                : ''}
+            </ThemedText>
+            <View style={styles.filter}>
+              <SegmentedControl
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: 'all', label: 'Wszystkie', count: allRequests.length },
+                  { value: 'route', label: 'Przy trasie', count: matchingRequests.length },
+                ]}
+              />
+            </View>
+            <Button
+              title="Zmień trasę"
+              variant="secondary"
+              inline
+              onPress={() => router.push('/route-planner')}
+            />
+            <Button
+              title="Ukryj trasę"
+              variant="ghost"
+              inline
+              onPress={() => {
+                setFilter('all');
+                toggleRouteActive(false);
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+              Wyznacz trasę do pracy lub na uczelnię, aby zobaczyć prośby po drodze.
+            </ThemedText>
+            <Button
+              title={savedRoute ? 'Pokaż moją trasę' : 'Wyznacz trasę'}
+              variant="secondary"
+              inline
+              onPress={() => (savedRoute ? toggleRouteActive(true) : router.push('/route-planner'))}
+            />
+          </>
+        )}
+      </View>
+
+      {error && (
+        <ThemedText themeColor="danger" accessibilityRole="alert">
+          {errorMessage(error)}
+        </ThemedText>
+      )}
 
       <LeafletMap
-        matchingRequests={matchingRequests}
         requests={displayedRequests}
-        showRouteBuffer={Boolean(savedRoute?.isActive)}
-        routeCoordinates={activeRouteCoordinates}
+        matchingRequests={matchingRequests}
+        showRouteBuffer={Boolean(activeRoute)}
+        routeCoordinates={activeRoute?.coordinates}
+        height={600}
       />
-
-      <Card highlighted style={styles.stats}>
-        <View style={styles.statsHeader}>
-          <ThemedText type="smallBold">
-            {savedRoute?.isActive ? '🚗 Aktywna trasa' : 'Trasa domyślna (demo)'}
-          </ThemedText>
-          <Pressable
-            onPress={() => router.push('/route-planner')}
-            style={({ pressed }) => pressed && styles.pressed}>
-            <ThemedText type="caption" style={{ color: Colors.light.primary, fontWeight: '700' }}>
-              Zmień trasę →
-            </ThemedText>
-          </Pressable>
-        </View>
-
-        <ThemedText type="small" themeColor="textSecondary">
-          W korytarzu {ROUTE_BUFFER_METERS} m: {matchingRequests.length} z {allRequests.length}{' '}
-          zgłoszeń.
-        </ThemedText>
-
-        <View style={styles.filterRow}>
-          <Pressable
-            onPress={() => setOnlyAlongRoute(false)}
-            style={[
-              styles.filterChip,
-              !onlyAlongRoute && { backgroundColor: Colors.light.primary },
-            ]}>
-            <ThemedText
-              type="caption"
-              style={{
-                color: !onlyAlongRoute ? Colors.light.onPrimary : Colors.light.textSecondary,
-                fontWeight: '700',
-              }}>
-              Wszystkie ({allRequests.length})
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => setOnlyAlongRoute(true)}
-            style={[
-              styles.filterChip,
-              onlyAlongRoute && { backgroundColor: Colors.light.primary },
-            ]}>
-            <ThemedText
-              type="caption"
-              style={{
-                color: onlyAlongRoute ? Colors.light.onPrimary : Colors.light.textSecondary,
-                fontWeight: '700',
-              }}>
-              Tylko przy trasie ({matchingRequests.length})
-            </ThemedText>
-          </Pressable>
-        </View>
-      </Card>
-
-      <View style={styles.list}>
-        <ThemedText type="smallBold">
-          {onlyAlongRoute ? 'Zgłoszenia przy Twojej trasie' : 'Zgłoszenia w pobliżu'}
-        </ThemedText>
-        {displayedRequests.slice(0, 8).map((request) => (
-          <RequestCard
-            key={request.id}
-            request={request}
-            onPress={() => router.push({ pathname: '/request/[id]', params: { id: request.id } })}
-          />
-        ))}
-      </View>
-
-      <Button title="Zaplanuj nową trasę" onPress={() => router.push('/route-planner')} />
     </Screen>
   );
 }
@@ -127,28 +125,21 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.one,
   },
-  stats: {
-    gap: Spacing.two,
-  },
-  statsHeader: {
+  toolbar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  filterChip: {
-    paddingVertical: 4,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.one,
-    backgroundColor: '#F3F8FE',
-  },
-  list: {
     gap: Spacing.two,
   },
-  pressed: {
-    opacity: 0.7,
+  flex: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 200,
+  },
+  routeLabel: {
+    flexGrow: 1,
+  },
+  filter: {
+    minWidth: 240,
   },
 });

@@ -63,6 +63,9 @@ export type ViewerRole = 'REQUESTER' | 'VOLUNTEER' | 'NONE';
 
 // ---------- Users ----------
 
+/** Lower-case ISO 639-1 code (`SpokenLanguages`): 'pl', 'en', 'uk', … Display via `languageName`. */
+export type LanguageCode = string;
+
 /** `UserProfileResponse` – `GET /api/users/me`. */
 export type UserProfile = {
   id: number;
@@ -75,6 +78,8 @@ export type UserProfile = {
   /** null until the user is rated. */
   ratingAverage: number | null;
   cityPoints: number;
+  /** Spoken languages, sorted alphabetically; may be [] for old accounts. */
+  languages: LanguageCode[];
 };
 
 /** `UserSummary` – the other side of a request. */
@@ -85,6 +90,13 @@ export type UserSummary = {
   identityVerified: boolean;
   ratingAverage: number | null;
   ratingCount: number;
+  /** Spoken languages, sorted alphabetically. */
+  languages: LanguageCode[];
+};
+
+/** `UpdateLanguagesRequest` – `PUT /api/users/me/languages`, 1–10 codes, replaces the list. */
+export type UpdateLanguagesDto = {
+  languages: LanguageCode[];
 };
 
 /**
@@ -96,6 +108,8 @@ export type CreateUserDto = {
   role: Exclude<UserRole, 'CITY_ADMIN'>;
   /** Only meaningful for requesters (raises request priority, see PriorityPolicy). */
   specialNeeds: boolean;
+  /** Optional (🔵 PROPOSED), default `['pl']`. */
+  languages?: LanguageCode[];
 };
 
 // ---------- Help requests ----------

@@ -13,7 +13,9 @@ import { Platform } from 'react-native';
 import { createUser, getMe } from '@/api/auth';
 import { setApiUserId } from '@/api/client';
 import type { CreateUserDto, UserProfile, UserRole } from '@/api/types';
+import { commuteStore } from '@/features/commute/commute-store';
 import { emptyProfileDetails, type ProfileDetails } from '@/features/profile/profile-details';
+import { webStorage } from '@/lib/web-storage';
 
 type AuthStatus = 'restoring' | 'signedOut' | 'signedIn';
 
@@ -23,8 +25,8 @@ type Auth = {
   /** Client-only profile description of the logged-in user. */
   profileDetails: ProfileDetails;
   signIn: (userId: number) => Promise<UserProfile>;
-  /** Creates a new account (`POST /api/users`) and logs in as it. */
-  signUp: (dto: CreateUserDto) => Promise<UserProfile>;
+  /** Creates a new account (`POST /api/users`) and logs in as it, with optional profile details. */
+  signUp: (dto: CreateUserDto, details?: Partial<ProfileDetails>) => Promise<UserProfile>;
   /** Re-reads `/users/me`, e.g. after a rating changed trust score or city points. */
   refreshUser: () => Promise<void>;
   signOut: () => void;
@@ -34,6 +36,7 @@ type Auth = {
 const AuthContext = createContext<Auth | null>(null);
 
 const STORAGE_KEY = 'podrodze.userId';
+const DETAILS_STORAGE_KEY = 'podrodze.profileDetails';
 
 /** Web keeps the session across reloads; native keeps it in memory (no storage dependency yet). */
 const storage = {
@@ -61,7 +64,9 @@ const storage = {
 export function SessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [detailsByUser, setDetailsByUser] = useState<Record<number, ProfileDetails>>({});
+  const [detailsByUser, setDetailsByUser] = useState<Record<number, ProfileDetails>>(
+    () => webStorage.read(DETAILS_STORAGE_KEY) ?? {},
+  );
   const [status, setStatus] = useState<AuthStatus>(() =>
     storage.get() ? 'restoring' : 'signedOut',
   );
@@ -75,15 +80,28 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signIn = useCallback((userId: number) => getMe(userId).then(applyUser), [applyUser]);
-  const signUp = useCallback((dto: CreateUserDto) => createUser(dto).then(applyUser), [applyUser]);
+  const signUp = useCallback(
+    async (dto: CreateUserDto, details?: Partial<ProfileDetails>) => {
+      const created = await createUser(dto);
+      if (details) {
+        setDetailsByUser((current) => ({
+          ...current,
+          [created.id]: { ...emptyProfileDetails, ...details },
+        }));
+      }
+      return applyUser(created);
+    },
+    [applyUser],
+  );
 
   const signOut = useCallback(() => {
     setApiUserId(null);
     storage.set(null);
     setUser(null);
     setStatus('signedOut');
-    // Cached lists belong to the previous user.
+    // Cached lists and the commute route belong to the previous user.
     queryClient.clear();
+    commuteStore.clearRoute();
   }, [queryClient]);
 
   const refreshUser = useCallback(async () => {
@@ -102,7 +120,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
     [userId],
   );
 
-  const profileDetails = (userId !== undefined && detailsByUser[userId]) || emptyProfileDetails;
+  // Older saved entries may miss newer fields, so always merge with the defaults.
+  const profileDetails = useMemo(
+    () => ({
+      ...emptyProfileDetails,
+      ...(userId !== undefined ? detailsByUser[userId] : undefined),
+    }),
+    [detailsByUser, userId],
+  );
+
+  useEffect(() => {
+    webStorage.write(DETAILS_STORAGE_KEY, detailsByUser);
+  }, [detailsByUser]);
 
   useEffect(() => {
     const storedId = storage.get();

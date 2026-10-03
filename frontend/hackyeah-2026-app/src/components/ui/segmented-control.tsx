@@ -3,6 +3,7 @@ import Animated from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useTheme } from '@/hooks/use-theme';
 import { enterScreen } from '@/lib/motion';
 
@@ -25,6 +26,7 @@ export function SegmentedControl<T extends string>({
   onChange,
 }: SegmentedControlProps<T>) {
   const theme = useTheme();
+  const { minTouchSize } = useAccessibility();
 
   return (
     <View
@@ -38,7 +40,7 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             onPress={() => onChange(option.value)}
-            style={styles.option}>
+            style={[styles.option, { minHeight: minTouchSize - 4 }]}>
             {active && (
               <Animated.View
                 entering={enterScreen}

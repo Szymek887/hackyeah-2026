@@ -1,15 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, ThemeProvider, type Theme } from 'expo-router';
 import { useState, type PropsWithChildren } from 'react';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 
-import { Colors } from '@/constants/theme';
+import type { ThemePalette } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { SessionProvider } from '@/features/auth/session-context';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSchemeName, useTheme } from '@/hooks/use-theme';
 
-/** Stack headers and navigation chrome use the app palette. */
-function navigationTheme(scheme: 'light' | 'dark'): Theme {
+/** Stack headers and navigation chrome use the app palette (incl. the high-contrast variant). */
+function navigationTheme(scheme: 'light' | 'dark', colors: ThemePalette): Theme {
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
-  const colors = Colors[scheme];
   return {
     ...base,
     colors: {
@@ -24,17 +25,21 @@ function navigationTheme(scheme: 'light' | 'dark'): Theme {
 }
 
 export function AppProviders({ children }: PropsWithChildren) {
-  const colorScheme = useColorScheme();
+  const scheme = useSchemeName();
+  const theme = useTheme();
+  const { settings } = useAccessibility();
   const [queryClient] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } }),
   );
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* "Bez animacji" setting wins; otherwise follow the OS reduce-motion switch. */}
+      <ReducedMotionConfig
+        mode={settings.reduceMotion ? ReduceMotion.Always : ReduceMotion.System}
+      />
       <SessionProvider>
-        <ThemeProvider value={navigationTheme(colorScheme === 'dark' ? 'dark' : 'light')}>
-          {children}
-        </ThemeProvider>
+        <ThemeProvider value={navigationTheme(scheme, theme)}>{children}</ThemeProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

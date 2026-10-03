@@ -3,25 +3,61 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { updateMyLanguages } from '@/api/auth';
+import { errorMessage } from '@/api/errors';
+import type { LanguageCode } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
+import { AccessibilityPanel } from '@/features/accessibility/components/accessibility-panel';
 import { useSession } from '@/features/auth/session-context';
 import { ProfileAbout } from '@/features/profile/components/profile-about';
 import { ProfileEditForm } from '@/features/profile/components/profile-edit-form';
 import { ProfileHeader } from '@/features/profile/components/profile-header';
 import { ProfileStats } from '@/features/profile/components/profile-stats';
+import type { ProfileDetails } from '@/features/profile/profile-details';
 import { enterScreen, layoutTransition } from '@/lib/motion';
+
+const sameLanguages = (a: LanguageCode[], b: LanguageCode[]) =>
+  a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 export function ProfileScreen() {
   const { user, profileDetails, updateProfileDetails, signOut, refreshUser } = useSession();
+  const { applyDisabilities } = useAccessibility();
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSave = async (details: ProfileDetails, languages: LanguageCode[]) => {
+    setSaveError(null);
+    if (!sameLanguages(languages, user.languages)) {
+      setSaving(true);
+      try {
+        await updateMyLanguages({ languages });
+        await refreshUser();
+      } catch (err) {
+        setSaveError(errorMessage(err));
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+    updateProfileDetails(details);
+    // Newly declared needs (e.g. vision) make the display more accessible straight away.
+    const added = details.disabilities.filter((d) => !profileDetails.disabilities.includes(d));
+    if (added.length > 0) applyDisabilities(added);
+    setEditing(false);
+  };
 
   return (
     <Screen scroll onRefresh={refreshUser}>
       <View style={styles.titleRow}>
-        <ThemedText type="title">Profil</ThemedText>
+        <ThemedText type="title" accessibilityRole="header">
+          Profil
+        </ThemedText>
         {!editing && (
           <Button
             title="Edytuj profil"
@@ -45,16 +81,25 @@ export function ProfileScreen() {
           <ProfileEditForm
             user={user}
             profile={profileDetails}
-            onCancel={() => setEditing(false)}
-            onSave={(profile) => {
-              updateProfileDetails(profile);
+            saving={saving}
+            error={saveError}
+            onCancel={() => {
+              setSaveError(null);
               setEditing(false);
             }}
+            onSave={handleSave}
           />
         ) : (
           <ProfileAbout user={user} profile={profileDetails} />
         )}
       </Animated.View>
+
+      <Card style={styles.section}>
+        <ThemedText type="subtitle" accessibilityRole="header">
+          Wygląd i dostępność
+        </ThemedText>
+        <AccessibilityPanel expanded />
+      </Card>
 
       <View style={styles.actions}>
         <Button title="Moje zadania" variant="secondary" onPress={() => router.push('/tasks')} />
@@ -69,6 +114,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   section: {

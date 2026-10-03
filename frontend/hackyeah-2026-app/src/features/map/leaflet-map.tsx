@@ -1,32 +1,36 @@
 import 'leaflet/dist/leaflet.css';
 
+import { router } from 'expo-router';
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { FeatureCollection } from 'geojson';
-import type { LayerGroup, Map as LeafletMapInstance } from 'leaflet';
+import type { LayerGroup, Map as LeafletMapInstance, Marker } from 'leaflet';
 
 import type { HelpRequestListItem } from '@/api/types';
-import { CategoryColors, Colors, PriorityColors, Radius } from '@/constants/theme';
+import { CategoryColors, PriorityColors, Radius, type ThemePalette } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { getAreaPolygonRings } from '@/features/map/area-geometry';
-import {
-  KRAKOW_COMMUTE_ROUTE,
-  KRAKOW_INITIAL_REGION,
-  toLatLng,
-} from '@/features/map/krakow-map-data';
+import { KRAKOW_INITIAL_REGION, toLatLng } from '@/features/map/krakow-map-data';
 import { clusterRequests } from '@/features/map/map-clustering';
 import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
+import { useTheme } from '@/hooks/use-theme';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
 export type RouteEndpoint = 'start' | 'end';
 
 type LeafletMapProps = {
   centerGeoJson?: FeatureCollection;
-  matchingRequests: HelpRequestListItem[];
+  /** Requests drawn as points. */
   requests: HelpRequestListItem[];
+  /** Requests along the route – drawn with a thicker ring and announced as "przy Twojej trasie". */
+  matchingRequests?: HelpRequestListItem[];
   showAreas?: boolean;
   showRouteBuffer?: boolean;
+  /** No route is drawn by default; pass the user's route to show it. */
   routeCoordinates?: RouteCoordinate[];
   editableRoute?: boolean;
+  /** Map height in px. */
+  height?: number;
   onMapPress?: (coordinate: RouteCoordinate) => void;
   onRouteEndpointChange?: (endpoint: RouteEndpoint, coordinate: RouteCoordinate) => void;
 };
@@ -36,36 +40,87 @@ const leafletElementStyle: CSSProperties = {
   width: '100%',
 };
 
-const leafletPopupCss = `
+const NO_ROUTE: RouteCoordinate[] = [];
+const NO_REQUESTS: HelpRequestListItem[] = [];
+
+function leafletCss(theme: ThemePalette, textScale: number) {
+  const px = (size: number) => `${Math.round(size * textScale)}px`;
+  return `
   .podrodze-request-popup .leaflet-popup-content-wrapper {
-    background: ${Colors.light.backgroundElement};
-    border: 1px solid ${Colors.light.border};
+    background: ${theme.backgroundElement};
+    border: 1.5px solid ${theme.border};
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(18, 38, 63, 0.14);
+    box-shadow: 0 8px 24px rgba(18, 38, 63, 0.18);
     padding: 0;
   }
-
   .podrodze-request-popup .leaflet-popup-content {
     margin: 0;
-    width: 220px !important;
-    max-width: 220px !important;
+    width: ${Math.round(240 * Math.min(textScale, 1.3))}px !important;
     font-family: var(--font-display);
-    color: ${Colors.light.text};
+    color: ${theme.text};
   }
-
   .podrodze-request-popup .leaflet-popup-tip {
-    background: ${Colors.light.backgroundElement};
-    border: 1px solid ${Colors.light.border};
+    background: ${theme.backgroundElement};
+    border: 1px solid ${theme.border};
     box-shadow: none;
   }
-
   .podrodze-request-popup .leaflet-popup-close-button {
-    color: ${Colors.light.textSecondary};
-    height: 28px;
-    width: 28px;
-    font: 20px/26px var(--font-display);
+    color: ${theme.textSecondary};
+    height: 32px;
+    width: 32px;
+    font: 22px/30px var(--font-display);
+  }
+  .podrodze-request-popup .pd-title {
+    font-size: ${px(15)};
+    line-height: ${px(20)};
+    font-weight: 700;
+    word-break: break-word;
+    padding-right: 20px;
+  }
+  .podrodze-request-popup .pd-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    font-size: ${px(12)};
+    line-height: ${px(16)};
+    font-weight: 700;
+    padding: 3px 8px;
+  }
+  .podrodze-request-popup .pd-meta {
+    font-size: ${px(13)};
+    line-height: ${px(18)};
+    color: ${theme.textSecondary};
+  }
+  .podrodze-request-popup .pd-action {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    background: ${theme.primary};
+    color: ${theme.onPrimary};
+    font: 700 ${px(14)}/${px(18)} var(--font-display);
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .podrodze-request-popup .pd-action:hover { background: ${theme.primaryStrong}; }
+  .podrodze-request-popup .pd-action:focus-visible,
+  .podrodze-marker:focus-visible {
+    outline: 3px solid ${theme.primary};
+    outline-offset: 2px;
+  }
+  .podrodze-tooltip {
+    font: 600 ${px(13)}/${px(18)} var(--font-display);
+    color: ${theme.text};
+    background: ${theme.backgroundElement};
+    border: 1.5px solid ${theme.border};
+    border-radius: 8px;
+    padding: 6px 10px;
+    max-width: 260px;
+    white-space: normal;
   }
 `;
+}
 
 function escapeHtml(value: string) {
   return value
@@ -76,242 +131,332 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#039;');
 }
 
-function requestPopupHtml(request: HelpRequestListItem) {
+/** Short, plain description used for hover tooltips and screen readers. */
+function requestLabel(request: HelpRequestListItem, alongRoute: boolean) {
+  return [
+    request.title,
+    CategoryLabels[request.category],
+    `priorytet: ${PriorityLabels[request.priority].toLowerCase()}`,
+    alongRoute ? 'przy Twojej trasie' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Popup as a DOM node, so the button can navigate in-app (no full page reload). */
+function requestPopup(request: HelpRequestListItem, alongRoute: boolean) {
   const categoryColor = CategoryColors[request.category];
   const priorityColor = PriorityColors[request.priority];
-
-  return `
-    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <span style="display:inline-flex;align-items:center;border-radius:999px;background:${priorityColor.soft};color:${priorityColor.color};font-size:11px;font-weight:700;line-height:14px;padding:3px 8px;">
-          ${escapeHtml(PriorityLabels[request.priority])}
-        </span>
-        <span style="display:inline-flex;align-items:center;border-radius:999px;background:${categoryColor.soft};color:${categoryColor.color};font-size:11px;font-weight:700;line-height:14px;padding:3px 8px;">
-          ${escapeHtml(CategoryLabels[request.category])}
-        </span>
-      </div>
-      <div style="font-size:14px;font-weight:700;line-height:18px;color:${Colors.light.text};word-break:break-word;">
-        ${escapeHtml(request.title)}
-      </div>
-      <a href="/request/${request.id}" style="display:inline-block;text-align:center;padding:7px 12px;background:${Colors.light.primary};color:#ffffff;border-radius:8px;text-decoration:none;font-size:12px;font-weight:700;margin-top:4px;">
-        Zobacz szczegóły i pomóż →
-      </a>
+  const element = document.createElement('div');
+  element.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:12px;';
+  element.innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <span class="pd-badge" style="background:${priorityColor.soft};color:${priorityColor.color};">
+        ${escapeHtml(PriorityLabels[request.priority])}
+      </span>
+      <span class="pd-badge" style="background:${categoryColor.soft};color:${categoryColor.color};">
+        ${escapeHtml(CategoryLabels[request.category])}
+      </span>
     </div>
+    <div class="pd-title">${escapeHtml(request.title)}</div>
+    ${alongRoute ? '<div class="pd-meta">Przy Twojej trasie</div>' : ''}
+    <div class="pd-meta">Dokładny adres zobaczysz po akceptacji Twojej pomocy.</div>
+    <button type="button" class="pd-action">Zobacz szczegóły i pomóż</button>
   `;
+  element.querySelector('button')?.addEventListener('click', () => {
+    router.push({ pathname: '/request/[id]', params: { id: request.id } });
+  });
+  return element;
 }
 
 export function LeafletMap({
   centerGeoJson,
-  matchingRequests,
   requests,
+  matchingRequests = NO_REQUESTS,
   showAreas = true,
   showRouteBuffer = false,
-  routeCoordinates = KRAKOW_COMMUTE_ROUTE,
+  routeCoordinates = NO_ROUTE,
   editableRoute = false,
+  height = 520,
   onMapPress,
   onRouteEndpointChange,
 }: LeafletMapProps) {
+  const theme = useTheme();
+  const { textScale, settings } = useAccessibility();
   const elementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMapInstance | null>(null);
   const overlayRef = useRef<LayerGroup | null>(null);
+  const areaRef = useRef<LayerGroup | null>(null);
   const fittedRouteRef = useRef('');
+  /** Request whose popup is open; reopened after the markers are redrawn (zoom, new data). */
+  const openRequestIdRef = useRef<number | null>(null);
+  const redrawingRef = useRef(false);
+  // Latest callbacks without redrawing the map on every parent render.
+  const onMapPressRef = useRef(onMapPress);
+  const onEndpointChangeRef = useRef(onRouteEndpointChange);
+  useEffect(() => {
+    onMapPressRef.current = onMapPress;
+    onEndpointChangeRef.current = onRouteEndpointChange;
+  });
+
+  const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState(14);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
-  const markerRequests = showRouteBuffer ? matchingRequests : requests;
-  const requestClusters = useMemo(
-    () => clusterRequests(markerRequests, zoom),
-    [markerRequests, zoom],
+  const requestClusters = useMemo(() => clusterRequests(requests, zoom), [requests, zoom]);
+  const matchingIds = useMemo(
+    () => new Set(matchingRequests.map((request) => request.id)),
+    [matchingRequests],
   );
-  const selectedRequest = markerRequests.find((request) => request.id === selectedRequestId);
+  const selectedRequest = requests.find((request) => request.id === selectedRequestId);
+  const hasMapPress = Boolean(onMapPress);
+  const markerSize = settings.largeTouchTargets ? 26 : 18;
 
+  // Base map + click handler.
+  useEffect(() => {
+    let disposed = false;
+    (async () => {
+      const L = await import('leaflet');
+      if (disposed || !elementRef.current || mapRef.current) return;
+      const map = L.map(elementRef.current, {
+        center: [KRAKOW_INITIAL_REGION.latitude, KRAKOW_INITIAL_REGION.longitude],
+        zoom: 14,
+        scrollWheelZoom: true,
+        keyboard: true,
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+      }).addTo(map);
+      map.on('zoomend', () => setZoom(map.getZoom()));
+      map.on('click', ({ latlng }) =>
+        onMapPressRef.current?.({ latitude: latlng.lat, longitude: latlng.lng }),
+      );
+      mapRef.current = map;
+      setZoom(map.getZoom());
+      setMapReady(true);
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (elementRef.current) elementRef.current.style.cursor = hasMapPress ? 'crosshair' : '';
+  }, [hasMapPress]);
+
+  // Route, endpoints and request markers.
   useEffect(() => {
     let disposed = false;
 
-    async function renderMap() {
+    async function draw() {
       const L = await import('leaflet');
-      if (disposed || !elementRef.current) return;
+      const map = mapRef.current;
+      if (disposed || !map) return;
 
-      if (!mapRef.current) {
-        mapRef.current = L.map(elementRef.current, {
-          center: [KRAKOW_INITIAL_REGION.latitude, KRAKOW_INITIAL_REGION.longitude],
-          zoom: 14,
-          scrollWheelZoom: true,
-        });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
-        }).addTo(mapRef.current);
-        mapRef.current.on('zoomend', () => setZoom(mapRef.current?.getZoom() ?? 14));
-      }
+      redrawingRef.current = true;
+      overlayRef.current?.remove();
+      redrawingRef.current = false;
 
-      if (overlayRef.current) {
-        overlayRef.current.remove();
-      }
-
-      const overlays = L.layerGroup().addTo(mapRef.current);
+      const overlays = L.layerGroup().addTo(map);
       overlayRef.current = overlays;
       const routePositions = routeCoordinates.map(
         (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
       );
 
-      mapRef.current.off('click');
-      if (onMapPress) {
-        mapRef.current.on('click', ({ latlng }) => {
-          onMapPress({ latitude: latlng.lat, longitude: latlng.lng });
-        });
-      }
-
       if (centerGeoJson) {
         L.geoJSON(centerGeoJson, {
           style: {
-            color: Colors.light.primary,
-            fillColor: Colors.light.primarySoft,
+            color: theme.primary,
+            fillColor: theme.primarySoft,
             fillOpacity: 0.2,
             weight: 1,
           },
         }).addTo(overlays);
       }
 
-      if (showRouteBuffer && routePositions.length >= 2) {
-        L.polyline(routePositions, {
-          color: Colors.light.primary,
-          opacity: 0.14,
-          weight: 22,
-        }).addTo(overlays);
-      }
-
       if (routePositions.length >= 2) {
+        if (showRouteBuffer) {
+          L.polyline(routePositions, {
+            color: theme.primary,
+            opacity: 0.16,
+            weight: 24,
+            interactive: false,
+          }).addTo(overlays);
+        }
         L.polyline(routePositions, {
-          color: Colors.light.primary,
-          dashArray: showRouteBuffer ? undefined : '8 6',
-          weight: 5,
+          color: theme.primary,
+          weight: settings.highContrast ? 7 : 5,
+          interactive: false,
         }).addTo(overlays);
-      }
 
-      const routeSignature = `${routePositions.length}:${routePositions[0]?.join(',')}:${routePositions.at(-1)?.join(',')}`;
-      if (
-        editableRoute &&
-        routePositions.length >= 2 &&
-        fittedRouteRef.current !== routeSignature
-      ) {
-        fittedRouteRef.current = routeSignature;
-        mapRef.current.fitBounds(routePositions, { padding: [32, 32] });
-      }
+        // Bring a new or changed route into view.
+        const signature = `${routePositions.length}:${routePositions[0].join(',')}:${routePositions.at(-1)?.join(',')}`;
+        if (fittedRouteRef.current !== signature) {
+          fittedRouteRef.current = signature;
+          map.fitBounds(routePositions, { padding: [40, 40] });
+        }
 
-      if (editableRoute && routeCoordinates.length >= 2) {
-        const endpointEntries: [RouteEndpoint, RouteCoordinate, string, string][] = [
-          ['start', routeCoordinates[0], 'A', PriorityColors[3].color],
-          ['end', routeCoordinates[routeCoordinates.length - 1], 'B', PriorityColors[1].color],
+        const endpoints: [RouteEndpoint, RouteCoordinate, string, string, string][] = [
+          ['start', routeCoordinates[0], 'A', theme.success, 'Start trasy'],
+          ['end', routeCoordinates[routeCoordinates.length - 1], 'B', theme.danger, 'Cel trasy'],
         ];
-
-        endpointEntries.forEach(([endpoint, coordinate, label, color]) => {
+        endpoints.forEach(([endpoint, coordinate, label, color, title]) => {
           const marker = L.marker([coordinate.latitude, coordinate.longitude], {
             bubblingMouseEvents: false,
-            draggable: true,
+            draggable: editableRoute,
+            keyboard: false,
+            title: editableRoute ? `${title} – przeciągnij, aby zmienić` : title,
             icon: L.divIcon({
               className: '',
-              html: `<div style="width:32px;height:32px;border-radius:16px;background:${color};color:white;border:3px solid white;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${label}</div>`,
+              html: `<div style="width:32px;height:32px;border-radius:16px;background:${color};color:#fff;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${label}</div>`,
               iconAnchor: [16, 16],
               iconSize: [32, 32],
             }),
           }).addTo(overlays);
-
           marker.on('dragend', () => {
             const position = marker.getLatLng();
-            onRouteEndpointChange?.(endpoint, {
+            onEndpointChangeRef.current?.(endpoint, {
               latitude: position.lat,
               longitude: position.lng,
             });
           });
         });
+      } else {
+        fittedRouteRef.current = '';
       }
 
-      if (showAreas) {
-        if (selectedRequest) {
-          const categoryColor = CategoryColors[selectedRequest.category];
-          const polygonRings = getAreaPolygonRings(selectedRequest.maskedArea).map((ring) =>
-            ring.map(({ latitude, longitude }) => [latitude, longitude] as [number, number]),
-          );
-
-          L.polygon(polygonRings, {
-            color: categoryColor.color,
-            fillColor: categoryColor.soft,
-            fillOpacity: 0.22,
-            weight: 1,
-          }).addTo(overlays);
-        }
-      }
+      const markersById = new Map<number, Marker>();
 
       requestClusters.forEach((cluster) => {
         if (cluster.requests.length > 1) {
+          const count = cluster.requests.length;
+          const size = markerSize + 16;
           const marker = L.marker([cluster.coordinate.latitude, cluster.coordinate.longitude], {
             bubblingMouseEvents: false,
+            title: `${count} zgłoszeń w okolicy – kliknij, aby przybliżyć`,
             icon: L.divIcon({
-              className: '',
-              html: `<div style="width:30px;height:30px;border-radius:15px;background:${Colors.light.primary};color:${Colors.light.onPrimary};border:2px solid ${Colors.light.backgroundElement};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.24)">${cluster.requests.length}</div>`,
-              iconAnchor: [15, 15],
-              iconSize: [30, 30],
+              className: 'podrodze-marker',
+              html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${theme.primary};color:${theme.onPrimary};border:2px solid ${theme.backgroundElement};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(13 * textScale)}px;box-shadow:0 1px 4px rgba(0,0,0,.3)">${count}</div>`,
+              iconAnchor: [size / 2, size / 2],
+              iconSize: [size, size],
             }),
           }).addTo(overlays);
           marker.on('click', () => {
-            const currentZoom = mapRef.current?.getZoom() ?? 14;
-            mapRef.current?.flyTo(
+            map.flyTo(
               [cluster.coordinate.latitude, cluster.coordinate.longitude],
-              Math.min(18, currentZoom + 2),
+              Math.min(18, map.getZoom() + 2),
+              { animate: !settings.reduceMotion },
             );
           });
           return;
         }
 
         const request = cluster.requests[0];
+        const alongRoute = matchingIds.has(request.id);
         const coordinate = toLatLng(request.approximateLocation.coordinates);
-        const categoryColor = CategoryColors[request.category].color;
-        const priorityColor = PriorityColors[request.priority].color;
+        const fill = CategoryColors[request.category].color;
+        const ring = PriorityColors[request.priority].color;
+        const size = alongRoute ? markerSize + 6 : markerSize;
+        const label = requestLabel(request, alongRoute);
 
-        const marker = L.circleMarker([coordinate.latitude, coordinate.longitude], {
+        // A real marker (not a canvas circle): focusable with Tab and opens with Enter. The name
+        // goes to aria-label rather than `title`, so hovering shows only the styled tooltip.
+        const marker = L.marker([coordinate.latitude, coordinate.longitude], {
           bubblingMouseEvents: false,
-          color: priorityColor,
-          fillColor: categoryColor,
-          fillOpacity: 1,
-          radius: 5,
-          weight: 2,
+          riseOnHover: true,
+          icon: L.divIcon({
+            className: 'podrodze-marker',
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${fill};border:${alongRoute ? 4 : 3}px solid ${ring};box-shadow:0 0 0 2px #fff,0 1px 4px rgba(0,0,0,.35)"></div>`,
+            iconAnchor: [size / 2, size / 2],
+            iconSize: [size, size],
+          }),
         })
-          .bindPopup(requestPopupHtml(request), {
+          .bindTooltip(escapeHtml(label), {
+            className: 'podrodze-tooltip',
+            direction: 'top',
+            offset: [0, -size / 2],
+          })
+          .bindPopup(() => requestPopup(request, alongRoute), {
             className: 'podrodze-request-popup',
             closeButton: true,
-            maxWidth: 240,
-            minWidth: 180,
+            maxWidth: 320,
             autoPanPadding: [16, 16],
           })
           .addTo(overlays);
+
+        marker.getElement()?.setAttribute('aria-label', label);
         marker.on('click', () => setSelectedRequestId(request.id));
+        marker.on('popupopen', () => {
+          openRequestIdRef.current = request.id;
+          marker.closeTooltip();
+          // Move keyboard focus into the popup so Enter reaches the action button.
+          marker.getPopup()?.getElement()?.querySelector<HTMLButtonElement>('.pd-action')?.focus();
+        });
+        marker.on('popupclose', () => {
+          if (redrawingRef.current) return;
+          openRequestIdRef.current = null;
+          setSelectedRequestId(null);
+        });
+        markersById.set(request.id, marker);
       });
 
-      mapRef.current.invalidateSize();
+      const reopen = openRequestIdRef.current;
+      if (reopen !== null) markersById.get(reopen)?.openPopup();
+
+      map.invalidateSize();
     }
 
-    renderMap();
+    draw();
 
     return () => {
       disposed = true;
-      overlayRef.current?.remove();
-      overlayRef.current = null;
     };
   }, [
     centerGeoJson,
     editableRoute,
-    matchingRequests,
-    onMapPress,
-    onRouteEndpointChange,
-    requests,
+    mapReady,
+    markerSize,
+    matchingIds,
     requestClusters,
     routeCoordinates,
-    selectedRequest,
-    showAreas,
+    settings.highContrast,
+    settings.reduceMotion,
     showRouteBuffer,
+    textScale,
+    theme,
   ]);
+
+  // Masked ~300 m area of the selected request (never the exact address).
+  useEffect(() => {
+    let disposed = false;
+    (async () => {
+      const L = await import('leaflet');
+      const map = mapRef.current;
+      areaRef.current?.remove();
+      areaRef.current = null;
+      if (disposed || !map || !showAreas || !selectedRequest) return;
+      const categoryColor = CategoryColors[selectedRequest.category];
+      const rings = getAreaPolygonRings(selectedRequest.maskedArea).map((ring) =>
+        ring.map(({ latitude, longitude }) => [latitude, longitude] as [number, number]),
+      );
+      const layer = L.layerGroup().addTo(map);
+      L.polygon(rings, {
+        color: categoryColor.color,
+        fillColor: categoryColor.soft,
+        fillOpacity: 0.3,
+        weight: 2,
+        interactive: false,
+      }).addTo(layer);
+      areaRef.current = layer;
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [mapReady, selectedRequest, showAreas]);
 
   useEffect(
     () => () => {
+      overlayRef.current?.remove();
+      areaRef.current?.remove();
       mapRef.current?.remove();
       mapRef.current = null;
     },
@@ -319,17 +464,25 @@ export function LeafletMap({
   );
 
   return (
-    <View style={styles.mapFrame}>
-      {createElement('style', { dangerouslySetInnerHTML: { __html: leafletPopupCss } })}
-      {createElement('div', { ref: elementRef, style: leafletElementStyle })}
+    <View style={[styles.mapFrame, { height, borderColor: theme.border }]}>
+      {createElement('style', {
+        dangerouslySetInnerHTML: { __html: leafletCss(theme, textScale) },
+      })}
+      {createElement('div', {
+        ref: elementRef,
+        style: leafletElementStyle,
+        role: 'region',
+        'aria-label':
+          'Mapa zgłoszeń. Klawiszem Tab przejdziesz między punktami, Enter otworzy szczegóły.',
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   mapFrame: {
-    height: 520,
     overflow: 'hidden',
     borderRadius: Radius.large,
+    borderWidth: 1,
   },
 });

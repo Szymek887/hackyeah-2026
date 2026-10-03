@@ -9,6 +9,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { ThemedText } from '@/components/themed-text';
 import { Motion, Radius, Spacing } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useTheme } from '@/hooks/use-theme';
 
 type ButtonProps = Omit<PressableProps, 'children'> & {
@@ -37,6 +38,7 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const theme = useTheme();
+  const { minTouchSize } = useAccessibility();
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
 
@@ -90,6 +92,7 @@ export function Button({
           return [
             styles.base,
             size === 'large' && styles.large,
+            { minHeight: size === 'large' ? minTouchSize + 8 : minTouchSize },
             {
               backgroundColor: pressed || hovered ? palette.active : palette.background,
               borderColor: palette.border,

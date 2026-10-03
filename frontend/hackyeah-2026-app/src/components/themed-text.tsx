@@ -1,6 +1,7 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import { Platform, StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
+import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
@@ -20,11 +21,29 @@ export type ThemedTextProps = TextProps & {
 
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
+  const { textScale } = useAccessibility();
   const defaultColor = type === 'linkPrimary' ? 'primary' : 'text';
+  const base = styles[type];
 
   return (
-    <Text style={[{ color: theme[themeColor ?? defaultColor] }, styles[type], style]} {...rest} />
+    <Text
+      style={[
+        { color: theme[themeColor ?? defaultColor] },
+        base,
+        // Accessibility text size (age group / profile setting), on top of the OS font scale.
+        textScale !== 1 && scaled(base, textScale),
+        style,
+      ]}
+      {...rest}
+    />
   );
+}
+
+function scaled(base: TextStyle, scale: number): TextStyle {
+  return {
+    fontSize: base.fontSize && Math.round(base.fontSize * scale),
+    lineHeight: base.lineHeight && Math.round(base.lineHeight * scale),
+  };
 }
 
 const styles = StyleSheet.create({

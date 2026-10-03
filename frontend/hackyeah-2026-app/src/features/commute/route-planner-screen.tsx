@@ -135,6 +135,9 @@ export function RoutePlannerScreen() {
       durationSeconds: drivingRoute?.durationSeconds ?? 0,
       isActive: true,
     });
+    // The map tab reads the same store, so the new route is already drawn there.
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
   };
 
   const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
@@ -284,18 +287,10 @@ export function RoutePlannerScreen() {
           </View>
 
           <Button
-            title={isRouteConfirmed ? '✓ Trasa zapisana (aktywna)' : 'Zatwierdź trasę'}
-            disabled={isRouting || isPending}
+            title="Zapisz trasę i pokaż na mapie"
+            disabled={isRouting}
             onPress={handleConfirmRoute}
           />
-
-          {isRouteConfirmed && (
-            <Button
-              title="Wróć do mapy z tą trasą"
-              variant="secondary"
-              onPress={() => router.push('/(tabs)')}
-            />
-          )}
 
           {drivingRoute && (
             <ThemedText type="small" themeColor="textSecondary">

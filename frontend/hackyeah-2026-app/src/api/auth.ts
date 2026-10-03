@@ -1,5 +1,5 @@
 import { apiRequest } from '@/api/client';
-import type { CreateUserDto, UserProfile } from '@/api/types';
+import type { CreateUserDto, UpdateLanguagesDto, UserProfile } from '@/api/types';
 
 /**
  * Backend auth is a mock: the user is identified by the `X-User-Id` header.
@@ -16,3 +16,7 @@ export const getDemoAccounts = () => apiRequest<UserProfile[]>('/api/users/demo'
 /** `POST /api/users` (🔵 PROPOSED) – public, creates an unverified account. → 201 UserProfile. */
 export const createUser = (dto: CreateUserDto) =>
   apiRequest<UserProfile>('/api/users', { method: 'POST', body: dto });
+
+/** `PUT /api/users/me/languages` – replaces the languages the caller speaks. → 200 UserProfile. */
+export const updateMyLanguages = (dto: UpdateLanguagesDto) =>
+  apiRequest<UserProfile>('/api/users/me/languages', { method: 'PUT', body: dto });
