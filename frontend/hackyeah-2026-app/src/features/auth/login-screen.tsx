@@ -14,7 +14,6 @@ import { demoAccounts, type DemoAccount } from '@/api/auth';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/session-context';
 import { RoleLabels } from '@/features/requests/labels';
@@ -22,28 +21,26 @@ import { useTheme } from '@/hooks/use-theme';
 import { enterItem, enterScreen } from '@/lib/motion';
 
 /**
- * Login portal. The backend has mock auth only (`X-User-Id` header + seeded users),
- * so the user picks a demo account or types a user id from the database.
+ * Login portal. Users pick a demo account (requester or volunteer).
  */
 export function LoginScreen() {
   const theme = useTheme();
   const { signIn } = useAuth();
   const [selectedId, setSelectedId] = useState<string>(demoAccounts[0]?.id ?? '');
-  const [customId, setCustomId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const userId = customId.trim() || selectedId;
+  const selectedAccount = demoAccounts.find((a) => a.id === selectedId);
 
   const handleSignIn = async () => {
-    if (!userId) {
-      setError('Wybierz konto lub wpisz identyfikator.');
+    if (!selectedId) {
+      setError('Wybierz konto, aby kontynuować.');
       return;
     }
     setError(null);
     setPending(true);
     try {
-      await signIn(userId);
+      await signIn(selectedId);
       // Route guard in app/_layout.tsx switches to the app automatically.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nie udało się zalogować.');
@@ -66,7 +63,8 @@ export function LoginScreen() {
               </View>
               <ThemedText type="title">Witaj w PoDrodze</ThemedText>
               <ThemedText themeColor="textSecondary">
-                Sąsiedzka pomoc po drodze. Zaloguj się, aby zgłosić potrzebę albo komuś pomóc.
+                Sąsiedzka pomoc po drodze. Wybierz profil, aby zgłosić potrzebę albo pomóc komuś na
+                swojej trasie.
               </ThemedText>
             </View>
 
@@ -75,16 +73,15 @@ export function LoginScreen() {
                 styles.panel,
                 { backgroundColor: theme.backgroundElement, borderColor: theme.border },
               ]}>
-              <ThemedText type="smallBold">Wybierz konto</ThemedText>
+              <ThemedText type="smallBold">Wybierz profil do logowania:</ThemedText>
               <View style={styles.accounts}>
                 {demoAccounts.map((account, index) => (
                   <Animated.View key={account.id} entering={enterItem(index)}>
                     <AccountOption
                       account={account}
-                      selected={!customId.trim() && account.id === selectedId}
+                      selected={account.id === selectedId}
                       onPress={() => {
                         setSelectedId(account.id);
-                        setCustomId('');
                         setError(null);
                       }}
                     />
@@ -92,29 +89,18 @@ export function LoginScreen() {
                 ))}
               </View>
 
-              <View style={styles.divider}>
-                <View style={[styles.line, { backgroundColor: theme.border }]} />
-                <ThemedText type="caption" themeColor="textSecondary">
-                  albo
+              {error && (
+                <ThemedText type="small" themeColor="danger">
+                  {error}
                 </ThemedText>
-                <View style={[styles.line, { backgroundColor: theme.border }]} />
-              </View>
-
-              <Input
-                label="Identyfikator użytkownika"
-                placeholder="np. 4"
-                keyboardType="number-pad"
-                value={customId}
-                onChangeText={(text) => {
-                  setCustomId(text);
-                  setError(null);
-                }}
-                onSubmitEditing={handleSignIn}
-                error={error ?? undefined}
-              />
+              )}
 
               <Button
-                title={pending ? 'Logowanie…' : 'Zaloguj się'}
+                title={
+                  pending
+                    ? 'Logowanie…'
+                    : `Zaloguj jako ${selectedAccount?.displayName ?? 'wybrany użytkownik'}`
+                }
                 size="large"
                 disabled={pending}
                 onPress={handleSignIn}
@@ -122,7 +108,8 @@ export function LoginScreen() {
             </View>
 
             <ThemedText type="caption" themeColor="textSecondary" style={styles.footnote}>
-              Wersja demonstracyjna – logowanie przez mObywatel pojawi się w kolejnej wersji.
+              Wersja demonstracyjna – tożsamość zweryfikowana z makietą Profilu Zaufanego /
+              mObywatel.
             </ThemedText>
           </Animated.View>
         </ScrollView>
@@ -169,7 +156,7 @@ function AccountOption({ account, selected, onPress }: AccountOptionProps) {
       <View style={styles.accountText}>
         <ThemedText type="defaultBold">{account.displayName}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {RoleLabels[account.role]} · ID {account.id}
+          {RoleLabels[account.role]}
         </ThemedText>
       </View>
       {account.verified ? (
@@ -239,15 +226,6 @@ const styles = StyleSheet.create({
   },
   accountText: {
     flex: 1,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  line: {
-    flex: 1,
-    height: 1,
   },
   footnote: {
     textAlign: 'center',
