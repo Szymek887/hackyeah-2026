@@ -20,7 +20,6 @@ import { useDrivingRoute } from '@/features/commute/hooks';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
 import { PriorityLabels } from '@/features/requests/labels';
-import { useUserLocation } from '@/features/map/use-user-location';
 import { useTheme } from '@/hooks/use-theme';
 import {
   KRAKOW_COMMUTE_ROUTE,
@@ -45,7 +44,6 @@ export function RoutePlannerScreen() {
     startLabel?: string;
   }>();
   const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
-  const { locate, isLoading: isLocating } = useUserLocation();
 
   const [start, setStart] = useState<RouteCoordinate>(() => {
     if (params.startLat && params.startLng) {
@@ -69,18 +67,6 @@ export function RoutePlannerScreen() {
     );
     return matched?.name ?? 'Kazimierz / Podgórze';
   });
-
-  const hasAutoLocatedRef = useRef(false);
-  useEffect(() => {
-    if (params.startLat || savedRoute || hasAutoLocatedRef.current) return;
-    hasAutoLocatedRef.current = true;
-    locate().then((loc) => {
-      if (loc) {
-        setStart(loc);
-        setStartLabel('Moja lokalizacja (GPS)');
-      }
-    });
-  }, [locate, params.startLat, savedRoute]);
 
   const [searchTarget, setSearchTarget] = useState<'start' | 'end' | null>(null);
   const [isListExpanded, setIsListExpanded] = useState(false);
@@ -146,19 +132,16 @@ export function RoutePlannerScreen() {
     }
   };
 
-  const centerOnMyLocation = async () => {
-    const loc = await locate();
-    if (loc) {
-      mapRef.current?.animateToRegion(
-        {
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        },
-        300,
-      );
-    }
+  const centerOnStart = () => {
+    mapRef.current?.animateToRegion(
+      {
+        latitude: start.latitude,
+        longitude: start.longitude,
+        latitudeDelta: 0.018,
+        longitudeDelta: 0.018,
+      },
+      300,
+    );
   };
 
   const fitFullRoute = () => {
@@ -257,7 +240,7 @@ export function RoutePlannerScreen() {
         ref={mapRef}
         style={styles.map}
         initialRegion={KRAKOW_INITIAL_REGION}
-        showsUserLocation
+        showsUserLocation={false}
         showsCompass
         onRegionChangeComplete={(region) => {
           setMapRegion(region);
@@ -338,14 +321,10 @@ export function RoutePlannerScreen() {
             { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             pressed && styles.pressed,
           ]}
-          onPress={centerOnMyLocation}>
-          {isLocating ? (
-            <ActivityIndicator size="small" color={theme.primary} />
-          ) : (
-            <ThemedText type="smallBold" style={{ color: theme.primary }}>
-              Moja pozycja
-            </ThemedText>
-          )}
+          onPress={centerOnStart}>
+          <ThemedText type="smallBold" style={{ color: theme.primary }}>
+            Punkt startu
+          </ThemedText>
         </Pressable>
       </View>
 

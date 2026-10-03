@@ -572,9 +572,12 @@ export function LeafletMap({
       const key = `${meLatitude},${meLongitude}`;
       if (shownLocationRef.current !== key) {
         shownLocationRef.current = key;
-        map.setView([meLatitude, meLongitude], Math.max(map.getZoom(), 15), {
-          animate: !settings.reduceMotion,
-        });
+        const targetZoom = Math.max(map.getZoom(), 16);
+        if (settings.reduceMotion) {
+          map.setView([meLatitude, meLongitude], targetZoom, { animate: false });
+        } else {
+          map.flyTo([meLatitude, meLongitude], targetZoom, { duration: 0.35 });
+        }
       }
     })();
     return () => {
