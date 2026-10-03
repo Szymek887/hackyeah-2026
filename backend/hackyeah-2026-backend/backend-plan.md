@@ -15,7 +15,7 @@
 - Publiczne wyszukiwanie zgłoszeń w promieniu `GET /api/help-requests/nearby` z PostGIS `ST_DWithin` – **B2.1 zrobione**.
 - Publiczne wyszukiwanie zgłoszeń wzdłuż trasy `POST /api/help-requests/along-route` z `LINESTRING` i PostGIS `ST_DWithin` – **B2.2 zrobione**.
 - Maskowanie lokalizacji dla odpowiedzi publicznych: przybliżony punkt i polygon komórki ok. 300 m, bez dokładnego adresu – **B2.4 częściowo zrobione**.
-- Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (bez podpięcia do `POST /requests`, które jeszcze nie istnieje). Model: `qwen2.5:7b` w Ollamie.
+- Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (podpięte do `POST /api/help-requests`). Model: `qwen2.5:7b` w Ollamie.
 - Analityka miejska (pakiet `analytics/`, `GET /api/analytics/heatmap`, `GET /api/analytics/summary`) – **B3.4 zrobione (API)**; widok dashboardu na froncie – później.
 
 ## 2. Decyzje techniczne
@@ -71,11 +71,11 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`.
 |---|---|---|
 | `GET /users/me` | Profil, reputacja, flagi – ✅ zrobione | B1 |
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
-| `POST /requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI | B2 |
+| `POST /requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI – ✅ zrobione (`POST /api/help-requests`) | B2 |
 | `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
 | `GET /help-requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON – ✅ zrobione | B2.1 |
 | `POST /help-requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu – ✅ zrobione | B2.2 |
-| `GET /requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` | B2.4 |
+| `GET /requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` – ✅ zrobione (`GET /api/help-requests/{id}`) | B2.4 |
 | `POST /requests/{id}/offer` | Wolontariusz deklaruje pomoc (`OPEN→OFFERED`) | B3.1 |
 | `POST /requests/{id}/accept` | Zgłaszający akceptuje (`OFFERED→ACCEPTED`), generowany token QR | B3.1/B3.2 |
 | `GET /requests/{id}/qr` | Token QR dla zgłaszającego (tylko `ACCEPTED`) | B3.2 |
@@ -124,8 +124,18 @@ Token generowany przy `ACCEPTED`, ważny np. 24 h, jednorazowy. `complete` weryf
 ### 6.5 Reputacja (Dev 2)
 Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayesowska, by pojedyncza ocena nie dawała skrajności); +bonus za `identityVerified`. Ocena możliwa tylko po `COMPLETED`, raz na stronę; gdy obie strony ocenią → `RATED`.
 
-### 6.6 Priorytet i niepełnosprawność
+### 6.6 Priorytet i niepełnosprawność – ✅ zrobione
 `finalPriority = max(1, aiPriority − 1)` gdy zgłaszający ma `hasSpecialNeeds` (priorytet 1 = najpilniejszy). Zapis zarówno wyniku AI, jak i końcowego priorytetu.
+- ✅ `PriorityPolicy`; `HelpRequest.priority` (końcowy) + `aiPriority` (wynik AI), a także `tags`, `riskFlags`, `classificationSource`.
+
+### 6.6a Widoczność szczegółów i flagi ryzyka (Dev 2) – ✅ zrobione
+- ✅ `HelpRequestVisibilityPolicy`: autor zawsze `FULL`; przypisany wolontariusz `FULL` od `ACCEPTED` (`ACCEPTED`/`COMPLETED`/`RATED`); pozostali `PUBLIC` (zamaskowany obszar, bez adresu, dokładnego punktu, zgłaszającego i flag ryzyka). Pole `visibility` w odpowiedzi.
+- ✅ `SCAM_SUSPECTED` → status `UNDER_REVIEW`: znika z `nearby`/`along-route` (filtrują po `OPEN`) i z heatmapy; `GET /{id}` zwraca 404 wszystkim poza autorem.
+- ✅ `MEDICAL_EMERGENCY` → zgłoszenie zostaje `OPEN`, flaga w `riskFlags` (front pokazuje komunikat o 112).
+- ✅ `PERSONAL_DATA` → w widoku publicznym `description = null`.
+- ✅ `CITY_ADMIN` nie tworzy zgłoszeń (403).
+- ✅ `StatusConstraintInitializer` odtwarza przy starcie `CHECK` na `help_requests.status` z enuma (`ddl-auto=update` go nie aktualizuje) – nowe statusy działają bez resetu bazy.
+- ⏳ Ręczny przegląd zgłoszeń `UNDER_REVIEW` (np. przez `CITY_ADMIN`) – poza zakresem MVP.
 
 ### 6.7 AI (Dev 3) – ✅ zrobione (poza podpięciem do tworzenia zgłoszenia)
 - ✅ `LlmRequestClassifier` ładuje prompt systemowy z `prompts/classify-request.txt` (kategorie, priorytet 1–3, tagi, flagi ryzyka) i wywołuje Ollamę (`OllamaClient`, `/api/chat`) ze schematem JSON w polu `format`.
@@ -140,8 +150,8 @@ Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayeso
   - Walidacja tagów: tylko polskie litery, maks. 3 słowa i 30 znaków; tagi z cyframi odrzucane (ochrona przed wyciekiem PESEL/telefonu). Literówek złożonych z polskich liter (np. „pomoć”) nie da się tak wykryć.
   - Rozgrzewka modelu (`OllamaWarmUp`): po starcie aplikacji w tle wykonywana jest przykładowa klasyfikacja, co ładuje model i cache promptu – pierwsze zapytanie ~2,4 s zamiast ~8,5 s. Błąd rozgrzewki tylko logowany.
   - Fallback: `BASIC_NEEDS` rozdzielone na `MEDICINE` / `GROCERIES`, nagły wypadek → `MEDICINE`; rdzenie słów dopasowywane tylko na początku wyrazu (wcześniej „lek” pasowało do „mleka”); „pożycz” ma pierwszeństwo przed słowami o naprawach.
-- ⏳ Podpięcie klasyfikacji do `POST /requests` (po encji `HelpRequest`, Dev 1/2).
-- ⏳ Podejrzenie scamu → zgłoszenie nie pojawia się publicznie do ręcznego przeglądu (lub oznaczone) – wymaga `POST /requests`.
+- ✅ Podpięcie klasyfikacji do `POST /api/help-requests` (Dev 2, `HelpRequestDetailsService`; klasyfikacja poza transakcją).
+- ✅ Podejrzenie scamu → status `UNDER_REVIEW`, zgłoszenie nie pojawia się publicznie (Dev 2, zob. 6.6a).
 - ⏳ Frontend (`types.ts`) oczekuje kategorii `BASIC_NEEDS` i pola `suspicious: boolean` – do zmiany po stronie frontu (`MEDICINE`/`GROCERIES`; `suspicious` = `riskFlags` zawiera `SCAM_SUSPECTED`) lub dodania pola w backendzie.
 
 ### 6.8 Analityka (Dev 3) – ✅ API zrobione
@@ -177,8 +187,8 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 
 ### Etap 2 (6–18 h)
 - **Dev 1:** ✅ `nearby` i ✅ `along-route` (**B2.1, B2.2**), ✅ maskowanie i odpowiedzi publiczne (**B2.4** częściowo); ⏳ testy integracyjne/Testcontainers.
-- **Dev 2:** `POST /requests`, `GET /requests/{id}` z widocznością zależną od stanu i roli (**B2.4**).
-- **Dev 3:** ✅ `RequestClassifier`, ✅ `POST /requests/classify`, ✅ fallback regułowy; ⏳ podpięcie do tworzenia zgłoszenia (**B2.3**).
+- **Dev 2:** ✅ `POST /api/help-requests` z klasyfikacją AI i priorytetem, ✅ `GET /api/help-requests/{id}` z widocznością zależną od stanu i roli (**B2.4**), ✅ test „brak wycieku” dla szczegółów, ✅ `http/help-requests-crud.http`.
+- **Dev 3:** ✅ `RequestClassifier`, ✅ `POST /requests/classify`, ✅ fallback regułowy; ✅ podpięcie do tworzenia zgłoszenia (**B2.3**, zrobione przez Dev 2).
 
 ### Etap 3 (18–30 h)
 - **Dev 2:** przejścia stanów, QR, `complete`, oceny i reputacja (**B3.1–B3.3**), mock weryfikacji.

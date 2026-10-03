@@ -6,5 +6,7 @@ public enum HelpRequestStatus {
     ACCEPTED,
     COMPLETED,
     CANCELLED,
-    RATED
+    RATED,
+    /** Flagged by AI as a suspected scam; hidden from public lists until manually reviewed. */
+    UNDER_REVIEW
 }

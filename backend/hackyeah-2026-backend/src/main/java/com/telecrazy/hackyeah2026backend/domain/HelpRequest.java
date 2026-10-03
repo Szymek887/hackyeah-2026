@@ -1,6 +1,10 @@
 package com.telecrazy.hackyeah2026backend.domain;
 
+import com.telecrazy.hackyeah2026backend.ai.ClassificationSource;
+import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -21,6 +25,10 @@ import org.hibernate.annotations.ColumnDefault;
 import org.locationtech.jts.geom.Point;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -53,8 +61,26 @@ public class HelpRequest {
     @Column(nullable = false)
     private HelpCategory category;
 
+    /** Final priority (1 = most urgent), after adjustments such as the requester's special needs. */
     @Column(nullable = false)
     private int priority;
+
+    /** Priority suggested by the classifier, before adjustments. */
+    private Integer aiPriority;
+
+    @Enumerated(EnumType.STRING)
+    private ClassificationSource classificationSource;
+
+    @ElementCollection
+    @CollectionTable(name = "help_request_tags", joinColumns = @JoinColumn(name = "help_request_id"))
+    @Column(name = "tag", nullable = false, length = 60)
+    private List<String> tags = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "help_request_risk_flags", joinColumns = @JoinColumn(name = "help_request_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "risk_flag", nullable = false)
+    private Set<RiskFlag> riskFlags = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
