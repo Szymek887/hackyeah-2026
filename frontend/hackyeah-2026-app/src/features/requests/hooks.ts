@@ -21,10 +21,14 @@ export const requestKeys = {
   detail: (id: number) => [...requestKeys.all, 'detail', id] as const,
 };
 
-export function useNearbyRequests(query: NearbyQuery) {
+export function useNearbyRequests(
+  query: NearbyQuery,
+  options: { enabled?: boolean; refetchInterval?: number } = {},
+) {
   return useQuery({
     queryKey: requestKeys.nearby(query),
     queryFn: () => getNearbyRequests(query),
+    ...options,
   });
 }
 
