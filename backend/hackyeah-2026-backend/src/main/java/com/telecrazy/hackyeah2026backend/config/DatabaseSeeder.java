@@ -16,6 +16,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Instant;
 import java.util.List;
 
 @Configuration
@@ -146,8 +147,12 @@ public class DatabaseSeeder {
             int trustScore,
             String... languages
     ) {
-        AppUser user = new AppUser(displayName, role, identityVerified, specialNeeds, trustScore);
+        AppUser user = new AppUser(displayName, role, identityVerified, false, trustScore);
         user.replaceLanguages(List.of(languages));
+        if (specialNeeds) {
+            // Simulates the consent given at sign-up: special needs are stored only with a consent record.
+            user.grantSpecialNeedsConsent(Instant.now());
+        }
         return user;
     }
 

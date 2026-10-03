@@ -57,6 +57,8 @@ type SeedUser = [
   languages: string[],
 ];
 
+const SEED_CONSENT_GRANTED_AT = '2026-10-01T10:00:00Z';
+
 // Same order as the seeder, so ids match the real database (1 = Anna K. … 13 = Miasto Kraków).
 const SEED_USERS: SeedUser[] = [
   ['Anna K.', 'REQUESTER', true, true, 72, ['pl']],
@@ -81,8 +83,9 @@ export const users: UserProfile[] = SEED_USERS.map(
     role,
     identityVerified,
     specialNeeds,
-    // Consent is off by default, as in the backend seeder.
-    shareSpecialNeeds: false,
+    // As in the backend seeder: special needs are stored together with the consent given at sign-up.
+    specialNeedsConsent: specialNeeds,
+    specialNeedsConsentGrantedAt: specialNeeds ? SEED_CONSENT_GRANTED_AT : null,
     trustScore,
     ratingCount: 0,
     ratingAverage: null,

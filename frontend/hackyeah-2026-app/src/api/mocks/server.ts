@@ -180,13 +180,16 @@ function createUser(body: CreateUserDto): UserProfile {
     errors.role = 'must be REQUESTER or VOLUNTEER';
   if (Object.keys(errors).length) throw new ApiError(400, 'Request validation failed', errors);
 
+  // Sign-up consent is not built yet: declaring special needs here stands in for giving it.
+  const specialNeeds = body.role === 'REQUESTER' && Boolean(body.specialNeeds);
   const user: UserProfile = {
     id: Math.max(...users.map((u) => u.id)) + 1,
     displayName,
     role: body.role,
     identityVerified: false,
-    specialNeeds: body.role === 'REQUESTER' && Boolean(body.specialNeeds),
-    shareSpecialNeeds: false,
+    specialNeeds,
+    specialNeedsConsent: specialNeeds,
+    specialNeedsConsentGrantedAt: specialNeeds ? new Date().toISOString() : null,
     trustScore: NEW_USER_TRUST,
     ratingCount: 0,
     ratingAverage: null,
@@ -219,20 +222,29 @@ function updateLanguages(user: UserProfile, body: UpdateLanguagesDto) {
   return user;
 }
 
-// UserController.updateSpecialNeedsConsent: explicit boolean required, revocable, effective at once.
+// UserController.updateSpecialNeedsConsent: requesters only. Withdrawing deletes the consent record
+// and the special needs; granting creates the record and stores the special needs again.
 function updateSpecialNeedsConsent(user: UserProfile, body: UpdateSpecialNeedsConsentDto) {
-  if (typeof body?.shareWithVolunteer !== 'boolean')
-    throw new ApiError(400, 'Request validation failed', {
-      shareWithVolunteer: 'must not be null',
-    });
-  user.shareSpecialNeeds = body.shareWithVolunteer;
+  if (user.role !== 'REQUESTER')
+    throw forbidden('Only requesters can manage special-needs consent');
+  if (typeof body?.consent !== 'boolean')
+    throw new ApiError(400, 'Request validation failed', { consent: 'must not be null' });
+  if (body.consent) {
+    user.specialNeedsConsentGrantedAt ??= new Date().toISOString();
+    user.specialNeedsConsent = true;
+    user.specialNeeds = true;
+  } else {
+    user.specialNeedsConsent = false;
+    user.specialNeedsConsentGrantedAt = null;
+    user.specialNeeds = false;
+  }
   return user;
 }
 
-/** AppUser.sharesSpecialNeeds: true only with special needs AND consent. */
+/** AppUser.sharesSpecialNeeds: true only with special needs AND a consent record. */
 function sharesSpecialNeeds(userId: number) {
   const user = users.find((u) => u.id === userId);
-  return Boolean(user?.specialNeeds && user.shareSpecialNeeds);
+  return Boolean(user?.specialNeeds && user.specialNeedsConsent);
 }
 
 // ---------- Views (HelpRequestViewMapper + policies) ----------

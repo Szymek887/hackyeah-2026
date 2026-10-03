@@ -57,37 +57,57 @@ X-User-Id: {{requesterId}}
     });
 %}
 
-### Give consent to share special needs with the accepted volunteer (profile switch)
+### Withdraw the special-needs consent (profile switch off) – deletes the consent record and specialNeeds
 PUT {{host}}/api/users/me/special-needs-consent
 Content-Type: application/json
 Accept: application/json
 X-User-Id: {{requesterId}}
 
 {
-  "shareWithVolunteer": true
+  "consent": false
 }
 
 > {%
-    client.test("Consent is stored", function () {
+    client.test("Consent and special needs are deleted", function () {
         client.assert(response.status === 200, "Expected status 200");
-        client.assert(response.body.shareSpecialNeeds === true, "Expected shareSpecialNeeds = true");
+        client.assert(response.body.specialNeedsConsent === false, "Expected no consent");
+        client.assert(response.body.specialNeedsConsentGrantedAt === null, "Expected no consent date");
+        client.assert(response.body.specialNeeds === false, "Expected specialNeeds deleted");
     });
 %}
 
-### Withdraw the consent
+### Give the consent again (profile switch on) – new consent record, specialNeeds stored again
 PUT {{host}}/api/users/me/special-needs-consent
 Content-Type: application/json
 Accept: application/json
 X-User-Id: {{requesterId}}
 
 {
-  "shareWithVolunteer": false
+  "consent": true
 }
 
 > {%
-    client.test("Consent is withdrawn", function () {
+    client.test("Consent is recorded again", function () {
         client.assert(response.status === 200, "Expected status 200");
-        client.assert(response.body.shareSpecialNeeds === false, "Expected shareSpecialNeeds = false");
+        client.assert(response.body.specialNeedsConsent === true, "Expected consent");
+        client.assert(response.body.specialNeedsConsentGrantedAt !== null, "Expected consent date");
+        client.assert(response.body.specialNeeds === true, "Expected specialNeeds stored");
+    });
+%}
+
+### Volunteers cannot manage special-needs consent
+PUT {{host}}/api/users/me/special-needs-consent
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{volunteerId}}
+
+{
+  "consent": true
+}
+
+> {%
+    client.test("Volunteer gets 403", function () {
+        client.assert(response.status === 403, "Expected status 403");
     });
 %}
 

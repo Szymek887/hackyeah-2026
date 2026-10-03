@@ -1,5 +1,6 @@
 package com.telecrazy.hackyeah2026backend.domain;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -11,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -45,22 +47,22 @@ public class AppUser {
     @Column(nullable = false)
     private boolean identityVerified;
 
-    /** Sensitive (health data). Used internally for the priority bump; never shown without consent. */
+    /**
+     * Sensitive (health data). Stored only while {@link #specialNeedsConsent} exists: granting the consent
+     * sets it, withdrawing clears it. Used for the priority bump and, via the consent, shown to the
+     * accepted volunteer.
+     */
     @Column(nullable = false)
     private boolean specialNeeds;
 
     /**
-     * Consent to tell the assigned volunteer (once the requester accepted their offer) that the requester
-     * has special needs. Off by default, revocable at any time, see {@link #updateSpecialNeedsConsent}.
+     * Consent to store and share the special needs. {@code null} = no consent; withdrawing deletes the row
+     * ({@code orphanRemoval}).
      */
-    @ColumnDefault("false")
-    @Column(nullable = false)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "special_needs_consent_id", unique = true)
     @Setter(AccessLevel.NONE)
-    private boolean shareSpecialNeeds;
-
-    /** When the consent was last given or withdrawn (record of consent). */
-    @Setter(AccessLevel.NONE)
-    private Instant specialNeedsConsentUpdatedAt;
+    private SpecialNeedsConsent specialNeedsConsent;
 
     @Column(nullable = false)
     private int trustScore;
@@ -107,17 +109,30 @@ public class AppUser {
         languages.addAll(normalized);
     }
 
-    public void updateSpecialNeedsConsent(boolean share, Instant now) {
-        this.shareSpecialNeeds = share;
-        this.specialNeedsConsentUpdatedAt = now;
+    /** Creates the consent record (if missing) and stores that the user has special needs. Idempotent. */
+    public void grantSpecialNeedsConsent(Instant now) {
+        if (specialNeedsConsent == null) {
+            specialNeedsConsent = new SpecialNeedsConsent(now);
+        }
+        specialNeeds = true;
+    }
+
+    /** Deletes the consent record and the special-needs information itself. Idempotent. */
+    public void withdrawSpecialNeedsConsent() {
+        specialNeedsConsent = null;
+        specialNeeds = false;
+    }
+
+    public boolean hasSpecialNeedsConsent() {
+        return specialNeedsConsent != null;
     }
 
     /**
-     * What the assigned volunteer may learn: {@code true} only when the user has special needs
-     * <em>and</em> consented. {@code false} does not reveal which of the two is missing.
+     * What the accepted volunteer may learn: {@code true} only with special needs <em>and</em> a consent
+     * record. {@code false} does not reveal which of the two is missing.
      */
     public boolean sharesSpecialNeeds() {
-        return specialNeeds && shareSpecialNeeds;
+        return specialNeeds && hasSpecialNeedsConsent();
     }
 
     public void addRating(int stars) {

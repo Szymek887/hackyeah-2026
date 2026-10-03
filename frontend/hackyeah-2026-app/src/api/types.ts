@@ -72,10 +72,12 @@ export type UserProfile = {
   displayName: string;
   role: UserRole;
   identityVerified: boolean;
-  /** Sensitive (health data). Never shown to others without consent, see `shareSpecialNeeds`. */
+  /** Sensitive (health data). Stored only while `specialNeedsConsent` is true (contract §3.6). */
   specialNeeds: boolean;
-  /** Consent to tell the accepted volunteer about the special needs. Off by default (contract §3.6). */
-  shareSpecialNeeds: boolean;
+  /** A consent record exists: special needs may be stored and shown to the accepted volunteer. */
+  specialNeedsConsent: boolean;
+  /** When the consent was given (ISO-8601), null without consent. */
+  specialNeedsConsentGrantedAt: string | null;
   trustScore: number;
   ratingCount: number;
   /** null until the user is rated. */
@@ -102,9 +104,12 @@ export type UpdateLanguagesDto = {
   languages: LanguageCode[];
 };
 
-/** `UpdateSpecialNeedsConsentRequest` – `PUT /api/users/me/special-needs-consent` (profile switch). */
+/**
+ * `UpdateSpecialNeedsConsentRequest` – `PUT /api/users/me/special-needs-consent` (profile switch).
+ * true creates the consent record and stores the special needs; false deletes both.
+ */
 export type UpdateSpecialNeedsConsentDto = {
-  shareWithVolunteer: boolean;
+  consent: boolean;
 };
 
 /**

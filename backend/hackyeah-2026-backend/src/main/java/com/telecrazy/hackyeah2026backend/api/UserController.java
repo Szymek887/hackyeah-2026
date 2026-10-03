@@ -2,6 +2,8 @@ package com.telecrazy.hackyeah2026backend.api;
 
 import com.telecrazy.hackyeah2026backend.auth.CurrentUser;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.UserRole;
+import com.telecrazy.hackyeah2026backend.exception.ForbiddenException;
 import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,15 +60,23 @@ public class UserController {
     }
 
     /**
-     * Gives or withdraws consent to tell the assigned volunteer (after acceptance) about the caller's
-     * special needs. Takes effect immediately for every request, including already accepted ones.
+     * Grants or withdraws the consent to store the caller's special needs and share them with the accepted
+     * volunteer. Withdrawing deletes the consent record and the special-needs information; granting creates
+     * the record and stores the special needs again. Takes effect immediately, also on accepted requests.
      */
     @PutMapping("/me/special-needs-consent")
     public UserProfileResponse updateSpecialNeedsConsent(
             @CurrentUser AppUser user,
             @Valid @RequestBody UpdateSpecialNeedsConsentRequest request
     ) {
-        user.updateSpecialNeedsConsent(request.shareWithVolunteer(), clock.instant());
+        if (user.getRole() != UserRole.REQUESTER) {
+            throw new ForbiddenException("Only requesters can manage special-needs consent");
+        }
+        if (request.consent()) {
+            user.grantSpecialNeedsConsent(clock.instant());
+        } else {
+            user.withdrawSpecialNeedsConsent();
+        }
         return UserProfileResponse.from(userRepository.save(user));
     }
 }

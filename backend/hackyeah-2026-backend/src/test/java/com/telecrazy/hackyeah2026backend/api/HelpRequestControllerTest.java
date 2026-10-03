@@ -156,8 +156,8 @@ class HelpRequestControllerTest {
     }
 
     @Test
-    void assignedVolunteerLearnsAboutSpecialNeedsOnlyWithConsent() throws Exception {
-        requester.setSpecialNeeds(true);
+    void assignedVolunteerLearnsAboutSpecialNeedsOnlyWhileConsentExists() throws Exception {
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
         HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
         request.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
@@ -165,18 +165,18 @@ class HelpRequestControllerTest {
         mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visibility").value("FULL"))
-                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(true));
 
-        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+        requester.withdrawSpecialNeedsConsent();
 
         mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requesterSpecialNeeds").value(true));
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
     }
 
     @Test
-    void consentWithoutSpecialNeedsRevealsNothing() throws Exception {
-        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+    void specialNeedsWithoutConsentRecordRevealNothing() throws Exception {
+        requester.setSpecialNeeds(true); // e.g. data from before consent records existed
         HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
         request.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
@@ -187,8 +187,7 @@ class HelpRequestControllerTest {
 
     @Test
     void specialNeedsNeverReachPublicViewsOrVolunteerBeforeAcceptance() throws Exception {
-        requester.setSpecialNeeds(true);
-        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
         HelpRequest offered = storedRequest(HelpRequestStatus.OFFERED);
         offered.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(offered));

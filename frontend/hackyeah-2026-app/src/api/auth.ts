@@ -27,8 +27,9 @@ export const updateMyLanguages = (dto: UpdateLanguagesDto) =>
   apiRequest<UserProfile>('/api/users/me/languages', { method: 'PUT', body: dto });
 
 /**
- * `PUT /api/users/me/special-needs-consent` – gives or withdraws consent to tell the accepted
- * volunteer about the caller's special needs. Takes effect immediately. → 200 UserProfile.
+ * `PUT /api/users/me/special-needs-consent` – requesters only. `consent: false` deletes the consent
+ * record and the special-needs information; `true` creates the record and stores it again.
+ * Takes effect immediately. → 200 UserProfile.
  */
 export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto) =>
   apiRequest<UserProfile>('/api/users/me/special-needs-consent', { method: 'PUT', body: dto });

@@ -50,7 +50,7 @@ The frontend has a clean seam for integration: every call goes through `src/api/
 | Requester name / trust on cards and details | public list/details have no requester at all (by design) | `requesterTrust` (anonymous) on PUBLIC details; cards drop the name |
 | "Is this my request / my offer?" | PUBLIC view has no ids | `viewerRole` on both views |
 | Tags on map/list | not in list items | add `tags` to `PublicHelpRequestResponse` |
-| Special needs of the requester | sensitive (health data) | ✅ consent-based: `shareSpecialNeeds` switch on the profile, `requesterSpecialNeeds` only in `FULL` for the accepted volunteer (contract §3.6). No public badge. |
+| Special needs of the requester | sensitive (health data) | ✅ consent record (store + share) given at sign-up, withdrawable with the profile switch – withdrawal deletes the record and `specialNeeds`; `requesterSpecialNeeds` only in `FULL` for the accepted volunteer (contract §3.6). No public badge. |
 | Star rating (`ratingAverage`) | only `ratingCount` | add `ratingAverage` to `UserSummary` and profile |
 | City points on profile | none | `cityPoints` on profile (awarded with ratings) |
 | User-picked category in form | backend ignores it, always uses AI | **decided: AI only**, no override – the form shows the AI suggestion read-only |
@@ -105,8 +105,9 @@ All backend endpoints here are already live, so this is frontend-only work again
 |---|---|---|
 | 2.1 | ✅ `createRequest`: send the flat body from contract §4.5 (`lat`, `lng`, `street`, `buildingNumber`, `apartmentNumber`). Drop `city`, `priority`, `tags`. | FE1 |
 | 2.2 | Real location: device location via `expo-location` with "pick on map" fallback; city centre only as last resort. | FE1 + FE2 |
-| 2.3 | ✅ Backend: special needs with consent – `PUT /api/users/me/special-needs-consent`, `shareSpecialNeeds` on profile, `requesterSpecialNeeds` in `FULL` (contract §3.6). ~~`category` override~~ and ~~`accessibilitySupport`~~ dropped. Still open: `tags` in list items (Dev 1). | Dev 2 / Dev 1 |
-| 2.3a | Frontend: consent switch on the profile (requesters with `specialNeeds` only, with an explanation who sees it and when); neutral note on the volunteer's task screen when `requesterSpecialNeeds` is `true`. | FE1 |
+| 2.3 | ✅ Backend: special-needs consent record (`special_needs_consents`) – `PUT /api/users/me/special-needs-consent` `{ consent }` (requesters only); withdrawal deletes the record and `specialNeeds`, granting recreates both; profile `specialNeedsConsent` + `specialNeedsConsentGrantedAt`; `requesterSpecialNeeds` in `FULL` (contract §3.6). ~~`category` override~~ and ~~`accessibilitySupport`~~ dropped. Still open: `tags` in list items (Dev 1). | Dev 2 / Dev 1 |
+| 2.3a | ✅ Frontend: consent switch on the profile for every requester, plain-language status, disability details cleared on withdrawal and not editable without consent. Still open: neutral note on the volunteer's task screen when `requesterSpecialNeeds` is `true`. | FE1 |
+| 2.3b | 🔵 Sign-up: consent to store and share the disability, given while creating the account (creates the consent record). Not built yet – the seeder simulates it for demo users. | FE1 / Dev 2 |
 | 2.4 | Handle `status: UNDER_REVIEW` in the create response ("Twoje zgłoszenie czeka na weryfikację"). | FE1 |
 
 ### Phase 3 – Volunteer flow: state machine, QR, ratings (⏱ ~6–8 h, critical path for the demo)
