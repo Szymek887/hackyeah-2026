@@ -10,8 +10,23 @@ Content-Type: application/json
 > {%
     client.test("Critical request gets priority 1", function () {
         client.assert(response.status === 200, "Expected status 200");
-        client.assert(response.body.category === "BASIC_NEEDS", "Expected BASIC_NEEDS");
+        client.assert(response.body.category === "MEDICINE", "Expected MEDICINE");
         client.assert(response.body.priority === 1, "Expected priority 1");
+    });
+%}
+
+### Classify: groceries
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Zakupy",
+  "description": "Potrzebuję chleba, mleka i warzyw ze sklepu, mogę oddać pieniądze przy odbiorze."
+}
+
+> {%
+    client.test("Shopping is GROCERIES", function () {
+        client.assert(response.body.category === "GROCERIES", "Expected GROCERIES");
     });
 %}
 
@@ -69,7 +84,24 @@ Content-Type: application/json
 > {%
     client.test("Emergency is flagged", function () {
         client.assert(response.body.riskFlags.includes("MEDICAL_EMERGENCY"), "Expected MEDICAL_EMERGENCY");
+        client.assert(response.body.category === "MEDICINE", "Expected MEDICINE");
         client.assert(response.body.priority === 1, "Expected priority 1");
+    });
+%}
+
+### Classify: personal data (no digits may leak into tags)
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Pomoc z pismem",
+  "description": "Pomoże ktoś wypełnić wniosek? Mój PESEL to 45010112345, tel. 600123456."
+}
+
+> {%
+    client.test("Personal data is flagged", function () {
+        client.assert(response.body.riskFlags.includes("PERSONAL_DATA"), "Expected PERSONAL_DATA");
+        client.assert(response.body.tags.every(t => !/[0-9]/.test(t)), "Tags must not contain digits");
     });
 %}
 
