@@ -68,7 +68,8 @@ export function NeedsPicker({
         onChangeText={onNotesChange}
       />
       <ThemedText type="caption" themeColor="textSecondary">
-        Widoczne tylko dla wolontariusza, którego pomoc zaakceptujesz.
+        Szczegóły widzisz tylko Ty. Wolontariuszowi możesz udostępnić sam fakt szczególnych potrzeb
+        – przełącznikiem w profilu.
       </ThemedText>
     </View>
   );

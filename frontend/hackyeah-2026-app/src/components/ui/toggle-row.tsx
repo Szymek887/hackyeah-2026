@@ -1,8 +1,16 @@
-import { StyleSheet, Switch, View } from 'react-native';
+import { Platform, StyleSheet, Switch, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+const THUMB_COLOR = '#FFFFFF';
+
+/**
+ * react-native-web colors the "on" thumb with `activeThumbColor` (teal by default) and ignores
+ * `thumbColor` there. The prop is web-only and missing from the RN types, hence the cast.
+ */
+const webThumbProps = (Platform.OS === 'web' ? { activeThumbColor: THUMB_COLOR } : {}) as object;
 
 type ToggleRowProps = {
   label: string;
@@ -37,10 +45,13 @@ export function ToggleRow({ label, description, value, onValueChange, disabled }
         disabled={disabled}
         accessibilityLabel={label}
         accessibilityHint={description}
-        trackColor={{ false: theme.border, true: theme.primary }}
-        ios_backgroundColor={theme.border}
-        // White thumb on both tracks, as in system settings (theme.onPrimary is dark in dark mode).
-        thumbColor="#FFFFFF"
+        // Off track uses textSecondary: ≥ 3:1 against the card in every theme (WCAG 1.4.11);
+        // `border` was nearly invisible in dark mode.
+        trackColor={{ false: theme.textSecondary, true: theme.primary }}
+        ios_backgroundColor={theme.textSecondary}
+        // White thumb in both states, as in system settings (theme.onPrimary is dark in dark mode).
+        thumbColor={THUMB_COLOR}
+        {...webThumbProps}
       />
     </View>
   );
