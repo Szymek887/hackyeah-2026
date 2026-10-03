@@ -62,6 +62,7 @@ class AnalyticsServiceTest {
         verify(repository).heatmap(filter.capture(), any(Double.class));
         assertThat(filter.getValue().statuses())
                 .doesNotContain(HelpRequestStatus.CANCELLED)
+                .doesNotContain(HelpRequestStatus.UNDER_REVIEW)
                 .contains(HelpRequestStatus.OPEN, HelpRequestStatus.COMPLETED);
     }
 
@@ -72,6 +73,26 @@ class AnalyticsServiceTest {
         ArgumentCaptor<AnalyticsFilter> filter = ArgumentCaptor.forClass(AnalyticsFilter.class);
         verify(repository).heatmap(filter.capture(), any(Double.class));
         assertThat(filter.getValue().statuses()).containsExactly(HelpRequestStatus.CANCELLED);
+    }
+
+    @Test
+    void heatmapDropsUnderReviewFromExplicitStatuses() {
+        service.heatmap(new AnalyticsFilter(null, Set.of(HelpRequestStatus.OPEN, HelpRequestStatus.UNDER_REVIEW), null, null), 500);
+
+        ArgumentCaptor<AnalyticsFilter> filter = ArgumentCaptor.forClass(AnalyticsFilter.class);
+        verify(repository).heatmap(filter.capture(), any(Double.class));
+        assertThat(filter.getValue().statuses()).containsExactly(HelpRequestStatus.OPEN);
+    }
+
+    @Test
+    void heatmapReturnsEmptyWhenOnlyUnderReviewRequested() {
+        HeatmapResponse response = service.heatmap(
+                new AnalyticsFilter(null, Set.of(HelpRequestStatus.UNDER_REVIEW), null, null),
+                500
+        );
+
+        assertThat(response.totalRequests()).isZero();
+        assertThat(response.features()).isEmpty();
     }
 
     @Test
