@@ -230,9 +230,8 @@ class HelpRequestControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "title": "", "description": "x", "lat": 95, "street": "Długa", "buildingNumber": "1" }
-                                """))
+                """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.title").exists())
                 .andExpect(jsonPath("$.errors.lat").exists())
                 .andExpect(jsonPath("$.errors.lng").exists());
     }

@@ -86,6 +86,41 @@ class HelpRequestDetailsServiceTest {
     }
 
     @Test
+    void createMedicinePresetStoresOnlySafeSystemText() {
+        FullHelpRequestResponse response = service.create(medicinePresetBody(), marek);
+
+        assertThat(response.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(response.title()).isEqualTo(MedicineRequestPolicy.SAFE_TITLE);
+        assertThat(response.description()).isEqualTo(MedicineRequestPolicy.SAFE_DESCRIPTION);
+        assertThat(response.priority()).isEqualTo(2);
+        assertThat(response.aiPriority()).isEqualTo(2);
+        assertThat(response.tags()).containsExactly("leki", "apteka");
+        assertThat(response.classificationSource()).isEqualTo(ClassificationSource.FALLBACK);
+        assertThat(response.requesterInstructions()).isEqualTo(MedicineRequestPolicy.REQUESTER_INSTRUCTIONS);
+        assertThat(response.volunteerInstructions()).isEqualTo(MedicineRequestPolicy.VOLUNTEER_INSTRUCTIONS);
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void createMedicinePresetRejectsUserText() {
+        CreateHelpRequestRequest body = new CreateHelpRequestRequest(
+                null,
+                "Kod recepty 1234, PESEL 12345678901",
+                50.0647,
+                19.9449,
+                "Długa",
+                "12",
+                null,
+                HelpCategory.MEDICINE
+        );
+
+        assertThatThrownBy(() -> service.create(body, marek))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Title and description are not accepted for medicine requests");
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
     void createBumpsPriorityForRequesterWithSpecialNeeds() {
         givenClassification(HelpCategory.GROCERIES, 3, Set.of());
 
@@ -209,7 +244,21 @@ class HelpRequestDetailsServiceTest {
                 19.9449,
                 "Długa",
                 "12",
-                "  "
+                "  ",
+                null
+        );
+    }
+
+    private static CreateHelpRequestRequest medicinePresetBody() {
+        return new CreateHelpRequestRequest(
+                null,
+                null,
+                50.0647,
+                19.9449,
+                "Długa",
+                "12",
+                "  ",
+                HelpCategory.MEDICINE
         );
     }
 

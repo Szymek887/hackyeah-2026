@@ -31,6 +31,8 @@ public record FullHelpRequestResponse(
         String apartmentNumber,
         UserSummary requester,
         UserSummary volunteer,
+        String requesterInstructions,
+        String volunteerInstructions,
         Instant createdAt,
         Instant updatedAt,
         ViewerRole viewerRole

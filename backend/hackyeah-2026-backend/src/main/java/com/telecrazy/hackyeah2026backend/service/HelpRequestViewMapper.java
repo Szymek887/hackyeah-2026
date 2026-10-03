@@ -50,6 +50,8 @@ public class HelpRequestViewMapper {
                 request.getApartmentNumber(),
                 UserSummary.from(request.getRequester()),
                 UserSummary.from(request.getVolunteer()),
+                MedicineRequestPolicy.requesterInstructions(request),
+                MedicineRequestPolicy.volunteerInstructions(request),
                 request.getCreatedAt(),
                 request.getUpdatedAt(),
                 HelpRequestVisibilityPolicy.viewerRole(request, user)
@@ -65,6 +67,8 @@ public class HelpRequestViewMapper {
                 request.getPriority(),
                 request.getStatus(),
                 List.copyOf(request.getTags()),
+                MedicineRequestPolicy.requesterInstructions(request),
+                MedicineRequestPolicy.volunteerInstructions(request),
                 locationObfuscationService.approximate(request.getLocation()),
                 locationObfuscationService.maskedArea(request.getLocation()),
                 request.getCreatedAt(),

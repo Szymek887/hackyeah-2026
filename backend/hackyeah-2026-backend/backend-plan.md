@@ -16,6 +16,7 @@
 - Publiczne wyszukiwanie zgłoszeń wzdłuż trasy `POST /api/help-requests/along-route` z `LINESTRING` i PostGIS `ST_DWithin` – **B2.2 zrobione**.
 - Maskowanie lokalizacji dla odpowiedzi publicznych: przybliżony punkt i polygon komórki ok. 300 m, bez dokładnego adresu – **B2.4 częściowo zrobione**.
 - Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (podpięte do `POST /api/help-requests`). Model: `qwen2.5:7b` w Ollamie.
+- Bezpieczny preset dla kategorii `MEDICINE`: backend nie przyjmuje swobodnego `title`/`description`, zapisuje systemowy opis odbioru leków i zwraca instrukcje dla zgłaszającego oraz wolontariusza – **privacy improvement zrobione**.
 - Analityka miejska (pakiet `analytics/`, `GET /api/analytics/heatmap`, `GET /api/analytics/summary`) – **B3.4 zrobione (API)**; widok dashboardu na froncie – później.
 
 ## 2. Decyzje techniczne
@@ -73,7 +74,7 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`. Zgłoszenia są
 |---|---|---|
 | `GET /users/me` | Profil, reputacja, flagi – ✅ zrobione | B1 |
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
-| `POST /help-requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI – ✅ zrobione | B2 |
+| `POST /help-requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI albo bezpieczny preset `MEDICINE` – ✅ zrobione | B2 |
 | `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
 | `GET /help-requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON – ✅ zrobione | B2.1 |
 | `POST /help-requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu – ✅ zrobione | B2.2 |

@@ -380,34 +380,63 @@ Auth required. Requests the caller is involved in, newest first.
 #### `POST /api/help-requests` — 🟡 `CHANGE`
 Auth required. Runs AI classification server-side (category, priority, tags, risk flags). `CITY_ADMIN` → 403.
 
+For `category: "MEDICINE"` the request uses a privacy-safe preset. The client must not send
+free-text `title` or `description`; the backend stores a system title/description and returns
+medicine pickup instructions. This prevents accidental storage of e-prescription codes, PESEL,
+QR codes, medicine names, dosing or health details.
+
 Request:
 ```json
 {
-  "title": "Leki z apteki",
-  "description": "Skończyły mi się leki na serce.",
+  "title": "Zakupy spożywcze",
+  "description": "Potrzebuję pomocy z zakupami na jutro.",
   "lat": 50.0647,
   "lng": 19.9449,
   "street": "Floriańska",
   "buildingNumber": "15",
   "apartmentNumber": "4",
-  "category": "MEDICINE",
+  "category": "GROCERIES",
   "accessibilitySupport": true
 }
 ```
+
+Medicine preset request:
+```json
+{
+  "lat": 50.0647,
+  "lng": 19.9449,
+  "street": "Floriańska",
+  "buildingNumber": "15",
+  "apartmentNumber": "4",
+  "category": "MEDICINE"
+}
+```
+
 | Field | Rules |
 |---|---|
-| `title` | required, ≤ 120 |
-| `description` | required, ≤ 1000 |
+| `title` | required for non-`MEDICINE`, ≤ 120. Not accepted for `MEDICINE`. |
+| `description` | required for non-`MEDICINE`, ≤ 1000. Not accepted for `MEDICINE`. |
 | `lat`, `lng` | required, valid range |
 | `street` | required, ≤ 255 |
 | `buildingNumber` | required, ≤ 20 |
 | `apartmentNumber` | optional, ≤ 20 |
-| `category` | **[+]** optional. When present it overrides the AI category (the user picked it in the form). Today it is ignored. |
+| `category` | **[+]** optional. When present it overrides the AI category (the user picked it in the form). `MEDICINE` enables the safe preset. |
 | `accessibilitySupport` | **[+]** optional, default = requester's `specialNeeds`. Today it is ignored. |
 
 Not accepted (the server decides): `priority`, `tags`, `status`. City is always Kraków in the MVP (no `city` field).
 
 → `201 FullHelpRequestResponse`, `Location: /api/help-requests/{id}`.
+
+`MEDICINE` response fields:
+
+| Field | Value |
+|---|---|
+| `title` | `Odbiór leków z apteki` |
+| `description` | Safe system text; no e-prescription data is stored. |
+| `requesterInstructions` | Explains not to enter e-prescription code, PESEL, QR, medicine names or health details in the app. |
+| `volunteerInstructions` | Explains pharmacy-only pickup and direct off-app transfer of any required e-prescription data. |
+
+Sending `title` or `description` with `category: "MEDICINE"` → `400`.
 If the AI flags a scam, the response has `status: "UNDER_REVIEW"` – the UI must tell the user the request is waiting for review.
 
 ### 4.6 Help requests – state transitions — ✅ `LIVE`
