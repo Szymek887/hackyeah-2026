@@ -10,6 +10,7 @@
 - Połączenie z bazą w `application.properties`, `ddl-auto=update`.
 - `GET /api/health` + żądania IntelliJ w `backend/hackyeah-2026-backend/http/`.
 - Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (bez podpięcia do `POST /requests`, które jeszcze nie istnieje). Model: `qwen2.5:7b` w Ollamie.
+- Analityka miejska (pakiet `analytics/`, `GET /api/analytics/heatmap`, `GET /api/analytics/summary`) – **B3.4 zrobione (API)**; widok dashboardu na froncie – później.
 
 ## 2. Decyzje techniczne
 
@@ -75,8 +76,8 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`.
 | `POST /requests/{id}/complete` | Body: `token`; wolontariusz kończy (`ACCEPTED→COMPLETED`) | B3.2 |
 | `POST /requests/{id}/cancel` | Anulowanie | B3.1 |
 | `POST /requests/{id}/ratings` | Ocena drugiej strony; aktualizuje reputację | B3.3 |
-| `GET /analytics/heatmap?category&from&to` | Klastry + liczności pod mapę cieplną | B3.4 |
-| `GET /analytics/summary` | Zliczenia wg kategorii i statusu (zrealizowane pomoce) | B3.4 |
+| `GET /analytics/heatmap?category&status&from&to&cellSizeMeters` | Heksagony + liczności pod mapę cieplną (GeoJSON) – ✅ zrobione | B3.4 |
+| `GET /analytics/summary?category&from&to` | Zliczenia wg statusu, kategorii i priorytetu + wskaźnik realizacji – ✅ zrobione | B3.4 |
 
 Zasady: współrzędne spoza zakresu → **400**; brak zgłoszenia → **404**; nieprawidłowe przejście stanu lub zlecenie już przejęte → **409**; zły/zużyty token → **400/409**; brak uprawnień do akcji → **403**.
 
@@ -127,8 +128,18 @@ Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayeso
 - ⏳ Podejrzenie scamu → zgłoszenie nie pojawia się publicznie do ręcznego przeglądu (lub oznaczone) – wymaga `POST /requests`.
 - ⏳ Frontend (`AiClassification` w `types.ts`) oczekuje pola `suspicious: boolean` – do uzgodnienia (dodać w backendzie lub używać `riskFlags`).
 
-### 6.8 Analityka (Dev 3)
-Heatmapa: grupowanie po siatce (`ST_SnapToGrid` lub `ST_ClusterDBSCAN`) i kategorii, zwrot środków komórek + liczności (dane już zagregowane, bez danych osobowych). Podsumowanie: liczba zgłoszeń wg kategorii/statusu i liczba zrealizowanych pomocy per dzielnica.
+### 6.8 Analityka (Dev 3) – ✅ API zrobione
+- ✅ **Heatmapa** `GET /api/analytics/heatmap` – grupowanie w heksagony `ST_HexagonGrid` (zamiast `ST_SnapToGrid`/`ST_ClusterDBSCAN`, zgodnie z „heksagonami” z `plan.md`). Heksagon liczony osobno dla każdego zgłoszenia (`LATERAL ... LIMIT 1`), więc koszt rośnie z liczbą zgłoszeń, a nie z obszarem (~70 ms dla 5000 zgłoszeń). Siatka w EPSG:3857, skalowana średnią szerokością geograficzną wszystkich zgłoszeń – heksagony mają rzeczywisty rozmiar w metrach i nie przesuwają się przy zmianie filtrów.
+  - Odpowiedź: GeoJSON `FeatureCollection`; każdy `Feature` to środek heksagonu (`Point`) z `properties`: `count`, `weight` (priorytet 1 = 3 pkt, 2 = 2 pkt, 3 = 1 pkt), `byCategory` (wszystkie kategorie, 0 gdy brak), `area` (obrys heksagonu, `Polygon`). Pozwala na warstwę heatmap (punkty z wagą) albo hexbin (wielokąty).
+  - Filtry: `category`, `status` (powtarzalny; domyślnie wszystkie oprócz `CANCELLED`), `from`/`to` (ISO-8601, po `created_at`), `cellSizeMeters` (bok heksagonu, 100–5000, domyślnie 500).
+- ✅ **Podsumowanie** `GET /api/analytics/summary` – `total`, `open`, `inProgress` (`OFFERED`+`ACCEPTED`), `fulfilled` (`COMPLETED`+`RATED`), `cancelled`, `fulfillmentRate` (`fulfilled / (total − cancelled)`), `byStatus`, `byCategory`, `byPriority`; filtry `category`, `from`, `to`.
+- ✅ Prywatność: tylko zagregowane liczności, brak danych osobowych i dokładnych współrzędnych → endpointy publiczne (bez `X-User-Id`).
+- ✅ Błędy: zły rozmiar komórki, nieznana kategoria/status, zły format daty, `from` ≥ `to` → **400** (`ProblemDetail`).
+- ✅ `AnalyticsRepository` na `NamedParameterJdbcTemplate` (dynamiczne filtry, SQL PostGIS), testy: jednostkowe (agregacja, walidacja), `@WebMvcTest` (bindowanie parametrów), integracyjne na PostGIS z dockera (rollback), żądania `http/analytics.http`.
+- ⏳ Liczba zrealizowanych pomocy **per dzielnica** – brak danych o dzielnicach w modelu; heatmapa pokrywa wymiar przestrzenny. Do dodania, jeśli będą granice dzielnic (np. GeoJSON + `ST_Contains`).
+- ⏳ Seeder ma tylko 3 zgłoszenia (Warszawa) – heatmapa na demo potrzebuje więcej danych w klastrach (B1.3, Dev 1).
+- ⏳ Ewentualny próg anonimowości (ukrywanie heksagonów z 1 zgłoszeniem) – do decyzji; obecnie heksagon 500 m jest grubszy niż maskowanie publiczne (300 m).
+- ⏳ Dashboard na froncie (F3.4).
 
 ## 7. Seeder (B1.3)
 
@@ -155,7 +166,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 
 ### Etap 3 (18–30 h)
 - **Dev 2:** przejścia stanów, QR, `complete`, oceny i reputacja (**B3.1–B3.3**), mock weryfikacji.
-- **Dev 3:** endpointy analityczne i heatmapa (**B3.4**).
+- **Dev 3:** ✅ endpointy analityczne i heatmapa (**B3.4**, API); ⏳ dane demo pod heatmapę, widok na froncie.
 - **Dev 1:** wydajność (indeksy GiST, `EXPLAIN`), uzupełnienie seedera o stany/oceny, wsparcie integracji.
 
 ### Etap 4 (30–36 h)
