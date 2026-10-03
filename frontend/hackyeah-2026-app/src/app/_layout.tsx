@@ -51,7 +51,6 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen name="rate/[id]" options={{ title: 'Oceń pomoc' }} />
-        <Stack.Screen name="dashboard" options={{ title: 'Panel miasta' }} />
       </Stack.Protected>
 
       <Stack.Protected guard={!signedIn}>

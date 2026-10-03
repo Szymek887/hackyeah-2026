@@ -30,6 +30,14 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="checklist" md="task_alt" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="dashboard">
+        <NativeTabs.Trigger.Label>Miasto</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }}
+          md="bar_chart"
+        />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="new">
         <NativeTabs.Trigger.Label>Dodaj</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

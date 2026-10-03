@@ -40,12 +40,22 @@ export function TasksScreen() {
   if (role === 'CITY_ADMIN') {
     return (
       <Screen>
-        <ThemedText type="title">Moje zadania</ThemedText>
-        <Card highlighted>
-          <ThemedText>
-            Konto miasta nie obsługuje zgłoszeń. Statystyki są w panelu miasta.
+        <View style={styles.header}>
+          <ThemedText type="title">Moje zadania</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            Zadania są realizowane przez wolontariuszy dla osób potrzebujących.
           </ThemedText>
-          <Button title="Otwórz panel miasta" inline onPress={() => router.push('/dashboard')} />
+        </View>
+        <Card highlighted style={styles.empty}>
+          <ThemedText themeColor="textSecondary">
+            Konto miejskie monitoruje deficyty i koordynuje wsparcie. Przejdź do dedykowanej
+            zakładki „Panel miasta”, aby wyświetlić mapę cieplną oraz statystyki.
+          </ThemedText>
+          <Button
+            title="Przejdź do: Panel miasta"
+            inline
+            onPress={() => router.push('/dashboard')}
+          />
         </Card>
       </Screen>
     );

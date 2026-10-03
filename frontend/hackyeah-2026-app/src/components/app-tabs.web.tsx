@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { name: 'index', href: '/', label: 'Mapa' },
   { name: 'requests', href: '/requests', label: 'Zgłoszenia' },
   { name: 'tasks', href: '/tasks', label: 'Moje zadania' },
+  { name: 'dashboard', href: '/dashboard', label: 'Panel miasta' },
   { name: 'new', href: '/new', label: 'Nowe zgłoszenie' },
   { name: 'profile', href: '/profile', label: 'Profil' },
 ] as const;
@@ -105,13 +106,6 @@ function TopNav({ children, ...props }: TabListProps) {
           contentContainerStyle={styles.links}
           style={styles.linksScroll}>
           {children}
-          {user?.role === 'CITY_ADMIN' && (
-            <Link href="/dashboard" style={styles.link}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Panel miasta
-              </ThemedText>
-            </Link>
-          )}
         </ScrollView>
 
         {user && (

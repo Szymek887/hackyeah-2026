@@ -1,13 +1,12 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Button } from '@/components/ui/button';
 import { Screen } from '@/components/ui/screen';
 import { CategoryColors, Spacing } from '@/constants/theme';
 import type { Category } from '@/api/types';
+import { CityHeatmapMap } from '@/features/dashboard/city-heatmap-map';
 import { useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -21,7 +20,6 @@ const CATEGORIES: { label: string; value?: Category }[] = [
 
 export function CityDashboard() {
   const theme = useTheme();
-  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
 
   const { data: summary, isPending: summaryLoading } = useCitySummary();
@@ -48,11 +46,6 @@ export function CityDashboard() {
             Kraków Smart City • Monitor deficytów sąsiedzkich i mobilności
           </ThemedText>
         </View>
-        <Button
-          title="Wróć do aplikacji"
-          variant="secondary"
-          onPress={() => router.replace('/(tabs)/requests')}
-        />
       </View>
 
       {/* KPI Cards */}
@@ -151,100 +144,32 @@ export function CityDashboard() {
           </View>
         </View>
 
-        {/* Visual Map Grid / Mock Heat Representation */}
-        <View
-          style={[
-            styles.mapContainer,
-            { backgroundColor: theme.background, borderColor: theme.border },
-          ]}>
-          <View style={styles.mapCanvas}>
-            {/* City Districts Labels */}
-            <View style={[styles.districtPin, { top: '20%', left: '25%' }]}>
-              <ThemedText type="smallBold" style={styles.districtTag}>
-                Krowodrza
-              </ThemedText>
-            </View>
-            <View style={[styles.districtPin, { top: '35%', left: '50%' }]}>
-              <ThemedText type="smallBold" style={styles.districtTag}>
-                Stare Miasto
-              </ThemedText>
-            </View>
-            <View style={[styles.districtPin, { top: '30%', left: '75%' }]}>
-              <ThemedText type="smallBold" style={styles.districtTag}>
-                Grzegórzki
-              </ThemedText>
-            </View>
-            <View style={[styles.districtPin, { top: '65%', left: '45%' }]}>
-              <ThemedText type="smallBold" style={styles.districtTag}>
-                Kazimierz / Podgórze
-              </ThemedText>
-            </View>
+        {/* Real Interactive Map with OpenStreetMap tiles & Heatmap overlays */}
+        <CityHeatmapMap points={heatmapPoints ?? []} />
 
-            {/* Heat Points */}
-            {(heatmapPoints ?? []).map((pt, i) => {
-              // Normalize coordinates relative to Krakow bounding box
-              // lat ~ 50.04 to 50.08, lng ~ 19.91 to 19.97
-              const minLat = 50.04;
-              const maxLat = 50.085;
-              const minLng = 19.915;
-              const maxLng = 19.97;
-
-              const topPercent = Math.max(
-                5,
-                Math.min(90, (1 - (pt.lat - minLat) / (maxLat - minLat)) * 100),
-              );
-              const leftPercent = Math.max(
-                5,
-                Math.min(90, ((pt.lng - minLng) / (maxLng - minLng)) * 100),
-              );
-              const dotColor = CategoryColors[pt.category]?.color ?? theme.primary;
-              const dotSize = 14 + pt.weight * 16;
-
-              return (
-                <View
-                  key={`pt-${i}`}
-                  style={[
-                    styles.heatSpot,
-                    {
-                      top: `${topPercent}%`,
-                      left: `${leftPercent}%`,
-                      width: dotSize,
-                      height: dotSize,
-                      borderRadius: dotSize / 2,
-                      backgroundColor: dotColor,
-                      opacity: 0.7,
-                      transform: [{ translateX: -dotSize / 2 }, { translateY: -dotSize / 2 }],
-                    },
-                  ]}
-                />
-              );
-            })}
+        {/* Map Legend */}
+        <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
+          <View style={styles.legendItem}>
+            <View
+              style={[styles.legendDot, { backgroundColor: CategoryColors.BASIC_NEEDS.color }]}
+            />
+            <ThemedText type="small">Leki / Pilne</ThemedText>
           </View>
-
-          {/* Map Legend */}
-          <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.BASIC_NEEDS.color }]}
-              />
-              <ThemedText type="small">Leki / Pilne</ThemedText>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.HOME_SUPPORT.color }]}
-              />
-              <ThemedText type="small">Naprawy</ThemedText>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.EQUIPMENT_LOAN.color }]}
-              />
-              <ThemedText type="small">Sprzęt</ThemedText>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors.SOCIAL.color }]} />
-              <ThemedText type="small">Integracja</ThemedText>
-            </View>
+          <View style={styles.legendItem}>
+            <View
+              style={[styles.legendDot, { backgroundColor: CategoryColors.HOME_SUPPORT.color }]}
+            />
+            <ThemedText type="small">Naprawy</ThemedText>
+          </View>
+          <View style={styles.legendItem}>
+            <View
+              style={[styles.legendDot, { backgroundColor: CategoryColors.EQUIPMENT_LOAN.color }]}
+            />
+            <ThemedText type="small">Sprzęt</ThemedText>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: CategoryColors.SOCIAL.color }]} />
+            <ThemedText type="small">Integracja</ThemedText>
           </View>
         </View>
       </ThemedView>
@@ -351,36 +276,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  mapContainer: {
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    overflow: 'hidden',
-  },
-  mapCanvas: {
-    height: 280,
-    position: 'relative',
-    backgroundColor: 'rgba(32, 138, 239, 0.04)',
-  },
-  districtPin: {
-    position: 'absolute',
-    transform: [{ translateX: -30 }, { translateY: -12 }],
-  },
-  districtTag: {
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    color: '#ffffff',
-    fontSize: 10,
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  heatSpot: {
-    position: 'absolute',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
   },
   legendBar: {
     flexDirection: 'row',
