@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import type { FeatureCollection } from 'geojson';
 import type { LayerGroup, Map as LeafletMapInstance } from 'leaflet';
 
-import type { HelpRequestPublic } from '@/api/types';
+import type { HelpRequestListItem } from '@/api/types';
 import { CategoryColors, PriorityColors, Radius } from '@/constants/theme';
 import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import {
@@ -17,8 +17,8 @@ import {
 
 type LeafletMapProps = {
   centerGeoJson?: FeatureCollection;
-  matchingRequests: HelpRequestPublic[];
-  requests: HelpRequestPublic[];
+  matchingRequests: HelpRequestListItem[];
+  requests: HelpRequestListItem[];
   showAreas?: boolean;
   showRouteBuffer?: boolean;
 };
@@ -96,7 +96,7 @@ export function LeafletMap({
       if (showAreas) {
         requests.forEach((request) => {
           const categoryColor = CategoryColors[request.category];
-          const polygonRings = getAreaPolygonRings(request.area).map((ring) =>
+          const polygonRings = getAreaPolygonRings(request.maskedArea).map((ring) =>
             ring.map(({ latitude, longitude }) => [latitude, longitude] as [number, number]),
           );
 
@@ -112,7 +112,7 @@ export function LeafletMap({
       }
 
       matchingRequests.forEach((request) => {
-        const coordinate = toLatLng(request.area.center.coordinates);
+        const coordinate = toLatLng(request.approximateLocation.coordinates);
         const priorityColor = PriorityColors[request.priority].color;
 
         L.circleMarker([coordinate.latitude, coordinate.longitude], {

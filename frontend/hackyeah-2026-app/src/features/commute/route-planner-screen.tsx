@@ -2,6 +2,7 @@ import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Spacing } from '@/constants/theme';
@@ -50,7 +51,7 @@ export function RoutePlannerScreen() {
         {matchingRequests.map((request) => (
           <Marker
             key={request.id}
-            coordinate={toLatLng(request.area.center.coordinates)}
+            coordinate={toLatLng(request.approximateLocation.coordinates)}
             pinColor={CategoryColors[request.category].color}
             title={request.title}
           />
@@ -64,7 +65,7 @@ export function RoutePlannerScreen() {
             Niebieski obszar to bufor 450 m. Pasujące zgłoszenia: {matchingRequests.length}.
           </ThemedText>
           {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
-          {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+          {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
         </ThemedView>
       </View>
     </ThemedView>

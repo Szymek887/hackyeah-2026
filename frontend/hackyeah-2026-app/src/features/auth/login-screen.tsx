@@ -11,8 +11,8 @@ import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { demoAccounts, type DemoAccount } from '@/api/auth';
+import { ApiError, errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Radius, Spacing } from '@/constants/theme';
@@ -28,16 +28,16 @@ import { enterItem, enterScreen } from '@/lib/motion';
 export function LoginScreen() {
   const theme = useTheme();
   const { signIn } = useAuth();
-  const [selectedId, setSelectedId] = useState<string>(demoAccounts[0]?.id ?? '');
+  const [selectedId, setSelectedId] = useState<number>(demoAccounts[0]?.id ?? 1);
   const [customId, setCustomId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const userId = customId.trim() || selectedId;
+  const userId = customId.trim() ? Number(customId.trim()) : selectedId;
 
   const handleSignIn = async () => {
-    if (!userId) {
-      setError('Wybierz konto lub wpisz identyfikator.');
+    if (!Number.isInteger(userId) || userId <= 0) {
+      setError('Wpisz numer konta, np. 9.');
       return;
     }
     setError(null);
@@ -46,7 +46,11 @@ export function LoginScreen() {
       await signIn(userId);
       // Route guard in app/_layout.tsx switches to the app automatically.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nie udało się zalogować.');
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? `Nie ma konta o numerze ${userId}.`
+          : errorMessage(err),
+      );
       setPending(false);
     }
   };
@@ -102,7 +106,7 @@ export function LoginScreen() {
 
               <Input
                 label="Identyfikator użytkownika"
-                placeholder="np. 4"
+                placeholder="np. 9"
                 keyboardType="number-pad"
                 value={customId}
                 onChangeText={(text) => {
@@ -172,15 +176,6 @@ function AccountOption({ account, selected, onPress }: AccountOptionProps) {
           {RoleLabels[account.role]} · ID {account.id}
         </ThemedText>
       </View>
-      {account.verified ? (
-        <Badge label="Zweryfikowany" color={theme.success} backgroundColor={theme.successSoft} />
-      ) : (
-        <Badge
-          label="Niezweryfikowany"
-          color={theme.textSecondary}
-          backgroundColor={theme.backgroundMuted}
-        />
-      )}
     </Pressable>
   );
 }

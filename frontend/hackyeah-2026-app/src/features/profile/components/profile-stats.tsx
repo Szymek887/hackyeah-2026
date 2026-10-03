@@ -1,11 +1,11 @@
 import { StyleSheet, View } from 'react-native';
 
-import type { User } from '@/api/types';
+import type { UserProfile } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Spacing } from '@/constants/theme';
 
-export function ProfileStats({ user }: { user: User }) {
+export function ProfileStats({ user }: { user: UserProfile }) {
   const stats = [
     { label: 'Zaufanie', value: `${user.trustScore}%` },
     { label: 'Punkty miejskie', value: String(user.cityPoints) },

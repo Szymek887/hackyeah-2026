@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
+import { errorMessage } from '@/api/errors';
 import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -42,7 +43,7 @@ export function RoutePlannerScreen() {
           /api/help-requests/along-route.
         </ThemedText>
         {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
-        {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+        {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
       </Card>
     </Screen>
   );

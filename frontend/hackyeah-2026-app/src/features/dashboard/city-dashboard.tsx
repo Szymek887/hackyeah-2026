@@ -9,15 +9,19 @@ import { Screen } from '@/components/ui/screen';
 import { CategoryColors, Spacing } from '@/constants/theme';
 import type { Category } from '@/api/types';
 import { useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
+import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
+
+const CATEGORY_KEYS = Object.keys(CategoryLabels) as Category[];
 
 const CATEGORIES: { label: string; value?: Category }[] = [
   { label: 'Wszystkie' },
-  { label: 'Leki i żywność', value: 'BASIC_NEEDS' },
-  { label: 'Awarie i naprawy', value: 'HOME_SUPPORT' },
-  { label: 'Sprzęt', value: 'EQUIPMENT_LOAN' },
-  { label: 'Towarzyskie', value: 'SOCIAL' },
+  ...CATEGORY_KEYS.map((value) => ({ label: CategoryLabels[value], value })),
 ];
+
+/** Category with the most requests in a heatmap cell, used as the dot color. */
+const dominantCategory = (byCategory: Record<Category, number>) =>
+  CATEGORY_KEYS.reduce((best, key) => (byCategory[key] > byCategory[best] ? key : best));
 
 export function CityDashboard() {
   const theme = useTheme();
@@ -25,7 +29,9 @@ export function CityDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
 
   const { data: summary, isPending: summaryLoading } = useCitySummary();
-  const { data: heatmapPoints, isPending: heatmapLoading } = useHeatmapData(selectedCategory);
+  const { data: heatmap, isPending: heatmapLoading } = useHeatmapData(selectedCategory);
+  const cells = heatmap?.features ?? [];
+  const maxWeight = Math.max(1, ...cells.map((cell) => cell.properties.weight));
 
   if (summaryLoading || heatmapLoading) {
     return (
@@ -62,10 +68,10 @@ export function CityDashboard() {
             Zgłoszone potrzeby
           </ThemedText>
           <ThemedText type="title" style={{ color: theme.primary }}>
-            {summary?.totalRequests ?? 0}
+            {summary?.total ?? 0}
           </ThemedText>
-          <ThemedText type="smallBold" style={{ color: theme.success }}>
-            ↑ 14% vs ub. tydzień
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Anulowane: {summary?.cancelled ?? 0}
           </ThemedText>
         </ThemedView>
 
@@ -74,34 +80,34 @@ export function CityDashboard() {
             Zrealizowana pomoc
           </ThemedText>
           <ThemedText type="title" style={{ color: theme.success }}>
-            {summary?.completedRequests ?? 0}
+            {summary?.fulfilled ?? 0}
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Wskaźnik: {summary?.satisfactionRate ?? 98}%
+            Skuteczność: {Math.round((summary?.fulfillmentRate ?? 0) * 100)}%
           </ThemedText>
         </ThemedView>
 
         <ThemedView type="backgroundElement" style={styles.kpiCard}>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Śr. czas reakcji
+            W toku
           </ThemedText>
-          <ThemedText type="title" style={{ color: '#F5A623' }}>
-            {summary?.avgResponseMinutes ?? 18} min
+          <ThemedText type="title" style={{ color: theme.warning }}>
+            {summary?.inProgress ?? 0}
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Commute Matching
+            Oferty i przyjęta pomoc
           </ThemedText>
         </ThemedView>
 
         <ThemedView type="backgroundElement" style={styles.kpiCard}>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Oszczędzone CO₂
+            Czeka na pomoc
           </ThemedText>
-          <ThemedText type="title" style={{ color: theme.success }}>
-            {summary?.co2SavedKg ?? 0} kg
+          <ThemedText type="title" style={{ color: theme.danger }}>
+            {summary?.open ?? 0}
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Zero extra tras
+            Pilnych: {summary?.byPriority['1'] ?? 0}
           </ThemedText>
         </ThemedView>
       </View>
@@ -145,8 +151,8 @@ export function CityDashboard() {
           <View>
             <ThemedText type="subtitle">Mapa Cieplna Zgłoszeń i Deficytów</ThemedText>
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Zagęszczenie potrzeb w korytarzach miejskich ({heatmapPoints?.length ?? 0} aktywnych
-              punktów)
+              Zagęszczenie potrzeb w korytarzach miejskich ({heatmap?.totalRequests ?? 0} zgłoszeń w{' '}
+              {cells.length} obszarach)
             </ThemedText>
           </View>
         </View>
@@ -181,7 +187,8 @@ export function CityDashboard() {
             </View>
 
             {/* Heat Points */}
-            {(heatmapPoints ?? []).map((pt, i) => {
+            {cells.map((cell, i) => {
+              const [lng, lat] = cell.geometry.coordinates;
               // Normalize coordinates relative to Krakow bounding box
               // lat ~ 50.04 to 50.08, lng ~ 19.91 to 19.97
               const minLat = 50.04;
@@ -191,14 +198,14 @@ export function CityDashboard() {
 
               const topPercent = Math.max(
                 5,
-                Math.min(90, (1 - (pt.lat - minLat) / (maxLat - minLat)) * 100),
+                Math.min(90, (1 - (lat - minLat) / (maxLat - minLat)) * 100),
               );
               const leftPercent = Math.max(
                 5,
-                Math.min(90, ((pt.lng - minLng) / (maxLng - minLng)) * 100),
+                Math.min(90, ((lng - minLng) / (maxLng - minLng)) * 100),
               );
-              const dotColor = CategoryColors[pt.category]?.color ?? theme.primary;
-              const dotSize = 14 + pt.weight * 16;
+              const dotColor = CategoryColors[dominantCategory(cell.properties.byCategory)].color;
+              const dotSize = 14 + (cell.properties.weight / maxWeight) * 30;
 
               return (
                 <View
@@ -223,71 +230,42 @@ export function CityDashboard() {
 
           {/* Map Legend */}
           <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.BASIC_NEEDS.color }]}
-              />
-              <ThemedText type="small">Leki / Pilne</ThemedText>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.HOME_SUPPORT.color }]}
-              />
-              <ThemedText type="small">Naprawy</ThemedText>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.EQUIPMENT_LOAN.color }]}
-              />
-              <ThemedText type="small">Sprzęt</ThemedText>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors.SOCIAL.color }]} />
-              <ThemedText type="small">Integracja</ThemedText>
-            </View>
+            {CATEGORY_KEYS.map((key) => (
+              <View key={key} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: CategoryColors[key].color }]} />
+                <ThemedText type="small">{CategoryLabels[key]}</ThemedText>
+              </View>
+            ))}
           </View>
         </View>
       </ThemedView>
 
-      {/* District Deficit Breakdown */}
+      {/* Requests by category (backend summary.byCategory) */}
       <ThemedView type="backgroundElement" style={styles.sectionCard}>
-        <ThemedText type="subtitle">Deficyty według Dzielnic</ThemedText>
+        <ThemedText type="subtitle">Zgłoszenia według kategorii</ThemedText>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          Priorytetyzacja wsparcia infrastruktury socjalnej i wolontariatu miejskiego
+          Gdzie mieszkańcy najczęściej potrzebują wsparcia
         </ThemedText>
 
         <View style={styles.districtList}>
-          {summary?.districts.map((d) => {
-            const pct = Math.round((d.completed / d.total) * 100);
+          {CATEGORY_KEYS.map((key) => {
+            const count = summary?.byCategory[key] ?? 0;
+            const pct = summary?.total ? Math.round((count / summary.total) * 100) : 0;
             return (
-              <ThemedView key={d.name} type="background" style={styles.districtItem}>
+              <ThemedView key={key} type="background" style={styles.districtItem}>
                 <View style={styles.districtHeader}>
-                  <ThemedText type="subtitle">{d.name}</ThemedText>
+                  <ThemedText type="subtitle">{CategoryLabels[key]}</ThemedText>
                   <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                    {d.completed} / {d.total} zrealizowane ({pct}%)
+                    {count} ({pct}%)
                   </ThemedText>
                 </View>
-
-                {/* Progress bar */}
                 <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
                   <View
                     style={[
                       styles.progressBarFill,
-                      {
-                        width: `${pct}%`,
-                        backgroundColor: pct >= 80 ? theme.success : theme.primary,
-                      },
+                      { width: `${pct}%`, backgroundColor: CategoryColors[key].color },
                     ]}
                   />
-                </View>
-
-                <View style={styles.districtFooter}>
-                  <ThemedText type="small" style={{ color: theme.danger }}>
-                    ⚠️ {d.critical} pilnych potrzeb (np. leki)
-                  </ThemedText>
-                  <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                    Główna kategoria: {d.topCategory}
-                  </ThemedText>
                 </View>
               </ThemedView>
             );

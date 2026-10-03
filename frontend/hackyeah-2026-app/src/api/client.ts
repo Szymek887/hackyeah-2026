@@ -1,65 +1,70 @@
-import { API_URL } from '@/api/config';
-import type { ApiErrorBody } from '@/api/types';
+import { API_URL, USE_MOCKS } from '@/api/config';
+import { handleMockRequest } from '@/api/mocks/server';
+import { ApiError } from '@/api/errors';
+import type { ProblemDetail } from '@/api/types';
 
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-    public readonly code?: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+export { ApiError };
 
-let currentUserId: string | null = null;
+let currentUserId: number | null = null;
 
 /** Called by the session on login / logout. Backend mock auth reads the `X-User-Id` header. */
-export function setApiUserId(userId: string | null) {
+export function setApiUserId(userId: number | null) {
   currentUserId = userId;
 }
 
-export function getApiUserId() {
-  return currentUserId;
-}
+export type HttpMethod = 'GET' | 'POST';
+
+export type ApiRequest = {
+  method: HttpMethod;
+  path: string;
+  query: Record<string, string>;
+  body?: unknown;
+  userId?: number;
+};
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method?: HttpMethod;
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
   /** Overrides the session user, used by the login call before the session exists. */
-  userId?: string;
+  userId?: number;
 };
 
-/** Thin fetch wrapper. All backend calls go through here so auth headers / error handling live in one place. */
+/**
+ * The only way to talk to the backend. With EXPO_PUBLIC_USE_MOCKS (default) the same request is
+ * answered by src/api/mocks/server.ts, which follows the backend rules and returns the same JSON.
+ */
 export async function apiRequest<T>(
   path: string,
   { method = 'GET', body, query, userId = currentUserId ?? undefined }: RequestOptions = {},
-) {
-  const search = Object.entries(query ?? {})
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
-    .join('&');
-  const url = `${API_URL}${path}${search ? `?${search}` : ''}`;
+): Promise<T> {
+  const cleanQuery = Object.fromEntries(
+    Object.entries(query ?? {})
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [key, String(value)]),
+  );
 
-  const response = await fetch(url, {
+  if (USE_MOCKS) {
+    return handleMockRequest<T>({ method, path, query: cleanQuery, body, userId });
+  }
+
+  const search = new URLSearchParams(cleanQuery).toString();
+  const response = await fetch(`${API_URL}${path}${search ? `?${search}` : ''}`, {
     method,
     headers: {
       Accept: 'application/json',
       ...(body !== undefined && { 'Content-Type': 'application/json' }),
-      ...(userId && { 'X-User-Id': userId }),
+      ...(userId !== undefined && { 'X-User-Id': String(userId) }),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {
-    // Backend returns RFC 9457 ProblemDetail (`detail`), older handlers used `message`.
-    const error = (await response.json().catch(() => null)) as
-      (ApiErrorBody & { detail?: string }) | null;
+    const problem = (await response.json().catch(() => null)) as ProblemDetail | null;
     throw new ApiError(
       response.status,
-      error?.detail ?? error?.message ?? response.statusText,
-      error?.code,
+      problem?.detail ?? problem?.title ?? response.statusText,
+      problem?.errors,
     );
   }
 

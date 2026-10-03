@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { filterRequestsAlongRoute } from '@/lib/route-matching';
+import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
 import {
   KRAKOW_CENTER_GEOJSON,
   KRAKOW_COMMUTE_ROUTE,
@@ -50,7 +51,7 @@ export function MapScreen() {
           <Card key={request.id}>
             <ThemedText type="smallBold">{request.title}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Priorytet {request.priority} · {request.tags.join(', ')}
+              {CategoryLabels[request.category]}, {PriorityLabels[request.priority].toLowerCase()}
             </ThemedText>
           </Card>
         ))}

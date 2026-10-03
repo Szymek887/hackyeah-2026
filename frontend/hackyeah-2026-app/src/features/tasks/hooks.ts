@@ -1,9 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-
-import { getMyTasks } from '@/api/tasks';
-import type { HelpRequestDetails, RequestStatus } from '@/api/types';
+import type { HelpRequestView, RequestStatus } from '@/api/types';
 import { useSession } from '@/features/auth/session-context';
-import { requestKeys } from '@/features/requests/hooks';
+import { useMyRequests } from '@/features/requests/hooks';
 
 export type TaskStage = 'pending' | 'inProgress' | 'done';
 
@@ -11,6 +8,7 @@ export type TaskStage = 'pending' | 'inProgress' | 'done';
 export const StageByStatus: Record<RequestStatus, TaskStage> = {
   OPEN: 'pending',
   OFFERED: 'pending',
+  UNDER_REVIEW: 'pending',
   ACCEPTED: 'inProgress',
   COMPLETED: 'done',
   RATED: 'done',
@@ -25,17 +23,14 @@ export const StageLabels: Record<TaskStage, string> = {
 
 export const STAGES: TaskStage[] = ['pending', 'inProgress', 'done'];
 
-export function groupByStage(tasks: HelpRequestDetails[]) {
-  const groups: Record<TaskStage, HelpRequestDetails[]> = { pending: [], inProgress: [], done: [] };
+export function groupByStage(tasks: HelpRequestView[]) {
+  const groups: Record<TaskStage, HelpRequestView[]> = { pending: [], inProgress: [], done: [] };
   for (const task of tasks) groups[StageByStatus[task.status]].push(task);
   return groups;
 }
 
+/** `GET /api/help-requests/mine` for the logged-in user. */
 export function useMyTasks() {
   const { user } = useSession();
-  // Lives under requestKeys.all, so QR completion / rating invalidations refresh the board too.
-  return useQuery({
-    queryKey: [...requestKeys.all, 'mine', user.id],
-    queryFn: () => getMyTasks(user),
-  });
+  return useMyRequests(user.id);
 }

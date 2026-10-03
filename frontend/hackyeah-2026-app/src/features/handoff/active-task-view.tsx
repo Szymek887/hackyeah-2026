@@ -10,31 +10,31 @@ import {
   View,
 } from 'react-native';
 
+import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
-import { useSession } from '@/features/auth/session-context';
 import { useCompleteRequest, useHandoffToken } from '@/features/handoff/hooks';
 import { QrCodeCard } from '@/features/handoff/qr-code-card';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import { useRequest } from '@/features/requests/hooks';
+import { formatAddress, isFull, mapsQuery } from '@/features/requests/view-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
 type ActiveTaskViewProps = {
-  requestId: string;
+  requestId: number;
 };
 
 export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
   const theme = useTheme();
   const router = useRouter();
-  const { role } = useSession();
-
   const { data: request, isPending, error } = useRequest(requestId);
+  // Only the requester of an ACCEPTED request may fetch the QR token (backend: 403 / 409 otherwise).
   const { data: qrData, isPending: qrLoading } = useHandoffToken(
     requestId,
-    request?.status === 'ACCEPTED',
+    request?.status === 'ACCEPTED' && request.viewerRole === 'REQUESTER',
   );
 
   const completeMutation = useCompleteRequest();
@@ -63,7 +63,10 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
     );
   }
 
-  const isRequester = role === 'REQUESTER';
+  // My part in this request (from the backend), not my account role.
+  const isRequester = request.viewerRole === 'REQUESTER';
+  const full = isFull(request) ? request : null;
+  const otherPerson = isRequester ? full?.volunteer : full?.requester;
   const isAccepted = request.status === 'ACCEPTED';
   const isCompleted = request.status === 'COMPLETED';
   const isRated = request.status === 'RATED';
@@ -82,17 +85,15 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
       });
       router.push({ pathname: '/rate/[id]', params: { id: request.id } });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Nie udało się zweryfikować kodu';
+      const msg = errorMessage(err);
       if (Platform.OS === 'web') alert(msg);
       else Alert.alert('Błąd weryfikacji', msg);
     }
   };
 
   const openInMaps = () => {
-    if (!request.address) return;
-    const query = encodeURIComponent(
-      `${request.address.street} ${request.address.building}, ${request.address.city}`,
-    );
+    if (!full) return;
+    const query = encodeURIComponent(mapsQuery(full));
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
   };
 
@@ -146,23 +147,21 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
         <View style={styles.personRow}>
           <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
             <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
-              {(isRequester
-                ? request.volunteer?.displayName
-                : request.requester?.displayName)?.[0] ?? 'U'}
+              {otherPerson?.displayName[0] ?? '?'}
             </ThemedText>
           </View>
           <View style={{ flex: 1 }}>
             <ThemedText type="subtitle">
-              {isRequester
-                ? (request.volunteer?.displayName ?? 'Przypisany wolontariusz')
-                : request.requester?.displayName}
+              {otherPerson?.displayName ?? (isRequester ? 'Wolontariusz' : 'Osoba potrzebująca')}
             </ThemedText>
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Wskaźnik zaufania:{' '}
-              {isRequester
-                ? (request.volunteer?.trustScore ?? 90)
-                : (request.requester?.trustScore ?? 80)}
-              % • Tożsamość zweryfikowana (mObywatel)
+              {otherPerson
+                ? `Zaufanie ${otherPerson.trustScore}%. ${
+                    otherPerson.identityVerified
+                      ? 'Tożsamość potwierdzona.'
+                      : 'Tożsamość niepotwierdzona.'
+                  }`
+                : 'Dane pojawią się po przyjęciu pomocy.'}
             </ThemedText>
           </View>
         </View>
@@ -174,14 +173,10 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
           {isRequester ? 'Adres realizacji' : 'Dokładny adres dostarczenia'}
         </ThemedText>
 
-        {request.address ? (
+        {full ? (
           <View style={{ gap: Spacing.two }}>
             <ThemedText type="default" style={{ fontWeight: '600' }}>
-              {request.address.street} {request.address.building}
-              {request.address.apartment ? ` / m. ${request.address.apartment}` : ''}
-            </ThemedText>
-            <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              {request.address.city}
+              {formatAddress(full)}
             </ThemedText>
             {!isRequester && (
               <Button
@@ -251,11 +246,12 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
                     borderColor: theme.border,
                   },
                 ]}
-                placeholder="np. PODDRODZE-R1-77A2"
+                placeholder="Wklej kod spod kodu QR"
                 placeholderTextColor={theme.textSecondary}
                 value={manualCode}
                 onChangeText={setManualCode}
-                autoCapitalize="characters"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <Button
                 title={completeMutation.isPending ? 'Weryfikacja...' : 'Zatwierdź kod i zakończ'}

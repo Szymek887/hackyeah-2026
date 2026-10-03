@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -76,13 +77,13 @@ export function TasksScreen() {
       />
 
       {isPending && <ActivityIndicator color={theme.primary} />}
-      {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+      {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
 
       <FlatList
         // Remount on tab change so the entrance animation plays for the new column.
         key={stage}
         data={tasks}
-        keyExtractor={(task) => task.id}
+        keyExtractor={(task) => String(task.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -102,7 +103,7 @@ export function TasksScreen() {
         }
         renderItem={({ item, index }) => (
           <Animated.View entering={enterItem(index)} exiting={exitItem} layout={layoutTransition}>
-            <TaskCard task={item} role={role} />
+            <TaskCard task={item} />
           </Animated.View>
         )}
       />

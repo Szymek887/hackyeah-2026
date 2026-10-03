@@ -10,18 +10,19 @@ import {
   View,
 } from 'react-native';
 
+import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
-import { useSession } from '@/features/auth/session-context';
 import { useSubmitRating } from '@/features/handoff/hooks';
 import { useRequest } from '@/features/requests/hooks';
+import { isFull } from '@/features/requests/view-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
 type RateViewProps = {
-  requestId: string;
+  requestId: number;
 };
 
 const STAR_LABELS: Record<number, string> = {
@@ -35,8 +36,6 @@ const STAR_LABELS: Record<number, string> = {
 export function RateView({ requestId }: RateViewProps) {
   const theme = useTheme();
   const router = useRouter();
-  const { role } = useSession();
-
   const { data: request, isPending: requestLoading } = useRequest(requestId);
   const ratingMutation = useSubmitRating();
 
@@ -44,10 +43,13 @@ export function RateView({ requestId }: RateViewProps) {
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const isRequester = role === 'REQUESTER';
+  // My part in this request (from the backend); the rated person is the other side.
+  const isRequester = request?.viewerRole === 'REQUESTER';
+  const full = request && isFull(request) ? request : null;
   const personName = isRequester
-    ? (request?.volunteer?.displayName ?? 'Wolontariusz')
-    : (request?.requester?.displayName ?? 'Osoba potrzebująca');
+    ? (full?.volunteer?.displayName ?? 'Wolontariusz')
+    : (full?.requester.displayName ?? 'Osoba potrzebująca');
+  const result = ratingMutation.data;
 
   const handleSubmit = async () => {
     try {
@@ -58,7 +60,7 @@ export function RateView({ requestId }: RateViewProps) {
       });
       setSubmitted(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Nie udało się zapisać oceny';
+      const msg = errorMessage(err);
       if (Platform.OS === 'web') alert(msg);
       else Alert.alert('Błąd', msg);
     }
@@ -86,11 +88,18 @@ export function RateView({ requestId }: RateViewProps) {
 
           <ThemedView style={styles.rewardCard}>
             <ThemedText type="smallBold" style={{ color: theme.success, textAlign: 'center' }}>
-              ✓ Przyznano +25 Punktów Smart City
+              {result && result.cityPointsAwarded > 0
+                ? `${result.ratedUser.displayName} otrzymuje ${result.cityPointsAwarded} punktów miejskich`
+                : 'Ocena zapisana'}
             </ThemedText>
-            <ThemedText type="small" style={{ textAlign: 'center', color: theme.textSecondary }}>
-              Wskaźnik zaufania profilu został zaktualizowany!
-            </ThemedText>
+            {result && (
+              <ThemedText type="small" style={{ textAlign: 'center', color: theme.textSecondary }}>
+                Zaufanie: {result.ratedUser.trustScore}%.{' '}
+                {result.requestStatus === 'RATED'
+                  ? 'Obie strony wystawiły już oceny.'
+                  : 'Czekamy jeszcze na ocenę drugiej strony.'}
+              </ThemedText>
+            )}
           </ThemedView>
 
           <Button title="Przejdź do panelu miasta" onPress={() => router.replace('/dashboard')} />

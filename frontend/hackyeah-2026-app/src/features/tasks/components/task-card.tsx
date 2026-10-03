@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { HelpRequestDetails, UserRole } from '@/api/types';
+import type { HelpRequestView } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,19 +9,19 @@ import { Card } from '@/components/ui/card';
 import { Radius, Spacing } from '@/constants/theme';
 import { CategoryBadge } from '@/features/requests/components/request-badges';
 import { StatusLabels, timeAgo } from '@/features/requests/labels';
+import { isFull } from '@/features/requests/view-helpers';
 import { STAGES, StageByStatus, StageLabels } from '@/features/tasks/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
 type TaskCardProps = {
-  task: HelpRequestDetails;
-  role: UserRole;
+  task: HelpRequestView;
 };
 
-export function TaskCard({ task, role }: TaskCardProps) {
+export function TaskCard({ task }: TaskCardProps) {
   const theme = useTheme();
-  const isVolunteer = role === 'VOLUNTEER';
+  // viewerRole comes from the backend: my part in this request, not my account role.
+  const isVolunteer = task.viewerRole === 'VOLUNTEER';
   const stage = StageByStatus[task.status];
-  const otherPerson = isVolunteer ? task.requester : task.volunteer;
 
   const openDetails = () =>
     router.push(
@@ -54,7 +54,7 @@ export function TaskCard({ task, role }: TaskCardProps) {
                 backgroundColor={stage === 'done' ? theme.successSoft : theme.primarySoft}
               />
               <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                {statusHint(task, isVolunteer, otherPerson?.displayName)}
+                {statusHint(task, isVolunteer)}
               </ThemedText>
             </View>
 
@@ -66,28 +66,31 @@ export function TaskCard({ task, role }: TaskCardProps) {
   );
 }
 
-function statusHint(task: HelpRequestDetails, isVolunteer: boolean, otherName?: string) {
+function statusHint(task: HelpRequestView, isVolunteer: boolean) {
+  // Names are only in the FULL view (requester always, volunteer after acceptance).
+  const requester = isFull(task) ? task.requester.displayName : 'osoba potrzebująca';
+  const volunteer = (isFull(task) && task.volunteer?.displayName) || 'Wolontariusz';
   switch (task.status) {
     case 'OPEN':
       return 'Czeka na wolontariusza';
     case 'OFFERED':
       return isVolunteer
-        ? `Czekasz na akceptację: ${task.requester.displayName}`
-        : `${otherName ?? 'Wolontariusz'} chce pomóc – zaakceptuj`;
+        ? 'Czekasz, aż osoba potrzebująca przyjmie Twoją pomoc'
+        : `${volunteer} chce pomóc – zaakceptuj`;
     case 'ACCEPTED':
-      return isVolunteer
-        ? `Pomagasz: ${task.requester.displayName}`
-        : `Pomaga Ci: ${otherName ?? 'wolontariusz'}`;
+      return isVolunteer ? `Pomagasz: ${requester}` : `Pomaga Ci: ${volunteer}`;
     case 'COMPLETED':
       return 'Potwierdzone kodem QR – czeka na ocenę';
     case 'RATED':
       return 'Zakończone i ocenione';
     case 'CANCELLED':
       return 'Zgłoszenie anulowane';
+    case 'UNDER_REVIEW':
+      return 'Sprawdzamy zgłoszenie, zanim zobaczą je inni';
   }
 }
 
-function TaskAction({ task, isVolunteer }: { task: HelpRequestDetails; isVolunteer: boolean }) {
+function TaskAction({ task, isVolunteer }: { task: HelpRequestView; isVolunteer: boolean }) {
   if (task.status === 'ACCEPTED') {
     return isVolunteer ? (
       <Button
@@ -114,7 +117,7 @@ function TaskAction({ task, isVolunteer }: { task: HelpRequestDetails; isVolunte
 }
 
 /** Three-step bar: Oczekujące → W toku → Zakończone. */
-function StageProgress({ status }: { status: HelpRequestDetails['status'] }) {
+function StageProgress({ status }: { status: HelpRequestView['status'] }) {
   const theme = useTheme();
   const current = STAGES.indexOf(StageByStatus[status]);
 

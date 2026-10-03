@@ -15,7 +15,7 @@ import { ProfileStats } from '@/features/profile/components/profile-stats';
 import { enterScreen, layoutTransition } from '@/lib/motion';
 
 export function ProfileScreen() {
-  const { user, updateProfile, signOut } = useSession();
+  const { user, profileDetails, updateProfileDetails, signOut } = useSession();
   const [editing, setEditing] = useState(false);
   const isCity = user.role === 'CITY_ADMIN';
 
@@ -45,14 +45,15 @@ export function ProfileScreen() {
         {editing ? (
           <ProfileEditForm
             user={user}
+            profile={profileDetails}
             onCancel={() => setEditing(false)}
             onSave={(profile) => {
-              updateProfile(profile);
+              updateProfileDetails(profile);
               setEditing(false);
             }}
           />
         ) : (
-          !isCity && <ProfileAbout user={user} />
+          !isCity && <ProfileAbout user={user} profile={profileDetails} />
         )}
       </Animated.View>
 

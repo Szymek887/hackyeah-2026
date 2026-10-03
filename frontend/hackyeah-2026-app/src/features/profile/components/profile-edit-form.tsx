@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { Category, User, UserProfileDetails } from '@/api/types';
+import type { Category, UserProfile } from '@/api/types';
+import type { ProfileDetails } from '@/features/profile/profile-details';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,16 +14,17 @@ import { CategoryLabels } from '@/features/requests/labels';
 const CATEGORIES = Object.keys(CategoryLabels) as Category[];
 
 type ProfileEditFormProps = {
-  user: User;
-  onSave: (profile: UserProfileDetails) => void;
+  user: UserProfile;
+  profile: ProfileDetails;
+  onSave: (profile: ProfileDetails) => void;
   onCancel: () => void;
 };
 
-export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps) {
-  const [draft, setDraft] = useState<UserProfileDetails>(user.profile);
+export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEditFormProps) {
+  const [draft, setDraft] = useState<ProfileDetails>(profile);
   const isVolunteer = user.role === 'VOLUNTEER';
 
-  const set = <K extends keyof UserProfileDetails>(key: K, value: UserProfileDetails[K]) =>
+  const set = <K extends keyof ProfileDetails>(key: K, value: ProfileDetails[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   const toggleTopic = (topic: Category) =>

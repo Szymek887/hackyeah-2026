@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, StyleSheet, TextInput, View } from 'react-native';
 
+import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -12,10 +13,10 @@ import { useCompleteRequest } from '@/features/handoff/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
 type ScannerViewProps = {
-  requestId?: string;
+  requestId: number;
 };
 
-export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
+export function ScannerView({ requestId }: ScannerViewProps) {
   const theme = useTheme();
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
@@ -52,7 +53,7 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
     } catch (err: unknown) {
       verifyingRef.current = false;
       setScanned(false);
-      const msg = err instanceof Error ? err.message : 'Błąd weryfikacji kodu QR';
+      const msg = errorMessage(err);
       if (Platform.OS === 'web') {
         alert(msg);
       } else {
@@ -96,7 +97,7 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
           <ThemedView style={styles.manualBox}>
             <ThemedText type="subtitle">Ręczne wprowadzenie kodu</ThemedText>
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Wpisz token widoczny pod kodem QR (np. PODDRODZE-R1-77A2):
+              Wklej kod widoczny pod kodem QR (wielkość liter ma znaczenie):
             </ThemedText>
             <TextInput
               style={[
@@ -107,11 +108,12 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
                   borderColor: theme.border,
                 },
               ]}
-              placeholder="PODDRODZE-R1-77A2"
+              placeholder="Wklej kod spod kodu QR"
               placeholderTextColor={theme.textSecondary}
               value={manualCode}
               onChangeText={setManualCode}
-              autoCapitalize="characters"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
             <Button
               title={completeMutation.isPending ? 'Weryfikacja...' : 'Potwierdź odbiór kodem'}

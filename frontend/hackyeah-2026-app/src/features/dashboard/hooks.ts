@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getCityAnalyticsSummary, getHeatmapData } from '@/api/dashboard';
+import { getAnalyticsSummary, getHeatmap } from '@/api/dashboard';
 import type { Category } from '@/api/types';
 
 export const dashboardKeys = {
@@ -12,15 +12,15 @@ export const dashboardKeys = {
 export function useHeatmapData(category?: Category) {
   return useQuery({
     queryKey: dashboardKeys.heatmap(category),
-    queryFn: () => getHeatmapData(category),
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    queryFn: () => getHeatmap({ category }),
+    staleTime: 1000 * 60 * 2,
   });
 }
 
 export function useCitySummary() {
   return useQuery({
     queryKey: dashboardKeys.summary(),
-    queryFn: () => getCityAnalyticsSummary(),
+    queryFn: () => getAnalyticsSummary(),
     staleTime: 1000 * 60 * 2,
   });
 }
