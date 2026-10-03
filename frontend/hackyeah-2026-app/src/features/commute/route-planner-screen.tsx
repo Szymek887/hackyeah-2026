@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, Spacing } from '@/constants/theme';
+import { filterRequestsAlongRoute } from '@/features/commute/route-matching';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -22,6 +23,7 @@ export function RoutePlannerScreen() {
     lng: KRAKOW_INITIAL_REGION.longitude,
     radiusKm: 5,
   });
+  const matchingRequests = filterRequestsAlongRoute(requests, KRAKOW_COMMUTE_ROUTE, 450);
 
   return (
     <ThemedView style={styles.root}>
@@ -43,11 +45,11 @@ export function RoutePlannerScreen() {
             title={index === 0 ? 'Start' : index === KRAKOW_COMMUTE_ROUTE.length - 1 ? 'Cel' : ''}
           />
         ))}
-        {requests.map((request) => (
+        {matchingRequests.map((request) => (
           <Marker
             key={request.id}
             coordinate={toLatLng(request.area.center.coordinates)}
-            pinColor={CategoryColors[request.category]}
+            pinColor={CategoryColors[request.category].color}
             title={request.title}
           />
         ))}
@@ -57,7 +59,8 @@ export function RoutePlannerScreen() {
         <ThemedView type="backgroundElement" style={styles.summary}>
           <ThemedText type="smallBold">Test korytarza trasy</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Niebieski obszar to bufor do filtrowania zgłoszeń po drodze.
+            Niebieski obszar to bufor do filtrowania zgłoszeń po drodze. Pasujące:{' '}
+            {matchingRequests.length}/{requests.length}.
           </ThemedText>
         </ThemedView>
       </View>

@@ -1,10 +1,19 @@
 import { router } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { Card } from '@/components/ui/card';
+import { Screen } from '@/components/ui/screen';
 import { ThemedText } from '@/components/themed-text';
+import { Spacing } from '@/constants/theme';
+import { filterRequestsAlongRoute } from '@/features/commute/route-matching';
+import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
-import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
+import {
+  KRAKOW_CENTER_GEOJSON,
+  KRAKOW_COMMUTE_ROUTE,
+  KRAKOW_INITIAL_REGION,
+} from '@/features/map/krakow-map-data';
 
 export function MapScreen() {
   const { data = [] } = useNearbyRequests({
@@ -12,14 +21,54 @@ export function MapScreen() {
     lng: KRAKOW_INITIAL_REGION.longitude,
     radiusKm: 5,
   });
+  const matchingRequests = filterRequestsAlongRoute(data, KRAKOW_COMMUTE_ROUTE, 450);
 
   return (
-    <ScreenPlaceholder title="Mapa" owner="FE2" tasks={['F2.1 mapa z rozmytymi strefami']}>
-      <ThemedText themeColor="textSecondary">
-        Mobile map test jest dostępny w Expo Go. Webowy panel miasta dostanie osobną bibliotekę map.
-      </ThemedText>
-      <ThemedText type="smallBold">Mocki Krakowa: {data.length}</ThemedText>
+    <Screen scroll>
+      <View style={styles.header}>
+        <ThemedText type="subtitle">Mapa</ThemedText>
+        <ThemedText themeColor="textSecondary">
+          Webowy test Leaflet: Krakow, rozmyte strefy i trasa wolontariusza.
+        </ThemedText>
+      </View>
+
+      <LeafletMap
+        centerGeoJson={KRAKOW_CENTER_GEOJSON}
+        matchingRequests={matchingRequests}
+        requests={data}
+      />
+
+      <Card highlighted style={styles.stats}>
+        <ThemedText type="smallBold">Pasujące do trasy: {matchingRequests.length}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Filtr liczy dystans zgłoszenia od polilinii i wybiera prośby w buforze 450 m.
+        </ThemedText>
+      </Card>
+
+      <View style={styles.list}>
+        {matchingRequests.map((request) => (
+          <Card key={request.id}>
+            <ThemedText type="smallBold">{request.title}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Priorytet {request.priority} · {request.tags.join(', ')}
+            </ThemedText>
+          </Card>
+        ))}
+      </View>
+
       <Button title="Zaplanuj trasę" onPress={() => router.push('/route-planner')} />
-    </ScreenPlaceholder>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    gap: Spacing.one,
+  },
+  stats: {
+    gap: Spacing.one,
+  },
+  list: {
+    gap: Spacing.two,
+  },
+});

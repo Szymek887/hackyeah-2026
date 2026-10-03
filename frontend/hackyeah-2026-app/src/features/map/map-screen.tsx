@@ -54,6 +54,7 @@ export function MapScreen() {
 
         {requests.map((request) => {
           const coordinate = toLatLng(request.area.center.coordinates);
+          const categoryColor = CategoryColors[request.category];
           const priorityColor = PriorityColors[request.priority];
 
           return (
@@ -61,11 +62,11 @@ export function MapScreen() {
               <Circle
                 center={coordinate}
                 radius={request.area.radiusMeters}
-                fillColor={`${CategoryColors[request.category]}26`}
-                strokeColor={`${CategoryColors[request.category]}AA`}
+                fillColor={categoryColor.soft}
+                strokeColor={categoryColor.color}
                 strokeWidth={2}
               />
-              <Marker coordinate={coordinate} pinColor={priorityColor}>
+              <Marker coordinate={coordinate} pinColor={priorityColor.color}>
                 <Callout>
                   <View style={styles.callout}>
                     <ThemedText type="smallBold">{request.title}</ThemedText>

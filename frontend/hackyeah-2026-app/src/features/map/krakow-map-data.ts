@@ -1,23 +1,27 @@
 import type { FeatureCollection } from 'geojson';
-import type { LatLng } from 'react-native-maps';
 
 import type { LngLat } from '@/api/types';
+
+export type MapCoordinate = {
+  latitude: number;
+  longitude: number;
+};
 
 export const KRAKOW_INITIAL_REGION = {
   latitude: 50.0614,
   longitude: 19.9366,
   latitudeDelta: 0.045,
   longitudeDelta: 0.045,
-};
+} as const;
 
-export const KRAKOW_COMMUTE_ROUTE: LatLng[] = [
+export const KRAKOW_COMMUTE_ROUTE: MapCoordinate[] = [
   { latitude: 50.0541, longitude: 19.9272 },
   { latitude: 50.0585, longitude: 19.9385 },
   { latitude: 50.0647, longitude: 19.945 },
   { latitude: 50.0709, longitude: 19.9561 },
 ];
 
-export const KRAKOW_ROUTE_BUFFER: LatLng[] = [
+export const KRAKOW_ROUTE_BUFFER: MapCoordinate[] = [
   { latitude: 50.0518, longitude: 19.9242 },
   { latitude: 50.0564, longitude: 19.935 },
   { latitude: 50.0627, longitude: 19.9477 },
@@ -55,6 +59,6 @@ export const KRAKOW_CENTER_GEOJSON: FeatureCollection = {
   ],
 };
 
-export function toLatLng([longitude, latitude]: LngLat): LatLng {
+export function toLatLng([longitude, latitude]: LngLat): MapCoordinate {
   return { latitude, longitude };
 }
