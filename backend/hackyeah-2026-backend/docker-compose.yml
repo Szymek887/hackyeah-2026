@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgis/postgis:17-3.5
+    image: imresamu/postgis:17-3.5-alpine
     container_name: hackyeah-db
     restart: unless-stopped
     environment:
