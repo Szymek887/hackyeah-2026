@@ -24,7 +24,7 @@ See [How to change this contract](#how-to-change-this-contract) at the bottom be
 - Base URL: `EXPO_PUBLIC_API_URL` (default `http://localhost:8080`). All paths start with `/api`.
 - JSON only: `Content-Type: application/json`, `Accept: application/json`.
 - Help-request endpoints live under **`/api/help-requests`**. The only exception is the AI preview `POST /api/requests/classify` (kept for compatibility).
-- **CORS** (browser clients only – Expo web, dashboard; native apps are not affected): `/api/**` allows origins matching `CORS_ALLOWED_ORIGIN_PATTERNS` (default `http://localhost:*`, `http://127.0.0.1:*`, `http://192.168.*:*`, `http://10.*:*`, `http://172.*:*`), methods `GET`/`POST`, request headers `Content-Type`, `Accept`, `X-User-Id`; `Location` is exposed. No credentials (no cookies). Error responses carry the CORS headers too, so the browser can read `ProblemDetail`. Other origins get **403** on preflight.
+- **CORS** (browser clients only – Expo web, dashboard; native apps are not affected): `/api/**` allows origins matching `CORS_ALLOWED_ORIGIN_PATTERNS` (default `http://localhost:*`, `http://127.0.0.1:*`, `http://192.168.*:*`, `http://10.*:*`, `http://172.*:*`), methods `GET`/`POST`/`PUT`, request headers `Content-Type`, `Accept`, `X-User-Id`; `Location` is exposed. No credentials (no cookies). Error responses carry the CORS headers too, so the browser can read `ProblemDetail`. Other origins get **403** on preflight.
 
 ### 1.2 Authentication (mock)
 
@@ -95,6 +95,13 @@ type ClassificationSource = 'LLM' | 'FALLBACK';
 
 /** 1 = critical, 2 = high, 3 = normal. */
 type Priority = 1 | 2 | 3;
+
+/**
+ * Lower-case ISO 639-1 code: 'pl', 'en', 'uk', 'ru', 'de', ...
+ * Any code from the ISO 639-1 list is valid; the client maps codes to display names
+ * (e.g. `new Intl.DisplayNames(['pl'], { type: 'language' }).of('uk')` → "ukraiński").
+ */
+type LanguageCode = string;
 ```
 
 > ⚠️ The frontend currently uses `BASIC_NEEDS` instead of `MEDICINE` + `GROCERIES` and lacks `UNDER_REVIEW`. The backend enum wins (data is persisted with it). See the integration plan, step 1.2.
@@ -134,6 +141,7 @@ type UserSummary = {
   identityVerified: boolean;
   ratingAverage: number | null; // 1.0–5.0, null when no ratings yet
   ratingCount: number;
+  languages: LanguageCode[];  // spoken languages, sorted alphabetically, may be [] (old accounts)
 };
 ```
 
@@ -150,6 +158,7 @@ type UserProfileResponse = {
   ratingCount: number;
   ratingAverage: number | null;
   cityPoints: number;           // engagement points, see §4.8
+  languages: LanguageCode[];    // spoken languages, sorted alphabetically, may be []
 };
 ```
 
@@ -234,6 +243,7 @@ type PublicHelpRequestDetailsResponse = {
     trustScore: number;
     ratingAverage: number | null;
     ratingCount: number;
+    languages: LanguageCode[];         // [+] so a volunteer knows if they can communicate
   };
   createdAt: string;
 };
@@ -262,16 +272,33 @@ Public. Accounts for the login screen (replaces the hard-coded list whose ids do
 → `200 UserProfileResponse[]`, ordered: requesters, volunteers, city admin; by `id` within a role.
 Ids come from the database (IDENTITY), so the client must use this list instead of hard-coded ids. On a fresh database with the current seeder: Anna K. = 1, Kuba W. (volunteer) = 9, Miasto Kraków (city admin) = 13.
 
+#### `PUT /api/users/me/languages` — ✅ `LIVE`
+Auth required. Replaces the whole list of languages the caller speaks (profile edit screen).
+
+Request (`UpdateLanguagesRequest`):
+```json
+{ "languages": ["pl", "uk", "en"] }
+```
+| Field | Rules |
+|---|---|
+| `languages` | required, 1–10 ISO 639-1 codes. Codes are trimmed and lower-cased (`" UK "` → `"uk"`), duplicates are removed. |
+
+→ `200 UserProfileResponse` with `languages` sorted alphabetically.
+400 `Request validation failed` with `errors.languages` (missing / empty / too many), or 400 `detail: "Unknown language code: xx"` for a code outside ISO 639-1.
+
+Why codes and not names: names are language-dependent ("ukraiński" / "Ukrainian" / "українська"); the backend stays locale-free and the client renders names in the UI language. Seeded demo users have languages (e.g. Kuba W. `pl, en, uk`, Nadia P. `pl, ru, uk`); accounts created before this change have `[]` until edited.
+
 #### `POST /api/users` — 🔵 `PROPOSED` (frontend: login screen „Nowe konto”, already in mocks)
 Public. Creates a new account for the mock login; the client then sends its id as `X-User-Id`.
 
 Request (`CreateUserRequest`):
 ```json
-{ "displayName": "Tomek Z.", "role": "VOLUNTEER", "specialNeeds": false }
+{ "displayName": "Tomek Z.", "role": "VOLUNTEER", "specialNeeds": false, "languages": ["pl", "en"] }
 ```
 - `displayName` – required, trimmed, 1–60 chars.
 - `role` – `REQUESTER` or `VOLUNTEER` (`CITY_ADMIN` → 400).
 - `specialNeeds` – optional, default `false`; stored only for `REQUESTER` (ignored for volunteers).
+- `languages` – optional, same rules as `PUT /api/users/me/languages`, default `["pl"]`.
 
 → `201 UserProfileResponse` (+ `Location: /api/users/{id}`), with `identityVerified = false`, `trustScore = 50`, no ratings, 0 city points. The new account appears in `GET /api/users/demo`.
 400 `Request validation failed` with `errors.displayName` / `errors.role`.
@@ -512,6 +539,7 @@ Until the frontend UI models are aligned 1:1 with the wire types, all conversion
 | `id: string` | `id: number` | `String(id)`; send back `Number(id)` |
 | `verified` | `identityVerified` | rename |
 | `hasSpecialNeeds` | `specialNeeds` | rename |
+| language names | `languages: LanguageCode[]` | display via `Intl.DisplayNames`; send codes back |
 | `area.center` | `approximateLocation` | rename |
 | `area.polygon` | `maskedArea` | rename |
 | `area.radiusMeters` | – | constant `300` (grid cell size) |
@@ -546,6 +574,7 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-03 | Spoken languages: `languages` (ISO 639-1 codes) on `UserSummary` and `UserProfileResponse`, new `PUT /api/users/me/languages` (live); proposed `languages` in `requesterTrust` and in `POST /api/users`; CORS allows `PUT`. | Backend |
 | 2026-10-03 | Proposed `POST /api/users` (create account from the login screen, §4.2). | FE1 |
 | 2026-10-03 | Integration phase 0: `GET /api/users/demo` live; CORS for browser clients on `/api/**` (§1.1). | Dev 2 |
 | 2026-10-03 | Stage 3 live: offer / accept / reject / cancel, `GET /mine`, QR (`/qr`, `/complete`), ratings. `viewerRole` on request views; `ratingAverage` on `UserSummary` and profile; `cityPoints` on profile. Decided: QR TTL 24 h with automatic reissue, stored city points (4★ = 20, 5★ = 25), requester may cancel `UNDER_REVIEW`. | – |

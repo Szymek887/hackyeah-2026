@@ -1,9 +1,13 @@
 package com.telecrazy.hackyeah2026backend.api;
 
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.SpokenLanguages;
+
+import java.util.List;
 
 /**
  * @param ratingAverage average stars received, {@code null} when not rated yet
+ * @param languages     ISO 639-1 codes, sorted
  */
 public record UserSummary(
         Long id,
@@ -11,7 +15,8 @@ public record UserSummary(
         int trustScore,
         boolean identityVerified,
         Double ratingAverage,
-        int ratingCount
+        int ratingCount,
+        List<String> languages
 ) {
 
     public static UserSummary from(AppUser user) {
@@ -24,7 +29,8 @@ public record UserSummary(
                 user.getTrustScore(),
                 user.isIdentityVerified(),
                 user.getRatingAverage(),
-                user.getRatingCount()
+                user.getRatingCount(),
+                SpokenLanguages.sorted(user.getLanguages())
         );
     }
 }

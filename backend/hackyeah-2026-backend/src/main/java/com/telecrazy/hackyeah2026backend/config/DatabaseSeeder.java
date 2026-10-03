@@ -14,6 +14,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.List;
+
 @Configuration
 public class DatabaseSeeder {
 
@@ -28,20 +30,20 @@ public class DatabaseSeeder {
 
             GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), WGS84);
 
-            AppUser anna = userRepository.save(new AppUser("Anna K.", UserRole.REQUESTER, true, true, 72));
-            AppUser marek = userRepository.save(new AppUser("Marek S.", UserRole.REQUESTER, true, false, 66));
-            AppUser ewa = userRepository.save(new AppUser("Ewa P.", UserRole.REQUESTER, false, false, 45));
-            AppUser zofia = userRepository.save(new AppUser("Zofia M.", UserRole.REQUESTER, true, true, 81));
-            AppUser jan = userRepository.save(new AppUser("Jan B.", UserRole.REQUESTER, true, false, 58));
-            AppUser halina = userRepository.save(new AppUser("Halina R.", UserRole.REQUESTER, true, true, 77));
-            AppUser piotr = userRepository.save(new AppUser("Piotr N.", UserRole.REQUESTER, false, false, 40));
-            AppUser maria = userRepository.save(new AppUser("Maria T.", UserRole.REQUESTER, true, false, 69));
+            AppUser anna = userRepository.save(user("Anna K.", UserRole.REQUESTER, true, true, 72, "pl"));
+            AppUser marek = userRepository.save(user("Marek S.", UserRole.REQUESTER, true, false, 66, "pl", "en"));
+            AppUser ewa = userRepository.save(user("Ewa P.", UserRole.REQUESTER, false, false, 45, "pl"));
+            AppUser zofia = userRepository.save(user("Zofia M.", UserRole.REQUESTER, true, true, 81, "pl", "de"));
+            AppUser jan = userRepository.save(user("Jan B.", UserRole.REQUESTER, true, false, 58, "pl"));
+            AppUser halina = userRepository.save(user("Halina R.", UserRole.REQUESTER, true, true, 77, "pl", "ru"));
+            AppUser piotr = userRepository.save(user("Piotr N.", UserRole.REQUESTER, false, false, 40, "pl", "uk"));
+            AppUser maria = userRepository.save(user("Maria T.", UserRole.REQUESTER, true, false, 69, "pl", "en"));
 
-            AppUser kuba = userRepository.save(new AppUser("Kuba W.", UserRole.VOLUNTEER, true, false, 91));
-            AppUser ola = userRepository.save(new AppUser("Ola D.", UserRole.VOLUNTEER, true, false, 88));
-            AppUser bartek = userRepository.save(new AppUser("Bartek L.", UserRole.VOLUNTEER, true, false, 84));
-            userRepository.save(new AppUser("Nadia P.", UserRole.VOLUNTEER, false, false, 63));
-            userRepository.save(new AppUser("Miasto Kraków", UserRole.CITY_ADMIN, true, false, 100));
+            AppUser kuba = userRepository.save(user("Kuba W.", UserRole.VOLUNTEER, true, false, 91, "pl", "en", "uk"));
+            AppUser ola = userRepository.save(user("Ola D.", UserRole.VOLUNTEER, true, false, 88, "pl", "en", "de"));
+            AppUser bartek = userRepository.save(user("Bartek L.", UserRole.VOLUNTEER, true, false, 84, "pl", "en"));
+            userRepository.save(user("Nadia P.", UserRole.VOLUNTEER, false, false, 63, "uk", "ru", "pl"));
+            userRepository.save(user("Miasto Kraków", UserRole.CITY_ADMIN, true, false, 100, "pl", "en"));
 
             AppUser[] requesters = {anna, marek, ewa, zofia, jan, halina, piotr, maria};
             AppUser[] volunteers = {kuba, ola, bartek};
@@ -116,6 +118,19 @@ public class DatabaseSeeder {
                     10
             );
         };
+    }
+
+    private AppUser user(
+            String displayName,
+            UserRole role,
+            boolean identityVerified,
+            boolean specialNeeds,
+            int trustScore,
+            String... languages
+    ) {
+        AppUser user = new AppUser(displayName, role, identityVerified, specialNeeds, trustScore);
+        user.replaceLanguages(List.of(languages));
+        return user;
     }
 
     private void seedRouteDemoRequests(
