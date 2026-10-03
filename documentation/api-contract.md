@@ -91,7 +91,7 @@ type UserRole = 'REQUESTER' | 'VOLUNTEER' | 'CITY_ADMIN';
 
 type RiskFlag = 'SCAM_SUSPECTED' | 'MEDICAL_EMERGENCY' | 'PERSONAL_DATA' | 'INAPPROPRIATE_CONTENT';
 
-type ClassificationSource = 'LLM' | 'FALLBACK';
+type ClassificationSource = 'LLM' | 'FALLBACK' | 'PRESET';
 
 /** 1 = critical, 2 = high, 3 = normal. */
 type Priority = 1 | 2 | 3;
@@ -310,6 +310,8 @@ Auth required. Mock mObywatel: sets `identityVerified = true`. No body. → `200
 
 #### `POST /api/requests/classify` — ✅ `LIVE`
 Public. Preview only, nothing is saved. Takes ~2–3 s with LLM, < 50 ms with fallback; client timeout ≥ 20 s.
+The medicine pickup flow must not call this endpoint; it should use `category: "MEDICINE"` on create
+and skip free-text title/description entirely.
 
 Request:
 ```json
@@ -384,6 +386,9 @@ For `category: "MEDICINE"` the request uses a privacy-safe preset. The client mu
 free-text `title` or `description`; the backend stores a system title/description and returns
 medicine pickup instructions. This prevents accidental storage of e-prescription codes, PESEL,
 QR codes, medicine names, dosing or health details.
+Medicine presets skip scam/risk-flag detection because there is no user free text to classify.
+If the client omits `category` and the server classifies the free text as `MEDICINE`, create returns
+`400` and asks the client to use the medicine preset instead of storing that text.
 
 Request:
 ```json
@@ -437,6 +442,7 @@ Not accepted (the server decides): `priority`, `tags`, `status`. City is always 
 | `volunteerInstructions` | Explains pharmacy-only pickup and direct off-app transfer of any required e-prescription data. |
 
 Sending `title` or `description` with `category: "MEDICINE"` → `400`.
+Omitting `category` while the classifier detects `MEDICINE` → `400`.
 If the AI flags a scam, the response has `status: "UNDER_REVIEW"` – the UI must tell the user the request is waiting for review.
 
 ### 4.6 Help requests – state transitions — ✅ `LIVE`

@@ -14,6 +14,7 @@ import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
+import com.telecrazy.hackyeah2026backend.exception.FieldValidationException;
 import com.telecrazy.hackyeah2026backend.exception.ForbiddenException;
 import com.telecrazy.hackyeah2026backend.exception.NotFoundException;
 import com.telecrazy.hackyeah2026backend.repository.HelpRequestRepository;
@@ -25,6 +26,7 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.mockito.ArgumentCaptor;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -63,12 +65,12 @@ class HelpRequestDetailsServiceTest {
 
     @Test
     void createStoresClassificationAndReturnsFullDetails() {
-        givenClassification(HelpCategory.MEDICINE, 2, Set.of());
+        givenClassification(HelpCategory.GROCERIES, 2, Set.of());
 
         FullHelpRequestResponse response = service.create(body(), marek);
 
         assertThat(response.id()).isEqualTo(100L);
-        assertThat(response.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(response.category()).isEqualTo(HelpCategory.GROCERIES);
         assertThat(response.priority()).isEqualTo(2);
         assertThat(response.aiPriority()).isEqualTo(2);
         assertThat(response.tags()).containsExactly("leki");
@@ -95,7 +97,7 @@ class HelpRequestDetailsServiceTest {
         assertThat(response.priority()).isEqualTo(2);
         assertThat(response.aiPriority()).isEqualTo(2);
         assertThat(response.tags()).containsExactly("leki", "apteka");
-        assertThat(response.classificationSource()).isEqualTo(ClassificationSource.FALLBACK);
+        assertThat(response.classificationSource()).isEqualTo(ClassificationSource.PRESET);
         assertThat(response.requesterInstructions()).isEqualTo(MedicineRequestPolicy.REQUESTER_INSTRUCTIONS);
         assertThat(response.volunteerInstructions()).isEqualTo(MedicineRequestPolicy.VOLUNTEER_INSTRUCTIONS);
         verifyNoInteractions(classifier);
@@ -115,9 +117,33 @@ class HelpRequestDetailsServiceTest {
         );
 
         assertThatThrownBy(() -> service.create(body, marek))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Title and description are not accepted for medicine requests");
+                .isInstanceOf(FieldValidationException.class)
+                .extracting("errors")
+                .satisfies(errors -> assertThat(errors(errors)).containsKey("description"));
         verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void createRejectsInferredMedicineWithoutPreset() {
+        givenClassification(HelpCategory.MEDICINE, 2, Set.of());
+
+        assertThatThrownBy(() -> service.create(body(), marek))
+                .isInstanceOf(FieldValidationException.class)
+                .extracting("errors")
+                .satisfies(errors -> assertThat(errors(errors)).containsEntry(
+                        "category", "Choose the medicine category instead of entering medicine details in free text"
+                ));
+    }
+
+    @Test
+    void createUsesExplicitNonMedicineCategoryOverride() {
+        givenClassification(HelpCategory.MEDICINE, 1, Set.of());
+
+        FullHelpRequestResponse response = service.create(groceryCategoryBody(), marek);
+
+        assertThat(response.category()).isEqualTo(HelpCategory.GROCERIES);
+        assertThat(response.priority()).isEqualTo(1);
+        verify(classifier).classify(any());
     }
 
     @Test
@@ -144,7 +170,7 @@ class HelpRequestDetailsServiceTest {
     void createKeepsMedicalEmergencyOpenAndFlagged() {
         givenClassification(HelpCategory.MEDICINE, 1, Set.of(RiskFlag.MEDICAL_EMERGENCY));
 
-        FullHelpRequestResponse response = service.create(body(), marek);
+        FullHelpRequestResponse response = service.create(groceryCategoryBody(), marek);
 
         assertThat(response.status()).isEqualTo(HelpRequestStatus.OPEN);
         assertThat(response.priority()).isEqualTo(1);
@@ -262,9 +288,27 @@ class HelpRequestDetailsServiceTest {
         );
     }
 
+    private static CreateHelpRequestRequest groceryCategoryBody() {
+        return new CreateHelpRequestRequest(
+                "Zakupy",
+                "Potrzebuję pomocy z zakupami.",
+                50.0647,
+                19.9449,
+                "Długa",
+                "12",
+                "  ",
+                HelpCategory.GROCERIES
+        );
+    }
+
     private static AppUser user(long id, UserRole role, boolean specialNeeds) {
         AppUser user = new AppUser("User " + id, role, true, specialNeeds, 50);
         user.setId(id);
         return user;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> errors(Object value) {
+        return (Map<String, String>) value;
     }
 }

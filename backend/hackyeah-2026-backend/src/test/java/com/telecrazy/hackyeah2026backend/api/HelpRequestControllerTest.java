@@ -207,7 +207,8 @@ class HelpRequestControllerTest {
                                   "lng": 19.944912,
                                   "street": "Tajemnicza",
                                   "buildingNumber": "77B",
-                                  "apartmentNumber": "13A"
+                                  "apartmentNumber": "13A",
+                                  "category": "GROCERIES"
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -215,7 +216,7 @@ class HelpRequestControllerTest {
                 .andExpect(jsonPath("$.id").value(100))
                 .andExpect(jsonPath("$.visibility").value("FULL"))
                 .andExpect(jsonPath("$.status").value("OPEN"))
-                .andExpect(jsonPath("$.category").value("MEDICINE"))
+                .andExpect(jsonPath("$.category").value("GROCERIES"))
                 .andExpect(jsonPath("$.priority").value(1))
                 .andExpect(jsonPath("$.classificationSource").value("FALLBACK"))
                 .andExpect(jsonPath("$.tags[0]").value("leki"))
@@ -234,6 +235,27 @@ class HelpRequestControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.lat").exists())
                 .andExpect(jsonPath("$.errors.lng").exists());
+    }
+
+    @Test
+    void createValidatesRequiredAddressFieldsWithFieldErrors() throws Exception {
+        mockMvc.perform(post("/api/help-requests")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Zakupy",
+                                  "description": "Potrzebuję pomocy z zakupami.",
+                                  "lat": 50.064734,
+                                  "lng": 19.944912,
+                                  "street": "",
+                                  "buildingNumber": ""
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Request validation failed"))
+                .andExpect(jsonPath("$.errors.street").exists())
+                .andExpect(jsonPath("$.errors.buildingNumber").exists());
     }
 
     private HelpRequest storedRequest(HelpRequestStatus status) {

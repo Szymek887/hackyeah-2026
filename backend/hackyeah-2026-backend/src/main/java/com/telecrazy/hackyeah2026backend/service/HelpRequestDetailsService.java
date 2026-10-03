@@ -12,6 +12,7 @@ import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
+import com.telecrazy.hackyeah2026backend.exception.FieldValidationException;
 import com.telecrazy.hackyeah2026backend.exception.ForbiddenException;
 import com.telecrazy.hackyeah2026backend.exception.NotFoundException;
 import com.telecrazy.hackyeah2026backend.repository.HelpRequestRepository;
@@ -22,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -58,8 +61,6 @@ public class HelpRequestDetailsService {
             throw new ForbiddenException("City administrators cannot create help requests");
         }
 
-        validateAddress(body);
-
         boolean medicinePreset = MedicineRequestPolicy.isMedicine(body.category());
         if (medicinePreset) {
             validateMedicinePreset(body);
@@ -70,6 +71,12 @@ public class HelpRequestDetailsService {
         RequestClassification classification = medicinePreset
                 ? medicineClassification()
                 : classify(body);
+        if (!medicinePreset && body.category() == null && MedicineRequestPolicy.isMedicine(classification.category())) {
+            throw new FieldValidationException(
+                    "Request validation failed",
+                    Map.of("category", "Choose the medicine category instead of entering medicine details in free text")
+            );
+        }
 
         HelpCategory category = body.category() != null ? body.category() : classification.category();
         String title = medicinePreset ? MedicineRequestPolicy.SAFE_TITLE : body.title().trim();
@@ -121,33 +128,33 @@ public class HelpRequestDetailsService {
                 2,
                 MedicineRequestPolicy.TAGS,
                 Set.of(),
-                ClassificationSource.FALLBACK
+                ClassificationSource.PRESET
         );
     }
 
     private static void validateMedicinePreset(CreateHelpRequestRequest body) {
         if (hasText(body.title()) || hasText(body.description())) {
-            throw new IllegalArgumentException(
-                    "Title and description are not accepted for medicine requests; choose the medicine category only"
-            );
+            Map<String, String> errors = new LinkedHashMap<>();
+            if (hasText(body.title())) {
+                errors.put("title", "must be empty for medicine requests");
+            }
+            if (hasText(body.description())) {
+                errors.put("description", "must be empty for medicine requests");
+            }
+            throw new FieldValidationException("Request validation failed", errors);
         }
     }
 
     private static void validateGeneralText(CreateHelpRequestRequest body) {
+        Map<String, String> errors = new LinkedHashMap<>();
         if (!hasText(body.title())) {
-            throw new IllegalArgumentException("title is required");
+            errors.put("title", "must not be blank");
         }
         if (!hasText(body.description())) {
-            throw new IllegalArgumentException("description is required");
+            errors.put("description", "must not be blank");
         }
-    }
-
-    private static void validateAddress(CreateHelpRequestRequest body) {
-        if (!hasText(body.street())) {
-            throw new IllegalArgumentException("street is required");
-        }
-        if (!hasText(body.buildingNumber())) {
-            throw new IllegalArgumentException("buildingNumber is required");
+        if (!errors.isEmpty()) {
+            throw new FieldValidationException("Request validation failed", errors);
         }
     }
 
