@@ -18,6 +18,7 @@ import { distanceMeters } from '@/lib/geo';
 import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 import { LocationPermissionModal } from '@/features/map/location-permission-modal';
+import { setSharedLocation, useSharedLocation } from '@/features/map/location-store';
 import { useTheme } from '@/hooks/use-theme';
 
 type ScopeFilter = 'nearest' | 'route' | 'urgent';
@@ -56,17 +57,15 @@ function sortByNearest(requests: HelpRequestListItem[], center: RouteCoordinate)
 export function MapScreen() {
   const theme = useTheme();
   const { savedRoute, toggleRouteActive } = useSavedCommuteRoute();
+  const sharedLocation = useSharedLocation();
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('nearest');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('ALL');
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(true);
-  const [locationLabel, setLocationLabel] = useState('Tauron Arena Kraków');
+  const [locationLabel, setLocationLabel] = useState(sharedLocation.label);
   const [radiusKm, setRadiusKm] = useState<number>(2.5);
-  const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
-    latitude: 50.0681,
-    longitude: 19.9942,
-  });
+  const [mapCenter, setMapCenter] = useState<RouteCoordinate>(sharedLocation.coordinate);
 
   const { data: allRequests = [], error } = useNearbyRequests({
     lat: mapCenter.latitude,
@@ -78,6 +77,7 @@ export function MapScreen() {
     setIsPermissionModalOpen(false);
     setMapCenter(coords);
     setLocationLabel('Moja lokalizacja (GPS)');
+    setSharedLocation({ label: 'Moja lokalizacja (GPS)', coordinate: coords });
   };
 
   const activeRoute = savedRoute?.isActive ? savedRoute : null;
@@ -113,6 +113,7 @@ export function MapScreen() {
   const handleSelectLocation = (name: string, coordinate: RouteCoordinate) => {
     setLocationLabel(name);
     setMapCenter(coordinate);
+    setSharedLocation({ label: name, coordinate });
   };
 
   return (

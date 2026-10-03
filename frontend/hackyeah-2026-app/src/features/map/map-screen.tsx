@@ -30,11 +30,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 import { LocationPermissionModal } from '@/features/map/location-permission-modal';
+import { setSharedLocation, useSharedLocation } from '@/features/map/location-store';
 
 type CategoryFilter = 'ALL' | Category;
 type PriorityFilter = 'ALL' | Priority;
 
-const TAURON_ARENA = { latitude: 50.0681, longitude: 19.9942 };
 const CATEGORY_FILTERS: CategoryFilter[] = ['ALL', 'MEDICINE', 'GROCERIES', 'HOME_SUPPORT'];
 const PRIORITY_FILTERS: PriorityFilter[] = ['ALL', 1, 2, 3];
 
@@ -62,15 +62,13 @@ export function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { savedRoute } = useSavedCommuteRoute();
+  const sharedLocation = useSharedLocation();
   const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
   const offerHelpMutation = useOfferHelp();
   const [offeredIds, setOfferedIds] = useState<number[]>([]);
 
-  const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
-    latitude: TAURON_ARENA.latitude,
-    longitude: TAURON_ARENA.longitude,
-  });
-  const [locationLabel, setLocationLabel] = useState<string>('Tauron Arena Kraków');
+  const [mapCenter, setMapCenter] = useState<RouteCoordinate>(sharedLocation.coordinate);
+  const [locationLabel, setLocationLabel] = useState<string>(sharedLocation.label);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(true);
   const [radiusKm, setRadiusKm] = useState<number>(2.5);
@@ -98,6 +96,7 @@ export function MapScreen() {
     setIsPermissionModalOpen(false);
     setMapCenter(coords);
     setLocationLabel('Moja lokalizacja (GPS)');
+    setSharedLocation({ label: 'Moja lokalizacja (GPS)', coordinate: coords });
     setSelectedRequestId(null);
     mapRef.current?.animateToRegion(
       {
@@ -151,6 +150,7 @@ export function MapScreen() {
   const handleSelectLocation = (name: string, coordinate: RouteCoordinate) => {
     setMapCenter(coordinate);
     setLocationLabel(name);
+    setSharedLocation({ label: name, coordinate });
     setSelectedRequestId(null);
     mapRef.current?.animateToRegion(
       {
@@ -168,6 +168,7 @@ export function MapScreen() {
     if (loc) {
       setMapCenter(loc);
       setLocationLabel('Moja lokalizacja (GPS)');
+      setSharedLocation({ label: 'Moja lokalizacja (GPS)', coordinate: loc });
       mapRef.current?.animateToRegion(
         {
           latitude: loc.latitude,

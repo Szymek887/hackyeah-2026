@@ -10,10 +10,11 @@ import { timeAgo } from '@/features/requests/labels';
 type RequestCardProps = {
   request: HelpRequestListItem;
   onPress?: () => void;
+  meta?: string;
 };
 
 /** List item from `/nearby` or `/along-route`: public data only, no requester identity. */
-export function RequestCard({ request, onPress }: RequestCardProps) {
+export function RequestCard({ request, onPress, meta }: RequestCardProps) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
       <Card>
@@ -25,7 +26,7 @@ export function RequestCard({ request, onPress }: RequestCardProps) {
         <ThemedText type="defaultBold">{request.title}</ThemedText>
 
         <ThemedText type="small" themeColor="textSecondary">
-          {timeAgo(request.createdAt)}
+          {meta ?? timeAgo(request.createdAt)}
         </ThemedText>
       </Card>
     </Pressable>
