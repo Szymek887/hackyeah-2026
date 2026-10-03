@@ -22,7 +22,8 @@ public record PublicHelpRequestDetailsResponse(
         List<String> tags,
         GeoJsonPoint approximateLocation,
         GeoJsonPolygon maskedArea,
-        Instant createdAt
+        Instant createdAt,
+        ViewerRole viewerRole
 ) implements HelpRequestView {
 
     @Override

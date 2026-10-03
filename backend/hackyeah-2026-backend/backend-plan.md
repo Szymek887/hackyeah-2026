@@ -78,12 +78,14 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`. Zgłoszenia są
 | `GET /help-requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON – ✅ zrobione | B2.1 |
 | `POST /help-requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu – ✅ zrobione | B2.2 |
 | `GET /help-requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` – ✅ zrobione | B2.4 |
-| `POST /help-requests/{id}/offer` | Wolontariusz deklaruje pomoc (`OPEN→OFFERED`) | B3.1 |
-| `POST /help-requests/{id}/accept` | Zgłaszający akceptuje (`OFFERED→ACCEPTED`), generowany token QR | B3.1/B3.2 |
-| `GET /help-requests/{id}/qr` | Token QR dla zgłaszającego (tylko `ACCEPTED`) | B3.2 |
-| `POST /help-requests/{id}/complete` | Body: `token`; wolontariusz kończy (`ACCEPTED→COMPLETED`) | B3.2 |
-| `POST /help-requests/{id}/cancel` | Anulowanie | B3.1 |
-| `POST /help-requests/{id}/ratings` | Ocena drugiej strony; aktualizuje reputację | B3.3 |
+| `GET /help-requests/mine` | Zgłoszenia, w których użytkownik jest zgłaszającym lub wolontariuszem – ✅ zrobione | B3.1 |
+| `POST /help-requests/{id}/offer` | Wolontariusz deklaruje pomoc (`OPEN→OFFERED`) – ✅ zrobione | B3.1 |
+| `POST /help-requests/{id}/accept` | Zgłaszający akceptuje (`OFFERED→ACCEPTED`), generowany token QR – ✅ zrobione | B3.1/B3.2 |
+| `POST /help-requests/{id}/reject` | Zgłaszający odrzuca ofertę (`OFFERED→OPEN`) – ✅ zrobione | B3.1 |
+| `GET /help-requests/{id}/qr` | Token QR dla zgłaszającego (tylko `ACCEPTED`) – ✅ zrobione | B3.2 |
+| `POST /help-requests/{id}/complete` | Body: `token`; wolontariusz kończy (`ACCEPTED→COMPLETED`) – ✅ zrobione | B3.2 |
+| `POST /help-requests/{id}/cancel` | Anulowanie przez zgłaszającego – ✅ zrobione | B3.1 |
+| `POST /help-requests/{id}/ratings` | Ocena drugiej strony; aktualizuje reputację – ✅ zrobione | B3.3 |
 | `GET /analytics/heatmap?category&status&from&to&cellSizeMeters` | Heksagony + liczności pod mapę cieplną (GeoJSON) – ✅ zrobione | B3.4 |
 | `GET /analytics/summary?category&from&to` | Zliczenia wg statusu, kategorii i priorytetu + wskaźnik realizacji – ✅ zrobione | B3.4 |
 
@@ -114,17 +116,19 @@ Brak numeru lokalu, nazwiska i dokładnych współrzędnych. Pełne dane wyłąc
 ### 6.2 Maskowanie (Dev 1/2)
 ✅ `LocationObfuscationService` zwraca środek komórki siatki ~300 m (`approximateLocation`) i polygon komórki (`maskedArea`). Kolejne ulepszenie: niewielki, deterministyczny jitter zależny od `requestId` oraz test odległości zamaskowanego punktu od oryginału w zakresie 0–400 m.
 
-### 6.3 Maszyna stanów (Dev 2)
-`RequestStateService` z jawną tabelą dozwolonych przejść i sprawdzaniem aktora (kto może wykonać przejście). Zmiany pod `@Transactional` z blokadą optymistyczną (`@Version`) – dwa równoczesne `offer` → drugi dostaje **409**.
+### 6.3 Maszyna stanów (Dev 2) – ✅ zrobione
+`HelpRequestWorkflowService` (+ `HelpRequestWorkflowController`): każda akcja pobiera zgłoszenie z blokadą wiersza (`SELECT … FOR UPDATE`, `findByIdForUpdate`), więc równoczesne akcje wykonują się po kolei – z dwóch równoczesnych `offer` drugi dostaje **409** (sprawdzone na PostGIS: 4 równoczesne `offer` → 1×200, 3×409). `@Version` zostaje jako dodatkowe zabezpieczenie. Kolejność sprawdzeń: widoczność (**404**) → aktor (**403**) → stan (**409**).
 - ✅ Pola w encjach: `HelpRequest.volunteer`, `updatedAt`, `@Version`; `AppUser.ratingCount` (`trustScore` zostaje `int` 0–100, jak w seederze).
 - ✅ Wyjątki domenowe (`exception/`) i mapowanie konfliktu wersji / naruszenia unikalności na **409**.
-- ⏳ `RequestStateService` z tabelą przejść i endpointy `offer` / `accept` / `cancel`.
+- ✅ Endpointy `offer` / `accept` / `reject` / `cancel` oraz `GET /mine`. `cancel` dozwolony z `OPEN`/`OFFERED`/`ACCEPTED`/`UNDER_REVIEW`.
+- ✅ Pole `viewerRole` (`REQUESTER` / `VOLUNTEER` / `NONE`) w obu wariantach szczegółów – wolontariusz w `OFFERED` widzi widok `PUBLIC`, ale wie, że to jego oferta. Mapowanie widoków wydzielone do `HelpRequestViewMapper`.
+- ⏳ Wycofanie oferty przez wolontariusza (`withdraw`) – otwarte pytanie w `documentation/api-contract.md`.
 
-### 6.4 QR (Dev 2)
-Token generowany przy `ACCEPTED`, ważny np. 24 h, jednorazowy. `complete` weryfikuje: stan `ACCEPTED`, wywołujący = przypisany wolontariusz, token zgodny, nieużyty, niewygasły. Po sukcesie `usedAt = now`, status `COMPLETED`.
+### 6.4 QR (Dev 2) – ✅ zrobione
+Token (32 losowe bajty, base64url, 43 znaki) w polach `HelpRequest.handoffToken*`, generowany przy `accept`, ważny 24 h, jednorazowy. `GET /qr` wydaje nowy token, gdy go brak (np. dane z seedera) lub wygasł. Porównanie w stałym czasie (`MessageDigest.isEqual`), `Clock` jako bean (testy wygaśnięcia). `complete` weryfikuje: stan `ACCEPTED`, wywołujący = przypisany wolontariusz, token zgodny, nieużyty, niewygasły. Po sukcesie `usedAt = now`, status `COMPLETED`.
 
-### 6.5 Reputacja (Dev 2)
-Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayesowska, by pojedyncza ocena nie dawała skrajności); +bonus za `identityVerified`. Ocena możliwa tylko po `COMPLETED`, raz na stronę; gdy obie strony ocenią → `RATED`.
+### 6.5 Reputacja (Dev 2) – ✅ zrobione
+`ReputationPolicy`: `trustScore` przesuwa się o 20% w stronę oceny przeliczonej na 0–100 (1★ = 0, 5★ = 100) – średnia krocząca zamiast bayesowskiej, bo zachowuje sensowne wartości z seedera, a pojedyncza ocena nie daje skrajności. `AppUser.ratingTotal` + `ratingCount` → `ratingAverage`. Punkty miejskie (`AppUser.cityPoints`) tylko dla wolontariusza ocenionego przez zgłaszającego: 4★ = 20, 5★ = 25. Ocena tylko po `COMPLETED`, raz na stronę (unikalny indeks `uk_ratings_request_from_user`); gdy obie strony ocenią → `RATED`.
 
 ### 6.6 Priorytet i niepełnosprawność – ✅ zrobione
 `finalPriority = max(1, aiPriority − 1)` gdy zgłaszający ma `hasSpecialNeeds` (priorytet 1 = najpilniejszy). Zapis zarówno wyniku AI, jak i końcowego priorytetu.
@@ -198,7 +202,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 - **Dev 3:** ✅ `RequestClassifier`, ✅ `POST /requests/classify`, ✅ fallback regułowy; ✅ podpięcie do tworzenia zgłoszenia (**B2.3**, zrobione przez Dev 2).
 
 ### Etap 3 (18–30 h)
-- **Dev 2:** przejścia stanów, QR, `complete`, oceny i reputacja (**B3.1–B3.3**), mock weryfikacji.
+- **Dev 2:** ✅ przejścia stanów, ✅ QR, ✅ `complete`, ✅ oceny i reputacja (**B3.1–B3.3**), ✅ `http/help-requests-flow.http`; ⏳ mock weryfikacji.
 - **Dev 3:** ✅ endpointy analityczne i heatmapa (**B3.4**, API); ✅ dane demo pod heatmapę dostarczone przez Dev 1; ⏳ widok na froncie.
 - **Dev 1:** ✅ testy integracyjne geo/prywatności; ⏳ wydajność (indeksy GiST, `EXPLAIN`), ewentualne uzupełnienie seedera o oceny po flow reputacji, wsparcie integracji.
 
@@ -207,7 +211,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 2. ✅ Dodać testy integracyjne dla `POST /api/help-requests/along-route`: minimum 2 punkty, walidacja bufora, trafienia w korytarzu trasy i brak trafień poza nim.
 3. ✅ Dodać test prywatności publicznych odpowiedzi: brak ulicy, numeru mieszkania i dokładnej lokalizacji; obecne tylko `approximateLocation` i `maskedArea`.
 4. ⏳ Sprawdzić wydajność zapytań geo na seedzie Krakowa: indeks GiST, `EXPLAIN`, czas odpowiedzi dla promienia i trasy.
-5. ⏳ Uzupełnić kolekcję `.http` o pełny scenariusz demo po merge endpointów `POST /requests`, `offer`, `accept`, `complete`.
+5. ✅ Uzupełnić kolekcję `.http` o pełny scenariusz demo po merge endpointów `POST /requests`, `offer`, `accept`, `complete` – `http/help-requests-flow.http` (Dev 2).
 
 ### Etap 4 (30–36 h)
 - Przejście pełnego scenariusza demo na API (kolekcja `.http` obejmująca cały flow), poprawki błędów, reset danych demo (endpoint/profil `dev`), przygotowanie awaryjnego trybu bez LLM.
@@ -215,18 +219,12 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 ## 9. Definicja ukończenia (backend)
 
 - [ ] Cały scenariusz demo przechodzi przez API bez ręcznych zmian w bazie.
-- [x] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny dla geo API).
+- [x] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny). – `HelpRequestControllerTest`: szczegóły `PUBLIC` i lista `nearby` (surowy JSON przeszukiwany pod kątem adresu, nazwiska, telefonu i dokładnych współrzędnych); `HelpRequestGeoIntegrationTest`: geo API na PostGIS.
 - [ ] Wszystkie geometrie w SRID 4326; zapytania odległościowe w metrach (`geography`).
 - [x] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
 - [x] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
-- [ ] Testy: ✅ zapytania geo i maskowanie publiczne na PostGIS; ⏳ maszyna stanów, token QR (użycie wtórne, wygaśnięcie).
-- [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu.
-- [x] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny). – `HelpRequestControllerTest`: szczegóły `PUBLIC` i lista `nearby` (surowy JSON przeszukiwany pod kątem adresu, nazwiska, telefonu i dokładnych współrzędnych); `along-route` używa tego samego mapowania co `nearby`.
-- [ ] Wszystkie geometrie w SRID 4326; zapytania odległościowe w metrach (`geography`).
-- [x] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
-- [x] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
-- [ ] Testy: zapytania geo (Testcontainers), maszyna stanów, token QR (użycie wtórne, wygaśnięcie), maskowanie.
-- [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu. – są: `health`, `users`, `classify`, `help-requests` (nearby, along-route), `help-requests-crud` (create, details), `analytics`; brakuje endpointów etapu 3.
+- [x] Testy: ✅ zapytania geo i maskowanie publiczne na PostGIS (`HelpRequestGeoIntegrationTest`); ✅ maszyna stanów, ✅ token QR (użycie wtórne, wygaśnięcie) – `HelpRequestWorkflowServiceTest`, `HelpRequestWorkflowControllerTest`, `ReputationPolicyTest`.
+- [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu. – są: `health`, `users`, `classify`, `help-requests` (nearby, along-route), `help-requests-crud` (create, details), `help-requests-flow` (cały cykl etapu 3), `analytics`; brakuje `POST /users/me/verify`.
 
 ## 10. Ryzyka
 

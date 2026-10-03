@@ -44,11 +44,31 @@ public class AppUser {
     @Column(nullable = false)
     private int ratingCount;
 
+    /** Sum of all stars received; the average is derived from it and {@link #ratingCount}. */
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private int ratingTotal;
+
+    /** Engagement points earned by volunteers for well-rated help. */
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private int cityPoints;
+
     public AppUser(String displayName, UserRole role, boolean identityVerified, boolean specialNeeds, int trustScore) {
         this.displayName = displayName;
         this.role = role;
         this.identityVerified = identityVerified;
         this.specialNeeds = specialNeeds;
         this.trustScore = trustScore;
+    }
+
+    /** Average stars received, {@code null} when the user has not been rated yet. */
+    public Double getRatingAverage() {
+        return ratingCount == 0 ? null : (double) ratingTotal / ratingCount;
+    }
+
+    public void addRating(int stars) {
+        ratingCount++;
+        ratingTotal += stars;
     }
 }

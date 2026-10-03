@@ -1,0 +1,228 @@
+### Full help request lifecycle (stage 3). Run top to bottom.
+### User ids come from http-client.env.json: Kraków seed = requester 1 (Anna K.), volunteer 9 (Kuba W.),
+### other volunteer 10 (Ola D.). On a database with the old Warsaw seed use volunteer 4 (and no other volunteer).
+
+### 1. Requester creates a request
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "title": "Zakupy po drodze",
+  "description": "Potrzebuję chleba, mleka i jajek na jutro rano.",
+  "lat": 50.0643,
+  "lng": 19.9451,
+  "street": "Basztowa",
+  "buildingNumber": "10",
+  "apartmentNumber": "3"
+}
+
+> {%
+    client.test("Created as OPEN", function () {
+        client.assert(response.status === 201, "Expected 201");
+        client.assert(response.body.status === "OPEN", "Expected OPEN");
+        client.assert(response.body.viewerRole === "REQUESTER", "Expected REQUESTER");
+    });
+    client.global.set("flowRequestId", response.body.id);
+%}
+
+### 2. Requester cannot offer help on their own request -> 403
+POST {{host}}/api/help-requests/{{flowRequestId}}/offer
+X-User-Id: {{requesterId}}
+
+> {%
+    client.test("Requester gets 403", function () {
+        client.assert(response.status === 403, "Expected 403");
+    });
+%}
+
+### 3. Volunteer offers help -> OFFERED, still the PUBLIC view
+POST {{host}}/api/help-requests/{{flowRequestId}}/offer
+X-User-Id: {{volunteerId}}
+
+> {%
+    client.test("Offer accepted, address still hidden", function () {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.status === "OFFERED", "Expected OFFERED");
+        client.assert(response.body.visibility === "PUBLIC", "Expected PUBLIC");
+        client.assert(response.body.viewerRole === "VOLUNTEER", "Expected VOLUNTEER");
+        client.assert(response.body.street === undefined, "Street must not be exposed");
+    });
+%}
+
+### 4. Another volunteer is too late -> 409
+POST {{host}}/api/help-requests/{{flowRequestId}}/offer
+X-User-Id: {{otherVolunteerId}}
+
+> {%
+    client.test("Second offer gets 409", function () {
+        client.assert(response.status === 409, "Expected 409");
+    });
+%}
+
+### 5. QR code is not available before acceptance -> 409
+GET {{host}}/api/help-requests/{{flowRequestId}}/qr
+X-User-Id: {{requesterId}}
+
+> {%
+    client.test("No QR before ACCEPTED", function () {
+        client.assert(response.status === 409, "Expected 409");
+    });
+%}
+
+### 6. Requester accepts the offer -> ACCEPTED
+POST {{host}}/api/help-requests/{{flowRequestId}}/accept
+X-User-Id: {{requesterId}}
+
+> {%
+    client.test("Accepted, volunteer visible to requester", function () {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.status === "ACCEPTED", "Expected ACCEPTED");
+        client.assert(response.body.volunteer.id == request.environment.get("volunteerId"), "Expected the volunteer");
+    });
+%}
+
+### 7. Volunteer now sees the FULL view with the address
+GET {{host}}/api/help-requests/{{flowRequestId}}
+X-User-Id: {{volunteerId}}
+
+> {%
+    client.test("Volunteer sees address after acceptance", function () {
+        client.assert(response.body.visibility === "FULL", "Expected FULL");
+        client.assert(response.body.street === "Basztowa", "Expected the street");
+    });
+%}
+
+### 8. Requester shows the QR code
+GET {{host}}/api/help-requests/{{flowRequestId}}/qr
+X-User-Id: {{requesterId}}
+
+> {%
+    client.test("QR token issued", function () {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.token.length === 43, "Expected a 43-char token");
+    });
+    client.global.set("flowToken", response.body.token);
+%}
+
+### 9. Wrong QR code -> 400
+POST {{host}}/api/help-requests/{{flowRequestId}}/complete
+Content-Type: application/json
+X-User-Id: {{volunteerId}}
+
+{ "token": "not-the-right-token" }
+
+> {%
+    client.test("Wrong token gets 400", function () {
+        client.assert(response.status === 400, "Expected 400");
+    });
+%}
+
+### 10. Volunteer scans the QR code -> COMPLETED
+POST {{host}}/api/help-requests/{{flowRequestId}}/complete
+Content-Type: application/json
+X-User-Id: {{volunteerId}}
+
+{ "token": "{{flowToken}}" }
+
+> {%
+    client.test("Completed", function () {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.status === "COMPLETED", "Expected COMPLETED");
+    });
+%}
+
+### 11. Requester rates the volunteer -> volunteer earns trust and city points
+POST {{host}}/api/help-requests/{{flowRequestId}}/ratings
+Content-Type: application/json
+X-User-Id: {{requesterId}}
+
+{ "stars": 5, "comment": "Bardzo dziękuję!" }
+
+> {%
+    client.test("Rating saved, request waits for the second rating", function () {
+        client.assert(response.status === 201, "Expected 201");
+        client.assert(response.body.requestStatus === "COMPLETED", "Expected COMPLETED");
+        client.assert(response.body.cityPointsAwarded === 25, "Expected 25 points");
+    });
+%}
+
+### 12. Rating twice -> 409
+POST {{host}}/api/help-requests/{{flowRequestId}}/ratings
+Content-Type: application/json
+X-User-Id: {{requesterId}}
+
+{ "stars": 1 }
+
+> {%
+    client.test("Second rating by the same side gets 409", function () {
+        client.assert(response.status === 409, "Expected 409");
+    });
+%}
+
+### 13. Volunteer rates the requester -> RATED
+POST {{host}}/api/help-requests/{{flowRequestId}}/ratings
+Content-Type: application/json
+X-User-Id: {{volunteerId}}
+
+{ "stars": 5 }
+
+> {%
+    client.test("Both sides rated", function () {
+        client.assert(response.status === 201, "Expected 201");
+        client.assert(response.body.requestStatus === "RATED", "Expected RATED");
+        client.assert(response.body.cityPointsAwarded === 0, "Requesters do not earn points");
+    });
+%}
+
+### 14. Volunteer's task list
+GET {{host}}/api/help-requests/mine
+X-User-Id: {{volunteerId}}
+
+> {%
+    client.test("Task list contains the request", function () {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.some(r => r.id === client.global.get("flowRequestId")), "Expected the request");
+    });
+%}
+
+### 15. Reject and cancel: new request, offer, reject (back to OPEN), cancel
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "title": "Pożyczenie drabiny",
+  "description": "Potrzebuję pożyczyć drabinę na godzinę.",
+  "lat": 50.0703,
+  "lng": 19.9556,
+  "street": "Rakowicka",
+  "buildingNumber": "20"
+}
+
+> {% client.global.set("rejectRequestId", response.body.id); %}
+
+###
+POST {{host}}/api/help-requests/{{rejectRequestId}}/offer
+X-User-Id: {{volunteerId}}
+
+###
+POST {{host}}/api/help-requests/{{rejectRequestId}}/reject
+X-User-Id: {{requesterId}}
+
+> {%
+    client.test("Rejected offer reopens the request", function () {
+        client.assert(response.body.status === "OPEN", "Expected OPEN");
+        client.assert(response.body.volunteer === null, "Expected no volunteer");
+    });
+%}
+
+###
+POST {{host}}/api/help-requests/{{rejectRequestId}}/cancel
+X-User-Id: {{requesterId}}
+
+> {%
+    client.test("Cancelled", function () {
+        client.assert(response.body.status === "CANCELLED", "Expected CANCELLED");
+    });
+%}
