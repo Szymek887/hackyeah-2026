@@ -22,7 +22,8 @@ import {
   useMyTasks,
   type TaskTab,
 } from '@/features/tasks/hooks';
-import { VoiceRequestBar } from '@/features/voice/voice-request-bar';
+import { toDraftParams } from '@/features/voice/voice-draft';
+import { VoiceRequestFlow } from '@/features/voice/voice-request-flow';
 import { useRefresh } from '@/hooks/use-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { enterItem, exitItem, layoutTransition } from '@/lib/motion';
@@ -66,7 +67,12 @@ export function TasksScreen() {
         </ThemedText>
       </View>
 
-      {role !== 'VOLUNTEER' && <VoiceRequestBar />}
+      {role !== 'VOLUNTEER' && (
+        <VoiceRequestFlow
+          label="Nowa prośba głosem"
+          onAccept={(draft) => router.push({ pathname: '/new', params: toDraftParams(draft) })}
+        />
+      )}
 
       <SegmentedControl
         value={tab}

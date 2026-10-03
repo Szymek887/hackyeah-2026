@@ -1,5 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -16,7 +16,8 @@ import { Spacing } from '@/constants/theme';
 import { PriorityBadge } from '@/features/requests/components/request-badges';
 import { useCreateRequest } from '@/features/requests/hooks';
 import { CategoryLabels } from '@/features/requests/labels';
-import { VoiceRequestBar } from '@/features/voice/voice-request-bar';
+import { parseDraftAi, type VoiceDraftParams } from '@/features/voice/voice-draft';
+import { VoiceRequestFlow } from '@/features/voice/voice-request-flow';
 import { useTheme } from '@/hooks/use-theme';
 import { DEFAULT_CENTER } from '@/lib/geo';
 import { enterItem, layoutTransition } from '@/lib/motion';
@@ -27,39 +28,24 @@ const DESCRIPTION_MAX = 1000;
 
 type Errors = Partial<Record<'title' | 'description' | 'street' | 'buildingNumber', string>>;
 
-/** F2.2 – new help request form with AI classification preview. */
-export function NewRequestScreen() {
+/**
+ * F2.2 – new help request form with AI classification preview. `draft` = request accepted from
+ * speech on the start screen (title, description and AI result already filled in).
+ */
+export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
   const theme = useTheme();
   const createMutation = useCreateRequest();
-  const params = useLocalSearchParams<{ initialVoiceText?: string }>();
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState(draft?.draftTitle ?? '');
+  const [description, setDescription] = useState(draft?.draftDescription ?? '');
   const [street, setStreet] = useState('');
   const [building, setBuilding] = useState('');
   const [apartment, setApartment] = useState('');
   const [errors, setErrors] = useState<Errors>({});
 
-  useEffect(() => {
-    if (params.initialVoiceText) {
-      try {
-        const text = decodeURIComponent(params.initialVoiceText).trim();
-        if (text) {
-          const words = text.split(' ');
-          if (words.length <= 6) {
-            setTitle(text);
-          } else {
-            setTitle(words.slice(0, 6).join(' '));
-          }
-          setDescription(text);
-        }
-      } catch {
-        // Ignored
-      }
-    }
-  }, [params.initialVoiceText]);
-
-  const [classification, setClassification] = useState<AiClassification | null>(null);
+  const [classification, setClassification] = useState<AiClassification | null>(() =>
+    parseDraftAi(draft?.draftAi),
+  );
   const [classifying, setClassifying] = useState(false);
   const [classifyError, setClassifyError] = useState<string | null>(null);
 
@@ -138,18 +124,13 @@ export function NewRequestScreen() {
         </ThemedText>
       </View>
 
-      <VoiceRequestBar
-        autoNavigate={false}
-        onTranscriptReady={(text) => {
-          const words = text.split(' ');
-          if (!title) {
-            if (words.length <= 6) {
-              setTitle(text);
-            } else {
-              setTitle(words.slice(0, 6).join(' '));
-            }
-          }
-          setDescription((prev) => (prev ? `${prev} ${text}` : text));
+      <VoiceRequestFlow
+        label="Podyktuj prośbę zamiast pisać"
+        onAccept={(accepted) => {
+          setTitle(accepted.title);
+          setDescription(accepted.description);
+          setClassification(accepted.classification);
+          setErrors({});
         }}
       />
 

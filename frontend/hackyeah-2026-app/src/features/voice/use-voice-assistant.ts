@@ -9,6 +9,10 @@ export type VoiceState = {
   error: string | null;
   isSpeaking: boolean;
   volumeLevel: number; // 0.0 to 1.0 real-time audio volume
+  /** Last few volume samples (0..1, oldest first) for a waveform like a voice message. */
+  levels: number[];
+  /** Recording time in seconds. */
+  elapsedSeconds: number;
   startListening: () => Promise<void>;
   stopListening: () => void;
   speak: (text: string) => void;
@@ -28,12 +32,33 @@ function getSpeechRecognition(): any {
   );
 }
 
-export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState {
+const WAVEFORM_BARS = 28;
+const WAVEFORM_SAMPLE_MS = 90;
+const SILENT_WAVEFORM = Array.from({ length: WAVEFORM_BARS }, () => 0);
+
+type VoiceOptions = {
+  /** Called once when recognition ends (silence, stop or error) with the final transcript. */
+  onEnd?: (transcript: string) => void;
+};
+
+export function useVoiceAssistant(
+  onResult?: (text: string) => void,
+  { onEnd }: VoiceOptions = {},
+): VoiceState {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [volumeLevel, setVolumeLevel] = useState(0);
+  const [levels, setLevels] = useState<number[]>(SILENT_WAVEFORM);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const startedAtRef = useRef(0);
+  const lastSampleRef = useRef(0);
+  const transcriptRef = useRef('');
+  const onEndRef = useRef(onEnd);
+  useEffect(() => {
+    onEndRef.current = onEnd;
+  });
 
   const recognitionRef = useRef<any>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -144,6 +169,7 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
       mediaStreamRef.current = null;
     }
     setVolumeLevel(0);
+    setLevels(SILENT_WAVEFORM);
   }, []);
 
   const stopListening = useCallback(() => {
@@ -164,6 +190,7 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
   }, [cleanupAudio]);
 
   const resetTranscript = useCallback(() => {
+    transcriptRef.current = '';
     setTranscript('');
     setError(null);
   }, []);
@@ -171,6 +198,9 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
   const startListening = useCallback(async () => {
     setError(null);
     stopSpeaking();
+    transcriptRef.current = '';
+    startedAtRef.current = Date.now();
+    setElapsedSeconds(0);
 
     const SpeechRecognitionConstructor = getSpeechRecognition();
 
@@ -205,6 +235,12 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
             // Map 0..255 to normalized 0.0..1.0
             const level = Math.min(1, Math.max(0, (average - 6) / 45));
             setVolumeLevel(level);
+            const now = Date.now();
+            if (now - lastSampleRef.current >= WAVEFORM_SAMPLE_MS) {
+              lastSampleRef.current = now;
+              setLevels((current) => [...current.slice(1), level]);
+              setElapsedSeconds(Math.floor((now - startedAtRef.current) / 1000));
+            }
             animationFrameRef.current = requestAnimationFrame(updateVolume);
           };
 
@@ -222,7 +258,9 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
 
     if (!SpeechRecognitionConstructor) {
       setError(
-        'Twoja przeglądarka nie obsługuje Web Speech API. Użyj przeglądarki Chrome lub Edge, albo wpisz treść ręcznie.',
+        Platform.OS === 'web'
+          ? 'Ta przeglądarka nie rozpoznaje mowy. Użyj Chrome lub Edge albo wybierz „Wpisz ręcznie”.'
+          : 'Prośbę głosem przygotujesz na razie w przeglądarce (Chrome lub Edge). Na telefonie wybierz „Wpisz ręcznie”.',
       );
       return;
     }
@@ -254,6 +292,7 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
         }
         const clean = fullText.trim();
         if (clean) {
+          transcriptRef.current = clean;
           setTranscript(clean);
           if (onResult) {
             onResult(clean);
@@ -288,6 +327,7 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
       recognition.onend = () => {
         setIsListening(false);
         cleanupAudio();
+        onEndRef.current?.(transcriptRef.current);
       };
 
       recognitionRef.current = recognition;
@@ -323,6 +363,8 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
     error,
     isSpeaking,
     volumeLevel,
+    levels,
+    elapsedSeconds,
     startListening,
     stopListening,
     speak,
