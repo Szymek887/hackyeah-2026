@@ -39,11 +39,9 @@ import { enterScreen } from '@/lib/motion';
 export function LoginScreen() {
   const theme = useTheme();
   const { settings } = useAccessibility();
-  // The age group is chosen once, on the first visit; later logins skip straight to the account.
-  // `null` = not decided by the user yet: follow the stored age group (also after web hydration).
-  const [chosenStep, setChosenStep] = useState<Step | null>(null);
-  const step: Step = chosenStep ?? (settings.ageGroup ? 'account' : 'age');
-  const choosingAge = chosenStep !== null;
+  // Every login starts with the age group: it sets the look of the whole app (the profile has no
+  // age setting). A previously chosen group is preselected.
+  const [step, setStep] = useState<Step>('age');
   const [mode, setMode] = useState<Mode>('signIn');
   const [role, setRole] = useState<ResidentRole>('REQUESTER');
   const isAdmin = mode === 'admin';
@@ -82,30 +80,28 @@ export function LoginScreen() {
                     Dopasujemy wielkość tekstu, kolory i przyciski.
                   </ThemedText>
                 </View>
-                <AccessibilityPanel onChange={() => setChosenStep('age')} />
+                <AccessibilityPanel />
                 <Button
                   title={settings.ageGroup ? 'Dalej' : 'Wybierz wiek, aby przejść dalej'}
                   size="large"
                   disabled={!settings.ageGroup}
-                  onPress={() => setChosenStep('account')}
+                  onPress={() => setStep('account')}
                 />
               </View>
             ) : (
               <>
-                {choosingAge && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Wróć do wyboru wieku. Wybrano: ${ageLabel ?? 'brak'}`}
-                    onPress={() => {
-                      setMode('signIn');
-                      setChosenStep('age');
-                    }}
-                    style={styles.backLink}>
-                    <ThemedText type="smallBold" themeColor="primary">
-                      ← Wróć do wyboru wieku{ageLabel ? ` (${ageLabel})` : ''}
-                    </ThemedText>
-                  </Pressable>
-                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Wróć do wyboru wieku. Wybrano: ${ageLabel ?? 'brak'}`}
+                  onPress={() => {
+                    setMode('signIn');
+                    setStep('age');
+                  }}
+                  style={styles.backLink}>
+                  <ThemedText type="smallBold" themeColor="primary">
+                    ← Wróć do wyboru wieku{ageLabel ? ` (${ageLabel})` : ''}
+                  </ThemedText>
+                </Pressable>
 
                 <Animated.View
                   key={isAdmin ? 'admin' : 'resident'}
@@ -127,11 +123,9 @@ export function LoginScreen() {
                     </>
                   ) : (
                     <>
-                      {choosingAge && (
-                        <ThemedText type="caption" themeColor="textSecondary">
-                          KROK 2 Z 2
-                        </ThemedText>
-                      )}
+                      <ThemedText type="caption" themeColor="textSecondary">
+                        KROK 2 Z 2
+                      </ThemedText>
                       <RoleChoice value={role} onChange={setRole} />
                       <SegmentedControl value={mode} onChange={setMode} options={MODE_OPTIONS} />
                       <Animated.View key={mode} entering={enterScreen}>
