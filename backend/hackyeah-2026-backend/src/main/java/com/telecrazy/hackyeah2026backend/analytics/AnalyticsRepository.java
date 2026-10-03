@@ -17,17 +17,19 @@ import java.util.List;
 public class AnalyticsRepository {
 
     /**
+     * Latitude used to convert hexagon size from real metres to Web Mercator units. The MVP covers
+     * Kraków only; a fixed value keeps the grid in the same place no matter which requests exist.
+     */
+    static final double REFERENCE_LATITUDE = 50.06;
+
+    /**
      * Each request is assigned to the single hexagon of a global grid that contains it
      * ({@code ST_HexagonGrid} evaluated per point, so cost grows with the number of requests,
      * not with the covered area). The grid is built in Web Mercator (EPSG:3857); its units are
-     * scaled by the average latitude of all requests so that hexagons are close to the requested
-     * size in real metres and stay in the same place regardless of filters.
+     * scaled by {@link #REFERENCE_LATITUDE} so that hexagons are close to the requested size in
+     * real metres and stay in the same place regardless of filters and data.
      */
     private static final String HEATMAP_SQL = """
-            WITH scale AS (
-                SELECT :hexSizeMeters / cos(radians(coalesce(avg(ST_Y(location)), 0))) AS hex_size
-                FROM help_requests
-            )
             SELECT h.i,
                    h.j,
                    ST_X(ST_Transform(ST_Centroid(h.geom), 4326)) AS center_lng,
@@ -37,10 +39,9 @@ public class AnalyticsRepository {
                    count(*)                                      AS cnt,
                    sum(4 - r.priority)                           AS weight
             FROM help_requests r
-            CROSS JOIN scale s
             CROSS JOIN LATERAL (
                 SELECT g.i, g.j, g.geom
-                FROM ST_HexagonGrid(s.hex_size, ST_Transform(r.location, 3857)) g
+                FROM ST_HexagonGrid(:hexSizeMercator, ST_Transform(r.location, 3857)) g
                 LIMIT 1
             ) h
             %s
@@ -62,7 +63,8 @@ public class AnalyticsRepository {
     }
 
     public List<HeatmapRow> heatmap(AnalyticsFilter filter, double hexSizeMeters) {
-        MapSqlParameterSource params = new MapSqlParameterSource("hexSizeMeters", hexSizeMeters);
+        double hexSizeMercator = hexSizeMeters / Math.cos(Math.toRadians(REFERENCE_LATITUDE));
+        MapSqlParameterSource params = new MapSqlParameterSource("hexSizeMercator", hexSizeMercator);
         String sql = HEATMAP_SQL.formatted(where(filter, params));
 
         return jdbc.query(sql, params, (rs, rowNum) -> new HeatmapRow(
