@@ -1,0 +1,10 @@
+### Health check
+GET {{host}}/api/health
+Accept: application/json
+
+> {%
+    client.test("Health endpoint returns UP", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.status === "UP", "Expected status UP");
+    });
+%}
