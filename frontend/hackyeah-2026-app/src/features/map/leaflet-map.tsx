@@ -14,6 +14,7 @@ import {
   toLatLng,
 } from '@/features/map/krakow-map-data';
 import { clusterRequests } from '@/features/map/map-clustering';
+import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
 export type RouteEndpoint = 'start' | 'end';
@@ -34,6 +35,70 @@ const leafletElementStyle: CSSProperties = {
   height: '100%',
   width: '100%',
 };
+
+const leafletPopupCss = `
+  .podrodze-request-popup .leaflet-popup-content-wrapper {
+    background: ${Colors.light.backgroundElement};
+    border: 1px solid ${Colors.light.border};
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(18, 38, 63, 0.14);
+    padding: 0;
+  }
+
+  .podrodze-request-popup .leaflet-popup-content {
+    margin: 0;
+    width: 220px !important;
+    max-width: 220px !important;
+    font-family: var(--font-display);
+    color: ${Colors.light.text};
+  }
+
+  .podrodze-request-popup .leaflet-popup-tip {
+    background: ${Colors.light.backgroundElement};
+    border: 1px solid ${Colors.light.border};
+    box-shadow: none;
+  }
+
+  .podrodze-request-popup .leaflet-popup-close-button {
+    color: ${Colors.light.textSecondary};
+    height: 28px;
+    width: 28px;
+    font: 20px/26px var(--font-display);
+  }
+`;
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function requestPopupHtml(request: HelpRequestListItem) {
+  const categoryColor = CategoryColors[request.category];
+  const priorityColor = PriorityColors[request.priority];
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="display:inline-flex;align-items:center;border-radius:999px;background:${priorityColor.soft};color:${priorityColor.color};font-size:11px;font-weight:700;line-height:14px;padding:3px 8px;">
+          ${escapeHtml(PriorityLabels[request.priority])}
+        </span>
+        <span style="display:inline-flex;align-items:center;border-radius:999px;background:${categoryColor.soft};color:${categoryColor.color};font-size:11px;font-weight:700;line-height:14px;padding:3px 8px;">
+          ${escapeHtml(CategoryLabels[request.category])}
+        </span>
+      </div>
+      <div style="font-size:14px;font-weight:700;line-height:18px;color:${Colors.light.text};word-break:break-word;">
+        ${escapeHtml(request.title)}
+      </div>
+      <div style="font-size:12px;line-height:16px;color:${Colors.light.textSecondary};">
+        Kliknij kartę zgłoszenia pod mapą albo przejdź przez trasę, żeby zaoferować pomoc.
+      </div>
+    </div>
+  `;
+}
 
 export function LeafletMap({
   centerGeoJson,
@@ -210,7 +275,13 @@ export function LeafletMap({
           radius: 5,
           weight: 2,
         })
-          .bindPopup(`<strong>${request.title}</strong><br />Priorytet ${request.priority}`)
+          .bindPopup(requestPopupHtml(request), {
+            className: 'podrodze-request-popup',
+            closeButton: true,
+            maxWidth: 240,
+            minWidth: 180,
+            autoPanPadding: [16, 16],
+          })
           .addTo(overlays);
         marker.on('click', () => setSelectedRequestId(request.id));
       });
@@ -249,6 +320,7 @@ export function LeafletMap({
 
   return (
     <View style={styles.mapFrame}>
+      {createElement('style', { dangerouslySetInnerHTML: { __html: leafletPopupCss } })}
       {createElement('div', { ref: elementRef, style: leafletElementStyle })}
     </View>
   );
