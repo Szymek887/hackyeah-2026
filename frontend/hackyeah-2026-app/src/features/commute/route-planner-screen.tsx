@@ -19,6 +19,7 @@ import {
 import { useDrivingRoute } from '@/features/commute/hooks';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
+import { PriorityLabels } from '@/features/requests/labels';
 import { useUserLocation } from '@/features/map/use-user-location';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -435,7 +436,8 @@ export function RoutePlannerScreen() {
                             {request.title}
                           </ThemedText>
                           <ThemedText type="caption" themeColor="textSecondary">
-                            Priorytet {request.priority} · Strefa ~300 m
+                            Priorytet: {PriorityLabels[request.priority].toLowerCase()} · Strefa
+                            ~300 m
                           </ThemedText>
                         </View>
                         <ThemedText

@@ -3,6 +3,7 @@
  * (same users and ids, same Kraków clusters), so the demo looks the same with and without the backend.
  * Only src/api/mocks/server.ts may read or change it.
  */
+import { MEDICINE_DESCRIPTION, MEDICINE_TITLE, SPECIAL_PRIORITY } from '@/api/mocks/classifier';
 import type {
   Category,
   ClassificationSource,
@@ -118,14 +119,16 @@ function addRequest(
 ): MockHelpRequest {
   minutesAgo += 17;
   const createdAt = new Date(now - minutesAgo * 60_000).toISOString();
+  // Same rule as for created requests: no medicine names or usage in stored text.
+  const redact = category === 'MEDICINE';
   const request: MockHelpRequest = {
     id: newRequestId(),
     requesterId,
     volunteerId: null,
-    title,
-    description,
+    title: redact ? MEDICINE_TITLE : title,
+    description: redact ? MEDICINE_DESCRIPTION : description,
     category,
-    priority,
+    priority: redact ? SPECIAL_PRIORITY : priority,
     aiPriority: null,
     status: 'OPEN',
     tags: [],

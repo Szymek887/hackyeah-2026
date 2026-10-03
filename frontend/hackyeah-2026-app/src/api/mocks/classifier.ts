@@ -125,7 +125,21 @@ function tags(text: string) {
   return [...result].slice(0, MAX_TAGS);
 }
 
-export function classifyByKeywords({ title, description }: ClassifyRequestDto): AiClassification {
+/** Port of backend `ai/MedicineRedaction.java`: no medicine names or usage are stored. */
+export const MEDICINE_TITLE = 'Prośba o pomoc z lekami';
+export const MEDICINE_DESCRIPTION = 'Prośba dotyczy leków. Szczegóły zostaną przekazane osobiście.';
+export const SPECIAL_PRIORITY = 0;
+const MEDICINE_TAGS = ['leki', 'apteka'];
+
+/** `RequestClassificationService`: medicine requests get the special priority and only generic tags. */
+export function classify(input: ClassifyRequestDto): AiClassification {
+  const result = classifyByKeywords(input);
+  if (result.category !== 'MEDICINE') return result;
+  const tags = result.tags.filter((tag) => MEDICINE_TAGS.includes(tag));
+  return { ...result, priority: SPECIAL_PRIORITY, tags: tags.length ? tags : ['leki'] };
+}
+
+function classifyByKeywords({ title, description }: ClassifyRequestDto): AiClassification {
   const text = `${title} ${description}`.toLocaleLowerCase('pl');
   const riskFlags: RiskFlag[] = [];
   if (containsAny(text, EMERGENCY)) riskFlags.push('MEDICAL_EMERGENCY');

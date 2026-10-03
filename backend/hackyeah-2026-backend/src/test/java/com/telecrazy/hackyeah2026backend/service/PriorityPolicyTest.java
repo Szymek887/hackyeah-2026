@@ -15,7 +15,9 @@ class PriorityPolicyTest {
             "1, true, 1",
             "2, true, 1",
             "3, true, 2",
-            "0, false, 1",
+            "0, false, 0",
+            "0, true, 0",
+            "-1, false, 1",
             "7, false, 3",
             "7, true, 2"
     })

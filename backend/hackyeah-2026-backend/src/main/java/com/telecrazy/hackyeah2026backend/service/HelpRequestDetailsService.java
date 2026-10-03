@@ -1,6 +1,7 @@
 package com.telecrazy.hackyeah2026backend.service;
 
 import com.telecrazy.hackyeah2026backend.ai.ClassificationInput;
+import com.telecrazy.hackyeah2026backend.ai.MedicineRedaction;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassificationService;
 import com.telecrazy.hackyeah2026backend.api.CreateHelpRequestRequest;
@@ -56,10 +57,12 @@ public class HelpRequestDetailsService {
                 new ClassificationInput(body.title(), body.description())
         );
 
+        // Medicine names and usage must not be stored: the requester gives the details in person.
+        boolean redact = MedicineRedaction.applies(classification.category());
         HelpRequest request = new HelpRequest(
                 requester,
-                body.title().trim(),
-                body.description().trim(),
+                redact ? MedicineRedaction.TITLE : body.title().trim(),
+                redact ? MedicineRedaction.DESCRIPTION : body.description().trim(),
                 classification.category(),
                 PriorityPolicy.finalPriority(classification.priority(), requester.isSpecialNeeds()),
                 GEOMETRY_FACTORY.createPoint(new Coordinate(body.lng(), body.lat())),

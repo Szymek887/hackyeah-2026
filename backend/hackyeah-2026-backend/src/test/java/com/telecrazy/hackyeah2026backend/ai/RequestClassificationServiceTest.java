@@ -26,10 +26,32 @@ class RequestClassificationServiceTest {
     @Test
     void usesLlmWhenItSucceeds() {
         RequestClassification llmResult = new RequestClassification(
-                HelpCategory.MEDICINE, 1, List.of("leki"), Set.of(), ClassificationSource.LLM);
+                HelpCategory.GROCERIES, 2, List.of("zakupy"), Set.of(), ClassificationSource.LLM);
         when(llm.classify(any())).thenReturn(llmResult);
 
         assertThat(service(true).classify(INPUT)).isEqualTo(llmResult);
+    }
+
+    @Test
+    void medicineRequestsGetSpecialPriorityAndOnlyGenericTags() {
+        when(llm.classify(any())).thenReturn(new RequestClassification(
+                HelpCategory.MEDICINE, 1, List.of("insulina", "apteka", "dawkowanie"),
+                Set.of(RiskFlag.PERSONAL_DATA), ClassificationSource.LLM));
+
+        RequestClassification result = service(true).classify(INPUT);
+
+        assertThat(result.priority()).isEqualTo(RequestClassification.SPECIAL);
+        assertThat(result.tags()).containsExactly("apteka");
+        assertThat(result.riskFlags()).containsExactly(RiskFlag.PERSONAL_DATA);
+    }
+
+    @Test
+    void keywordFallbackAlsoRestrictsMedicineRequests() {
+        RequestClassification result = service(false).classify(INPUT);
+
+        assertThat(result.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(result.priority()).isEqualTo(RequestClassification.SPECIAL);
+        assertThat(result.tags()).containsExactly("leki");
     }
 
     @Test

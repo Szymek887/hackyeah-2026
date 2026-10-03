@@ -2,6 +2,7 @@ package com.telecrazy.hackyeah2026backend.service;
 
 import com.telecrazy.hackyeah2026backend.ai.ClassificationInput;
 import com.telecrazy.hackyeah2026backend.ai.ClassificationSource;
+import com.telecrazy.hackyeah2026backend.ai.MedicineRedaction;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassificationService;
 import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
@@ -63,12 +64,13 @@ class HelpRequestDetailsServiceTest {
 
     @Test
     void createStoresClassificationAndReturnsFullDetails() {
-        givenClassification(HelpCategory.MEDICINE, 2, Set.of());
+        givenClassification(HelpCategory.GROCERIES, 2, Set.of());
 
         FullHelpRequestResponse response = service.create(body(), marek);
 
         assertThat(response.id()).isEqualTo(100L);
-        assertThat(response.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(response.title()).isEqualTo("Potrzebuję leków");
+        assertThat(response.category()).isEqualTo(HelpCategory.GROCERIES);
         assertThat(response.priority()).isEqualTo(2);
         assertThat(response.aiPriority()).isEqualTo(2);
         assertThat(response.tags()).containsExactly("leki");
@@ -83,6 +85,21 @@ class HelpRequestDetailsServiceTest {
         ArgumentCaptor<ClassificationInput> input = ArgumentCaptor.forClass(ClassificationInput.class);
         verify(classifier).classify(input.capture());
         assertThat(input.getValue().title()).isEqualTo("Potrzebuję leków");
+    }
+
+    @Test
+    void createReplacesMedicineTextWithGenericOne() {
+        givenClassification(HelpCategory.MEDICINE, RequestClassification.SPECIAL, Set.of());
+
+        FullHelpRequestResponse response = service.create(body(), anna);
+
+        assertThat(response.title()).isEqualTo(MedicineRedaction.TITLE);
+        assertThat(response.description()).isEqualTo(MedicineRedaction.DESCRIPTION);
+        assertThat(response.priority()).isEqualTo(RequestClassification.SPECIAL);
+
+        ArgumentCaptor<HelpRequest> saved = ArgumentCaptor.forClass(HelpRequest.class);
+        verify(repository).save(saved.capture());
+        assertThat(saved.getValue().getDescription()).doesNotContain("serce");
     }
 
     @Test

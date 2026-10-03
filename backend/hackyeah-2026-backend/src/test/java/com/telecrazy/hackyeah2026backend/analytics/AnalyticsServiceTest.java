@@ -152,6 +152,6 @@ class AnalyticsServiceTest {
 
         assertThat(summary.total()).isZero();
         assertThat(summary.fulfillmentRate()).isZero();
-        assertThat(summary.byPriority()).containsEntry(1, 0L);
+        assertThat(summary.byPriority()).containsEntry(0, 0L).containsEntry(1, 0L);
     }
 }

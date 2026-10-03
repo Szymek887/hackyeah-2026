@@ -1,5 +1,7 @@
 package com.telecrazy.hackyeah2026backend.config;
 
+import com.telecrazy.hackyeah2026backend.ai.MedicineRedaction;
+import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
@@ -263,12 +265,14 @@ public class DatabaseSeeder {
             String buildingNumber,
             String apartmentNumber
     ) {
+        // Same rule as for created requests: no medicine names or usage in stored text.
+        boolean redact = MedicineRedaction.applies(category);
         return new HelpRequest(
                 requester,
-                title,
-                description,
+                redact ? MedicineRedaction.TITLE : title,
+                redact ? MedicineRedaction.DESCRIPTION : description,
                 category,
-                priority,
+                redact ? RequestClassification.SPECIAL : priority,
                 point(geometryFactory, lng, lat),
                 street,
                 buildingNumber,

@@ -8,7 +8,7 @@ import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 /**
  * Result of classifying a help request.
  *
- * @param priority 1 = critical, 2 = high, 3 = normal
+ * @param priority 0 = special (medicine, see {@link MedicineRedaction}), 1 = critical, 2 = high, 3 = normal
  */
 public record RequestClassification(
         HelpCategory category,
@@ -18,6 +18,8 @@ public record RequestClassification(
         ClassificationSource source
 ) {
 
+    /** Medicine requests: details are given in person, see {@link MedicineRedaction}. */
+    public static final int SPECIAL = 0;
     public static final int MOST_URGENT = 1;
     public static final int LEAST_URGENT = 3;
 
