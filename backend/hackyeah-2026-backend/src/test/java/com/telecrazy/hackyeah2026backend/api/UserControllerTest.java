@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -15,6 +16,7 @@ import java.util.Optional;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,7 +51,10 @@ class UserControllerTest {
     void missingHeaderReturns401() throws Exception {
         mockMvc.perform(get("/api/users/me"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401));
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.detail").value("Missing X-User-Id header"));
     }
 
     @Test
@@ -64,6 +69,6 @@ class UserControllerTest {
 
         mockMvc.perform(get("/api/users/me").header("X-User-Id", "999"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Unknown user 999"));
+                .andExpect(jsonPath("$.detail").value("Unknown user 999"));
     }
 }
