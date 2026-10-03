@@ -1,21 +1,70 @@
 import type { HelpRequestDetails, User } from '@/api/types';
 import { point } from '@/lib/geo';
 
+/**
+ * Demo accounts. Ids and names mirror the backend `DatabaseSeeder`, so the same login works
+ * with mocks and with the real API (`X-User-Id` header).
+ */
 export const mockRequester: User = {
-  id: 'u-requester',
-  displayName: 'Pani Halina',
+  id: '1',
+  displayName: 'Anna K.',
   role: 'REQUESTER',
   verified: true,
-  trustScore: 82,
+  trustScore: 72,
   ratingAverage: 4.8,
   ratingCount: 12,
   hasSpecialNeeds: true,
   cityPoints: 40,
+  profile: {
+    about: 'Emerytowana nauczycielka, mieszkam sama na trzecim piętrze bez windy.',
+    district: 'Stare Miasto',
+    availability: 'W domu codziennie, najlepiej przed 18:00',
+    helpTopics: ['BASIC_NEEDS', 'SOCIAL'],
+    accessibilityNotes: 'Chodzę o kulach – proszę dzwonić domofonem i chwilę poczekać.',
+  },
+};
+
+const marek: User = {
+  id: '2',
+  displayName: 'Marek S.',
+  role: 'REQUESTER',
+  verified: true,
+  trustScore: 66,
+  ratingAverage: 4.5,
+  ratingCount: 4,
+  hasSpecialNeeds: false,
+  cityPoints: 15,
+  profile: {
+    about: 'Tata dwójki dzieci, czasem potrzebuję pożyczyć narzędzia.',
+    district: 'Podgórze',
+    availability: 'Wieczory i weekendy',
+    helpTopics: ['EQUIPMENT_LOAN', 'HOME_SUPPORT'],
+    accessibilityNotes: '',
+  },
+};
+
+const ewa: User = {
+  id: '3',
+  displayName: 'Ewa P.',
+  role: 'REQUESTER',
+  verified: false,
+  trustScore: 45,
+  ratingAverage: 4.2,
+  ratingCount: 3,
+  hasSpecialNeeds: false,
+  cityPoints: 5,
+  profile: {
+    about: '',
+    district: 'Grzegórzki',
+    availability: '',
+    helpTopics: ['HOME_SUPPORT'],
+    accessibilityNotes: '',
+  },
 };
 
 export const mockVolunteer: User = {
-  id: 'u-volunteer',
-  displayName: 'Kuba',
+  id: '4',
+  displayName: 'Kuba W.',
   role: 'VOLUNTEER',
   verified: true,
   trustScore: 91,
@@ -23,16 +72,35 @@ export const mockVolunteer: User = {
   ratingCount: 27,
   hasSpecialNeeds: false,
   cityPoints: 310,
+  profile: {
+    about: 'Student AGH, codziennie jeżdżę rowerem przez centrum na uczelnię.',
+    district: 'Krowodrza',
+    availability: 'Pon–pt 7:30–9:00 i 16:00–18:00',
+    helpTopics: ['BASIC_NEEDS', 'EQUIPMENT_LOAN', 'HOME_SUPPORT'],
+    accessibilityNotes: '',
+  },
 };
 
-const otherRequester = {
-  id: 'u-2',
-  displayName: 'Pan Zbigniew',
-  verified: false,
-  trustScore: 55,
-  ratingAverage: 4.2,
-  ratingCount: 3,
+const cityAdmin: User = {
+  id: '5',
+  displayName: 'Miasto Warszawa',
+  role: 'CITY_ADMIN',
+  verified: true,
+  trustScore: 100,
+  ratingAverage: 0,
+  ratingCount: 0,
+  hasSpecialNeeds: false,
+  cityPoints: 0,
+  profile: {
+    about: 'Konto urzędu miasta – dostęp do panelu analitycznego.',
+    district: '',
+    availability: '',
+    helpTopics: [],
+    accessibilityNotes: '',
+  },
 };
+
+export const mockUsers: User[] = [mockRequester, marek, ewa, mockVolunteer, cityAdmin];
 
 const toPublic = (user: User) => ({
   id: user.id,
@@ -71,7 +139,7 @@ export const mockRequests: HelpRequestDetails[] = [
     tags: ['drabina', 'narzędzia'],
     accessibilitySupport: false,
     area: { center: point(50.0545, 19.9265), radiusMeters: 300 },
-    requester: otherRequester,
+    requester: toPublic(ewa),
     createdAt: '2026-10-03T08:40:00Z',
     exactLocation: point(50.0541, 19.9272),
     address: { street: 'ul. Kalwaryjska', building: '30', city: 'Kraków' },
@@ -86,7 +154,7 @@ export const mockRequests: HelpRequestDetails[] = [
     tags: ['hydraulika', 'awaria'],
     accessibilitySupport: false,
     area: { center: point(50.0705, 19.9555), radiusMeters: 300 },
-    requester: otherRequester,
+    requester: toPublic(marek),
     createdAt: '2026-10-03T07:05:00Z',
     exactLocation: point(50.0709, 19.9561),
     address: { street: 'ul. Lubomirskiego', building: '5', apartment: '11', city: 'Kraków' },
@@ -105,5 +173,53 @@ export const mockRequests: HelpRequestDetails[] = [
     createdAt: '2026-10-02T16:20:00Z',
     exactLocation: point(50.0589, 19.9379),
     address: { street: 'ul. Grodzka', building: '40', city: 'Kraków' },
+  },
+  {
+    id: 'r-5',
+    title: 'Zakupy spożywcze na weekend',
+    description: 'Lista zakupów w wiadomości, płacę gotówką przy odbiorze.',
+    category: 'BASIC_NEEDS',
+    priority: 2,
+    status: 'COMPLETED',
+    tags: ['zakupy'],
+    accessibilitySupport: true,
+    area: { center: point(50.0632, 19.9402), radiusMeters: 300 },
+    requester: toPublic(mockRequester),
+    volunteer: toPublic(mockVolunteer),
+    createdAt: '2026-10-01T10:00:00Z',
+    exactLocation: point(50.0636, 19.9398),
+    address: { street: 'ul. Długa', building: '12', apartment: '4', city: 'Kraków' },
+  },
+  {
+    id: 'r-6',
+    title: 'Pomoc przy złożeniu szafki',
+    description: 'Kupiłem szafkę z IKEA, potrzebna druga para rąk na pół godziny.',
+    category: 'HOME_SUPPORT',
+    priority: 3,
+    status: 'OFFERED',
+    tags: ['montaż'],
+    accessibilitySupport: false,
+    area: { center: point(50.0498, 19.9512), radiusMeters: 300 },
+    requester: toPublic(marek),
+    volunteer: toPublic(mockVolunteer),
+    createdAt: '2026-10-03T06:30:00Z',
+    exactLocation: point(50.0495, 19.9517),
+    address: { street: 'ul. Limanowskiego', building: '18', city: 'Kraków' },
+  },
+  {
+    id: 'r-7',
+    title: 'Odbiór paczki z paczkomatu',
+    description: 'Paczka z lekami czeka w paczkomacie przy Rondzie Mogilskim.',
+    category: 'BASIC_NEEDS',
+    priority: 2,
+    status: 'RATED',
+    tags: ['paczka'],
+    accessibilitySupport: false,
+    area: { center: point(50.0662, 19.9601), radiusMeters: 300 },
+    requester: toPublic(ewa),
+    volunteer: toPublic(mockVolunteer),
+    createdAt: '2026-09-30T12:00:00Z',
+    exactLocation: point(50.0667, 19.9596),
+    address: { street: 'ul. Mogilska', building: '7', city: 'Kraków' },
   },
 ];

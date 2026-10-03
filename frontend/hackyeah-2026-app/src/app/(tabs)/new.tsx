@@ -1,11 +1,5 @@
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { NewRequestScreen } from '@/features/requests/new-request-screen';
 
-export default function NewRequestScreen() {
-  return (
-    <ScreenPlaceholder
-      title="Nowe zgłoszenie"
-      owner="FE1"
-      tasks={['F2.2 formularz + podgląd klasyfikacji AI']}
-    />
-  );
+export default function NewRequestRoute() {
+  return <NewRequestScreen />;
 }

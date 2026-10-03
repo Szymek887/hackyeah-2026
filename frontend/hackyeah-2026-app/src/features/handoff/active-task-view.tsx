@@ -185,7 +185,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
             </ThemedText>
             {!isRequester && (
               <Button
-                title="📍 Otwórz w Google Maps"
+                title="Otwórz w Mapach Google"
                 variant="secondary"
                 onPress={openInMaps}
                 style={{ marginTop: Spacing.one }}
@@ -221,7 +221,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
           </ThemedText>
 
           <Button
-            title="📷 Skanuj kod QR odbiorcy"
+            title="Skanuj kod QR odbiorcy"
             variant="primary"
             onPress={() =>
               router.push({
@@ -279,7 +279,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
               : 'Zlecenie zostało dostarczone! Wystaw ocenę, aby przyznać punkty zaufania.'}
           </ThemedText>
           <Button
-            title={isRated ? 'Przejrzyj ocenę' : '⭐ Wystaw ocenę i odbierz punkty'}
+            title={isRated ? 'Przejrzyj ocenę' : 'Wystaw ocenę i odbierz punkty'}
             onPress={() =>
               router.push({
                 pathname: '/rate/[id]',

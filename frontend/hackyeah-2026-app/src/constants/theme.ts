@@ -1,5 +1,5 @@
 /**
- * PoDrodze design tokens. Style: clean & casual – white surfaces, light blue accents,
+ * PoDrodze design tokens. Style: clean & casual – white background, light blue accents,
  * thin borders instead of shadows, no blur / gradients.
  * Use these tokens instead of hard-coded values.
  */
@@ -11,18 +11,22 @@ import { Platform } from 'react-native';
 export const Colors = {
   light: {
     /** Main text, navy instead of pure black. */
-    text: '#0F2440',
-    textSecondary: '#5B6B80',
-    /** Screen background, very light blue. */
-    background: '#F4F8FD',
-    /** Cards, inputs, tab bar. */
+    text: '#12263F',
+    textSecondary: '#5A6B80',
+    /** Screen background: white. */
+    background: '#FFFFFF',
+    /** Cards, inputs, nav bars. */
     backgroundElement: '#FFFFFF',
+    /** Subtle light blue section background / hover. */
+    backgroundMuted: '#F3F8FE',
     /** Selected / highlighted element, light blue. */
-    backgroundSelected: '#E6F1FD',
-    primary: '#1A73D1',
-    primarySoft: '#E6F1FD',
+    backgroundSelected: '#E3F0FD',
+    primary: '#1C7ED6',
+    /** Pressed / hovered primary. */
+    primaryStrong: '#1667B3',
+    primarySoft: '#E3F0FD',
     onPrimary: '#FFFFFF',
-    border: '#DCE6F2',
+    border: '#D5E5F6',
     danger: '#C93B3B',
     dangerSoft: '#FCEBEB',
     warning: '#B86E00',
@@ -35,8 +39,10 @@ export const Colors = {
     textSecondary: '#9DB0C6',
     background: '#0B1522',
     backgroundElement: '#132132',
+    backgroundMuted: '#102031',
     backgroundSelected: '#173353',
     primary: '#5AA9F5',
+    primaryStrong: '#80BEF8',
     primarySoft: '#173353',
     onPrimary: '#0B1522',
     border: '#22344A',
@@ -109,4 +115,13 @@ export const Radius = {
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 640;
+export const MaxContentWidth = 720;
+/** Height of the web top navigation bar. */
+export const WebNavHeight = 64;
+
+/** Shared animation timings (ms). Keep motion short and calm. */
+export const Motion = {
+  fast: 150,
+  base: 250,
+  stagger: 40,
+} as const;

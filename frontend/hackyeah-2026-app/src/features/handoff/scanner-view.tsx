@@ -90,7 +90,7 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
           </ThemedText>
 
           {!permission.granted && Platform.OS !== 'web' && (
-            <Button title="📷 Zezwól na dostęp do aparatu" onPress={requestPermission} />
+            <Button title="Zezwól na dostęp do aparatu" onPress={requestPermission} />
           )}
 
           <ThemedView style={styles.manualBox}>
@@ -149,7 +149,7 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
       <View style={styles.overlay}>
         <View style={styles.header}>
           <Button
-            title="✕ Anuluj"
+            title="Anuluj"
             variant="secondary"
             onPress={() => router.back()}
             style={styles.cancelBtn}

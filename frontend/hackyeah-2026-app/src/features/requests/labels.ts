@@ -1,4 +1,4 @@
-import type { Category, Priority, RequestStatus } from '@/api/types';
+import type { Category, Priority, RequestStatus, UserRole } from '@/api/types';
 
 export const CategoryLabels: Record<Category, string> = {
   BASIC_NEEDS: 'Leki i zakupy',
@@ -30,3 +30,9 @@ export function timeAgo(iso: string) {
   if (hours < 24) return `${hours} godz. temu`;
   return `${Math.round(hours / 24)} dni temu`;
 }
+
+export const RoleLabels: Record<UserRole, string> = {
+  REQUESTER: 'Potrzebuję pomocy',
+  VOLUNTEER: 'Wolontariusz',
+  CITY_ADMIN: 'Urząd miasta',
+};

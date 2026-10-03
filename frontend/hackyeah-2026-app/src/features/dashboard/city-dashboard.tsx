@@ -49,7 +49,7 @@ export function CityDashboard() {
           </ThemedText>
         </View>
         <Button
-          title="← Aplikacja"
+          title="Wróć do aplikacji"
           variant="secondary"
           onPress={() => router.replace('/(tabs)/requests')}
         />

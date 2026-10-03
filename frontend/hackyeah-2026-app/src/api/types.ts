@@ -36,7 +36,8 @@ export type Priority = 1 | 2 | 3;
  */
 export type RequestStatus = 'OPEN' | 'OFFERED' | 'ACCEPTED' | 'COMPLETED' | 'RATED' | 'CANCELLED';
 
-export type UserRole = 'REQUESTER' | 'VOLUNTEER';
+/** Matches backend `UserRole`. CITY_ADMIN only uses the city dashboard. */
+export type UserRole = 'REQUESTER' | 'VOLUNTEER' | 'CITY_ADMIN';
 
 // ---------- Users ----------
 
@@ -50,10 +51,36 @@ export type UserPublic = {
   ratingCount: number;
 };
 
+/**
+ * Self-described profile shown on the profile screen.
+ * TODO(backend): not in `UserProfileResponse` yet, kept on the client until the backend adds it.
+ */
+export type UserProfileDetails = {
+  about: string;
+  district: string;
+  availability: string;
+  /** Requester: what they usually need help with. Volunteer: what they can help with. */
+  helpTopics: Category[];
+  /** Accessibility / special needs details, visible only to the assigned volunteer. */
+  accessibilityNotes: string;
+};
+
 export type User = UserPublic & {
   role: UserRole;
   hasSpecialNeeds: boolean;
   cityPoints: number;
+  profile: UserProfileDetails;
+};
+
+/** `GET /api/users/me` response (backend `UserProfileResponse`). */
+export type BackendUserProfile = {
+  id: number;
+  displayName: string;
+  role: UserRole;
+  identityVerified: boolean;
+  specialNeeds: boolean;
+  trustScore: number;
+  ratingCount: number;
 };
 
 // ---------- Help requests ----------
@@ -68,12 +95,18 @@ export type ApproximateArea = {
   polygon?: GeoPolygon;
 };
 
+/** Backend `RiskFlag`. */
+export type RiskFlag =
+  'SCAM_SUSPECTED' | 'MEDICAL_EMERGENCY' | 'PERSONAL_DATA' | 'INAPPROPRIATE_CONTENT';
+
+/** `POST /api/requests/classify` response (backend `RequestClassification`). */
 export type AiClassification = {
   category: Category;
   priority: Priority;
   tags: string[];
-  riskFlags: string[];
-  suspicious: boolean;
+  riskFlags: RiskFlag[];
+  /** LLM = model answered, FALLBACK = keyword rules (model unavailable). */
+  source: 'LLM' | 'FALLBACK';
 };
 
 /** Item returned by list / map endpoints. Must never contain the exact location. */
@@ -114,6 +147,9 @@ export type CreateHelpRequestDto = {
   accessibilitySupport: boolean;
   location: GeoPoint;
   address: Address;
+  /** Accepted AI suggestion, the backend re-classifies anyway. */
+  priority?: Priority;
+  tags?: string[];
 };
 
 export type ClassifyRequestDto = {

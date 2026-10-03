@@ -1,6 +1,6 @@
-import { apiRequest, ApiError } from '@/api/client';
+import { apiRequest, ApiError, getApiUserId } from '@/api/client';
 import { USE_MOCKS } from '@/api/config';
-import { mockRequests } from '@/api/mocks/data';
+import { mockRequests, mockUsers } from '@/api/mocks/data';
 import { mockResponse } from '@/api/mocks/delay';
 import type {
   AiClassification,
@@ -15,6 +15,9 @@ import type {
   NearbyQuery,
   Priority,
   RequestStatus,
+  RiskFlag,
+  User,
+  UserPublic,
 } from '@/api/types';
 import { distanceMeters } from '@/lib/geo';
 import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
@@ -42,6 +45,22 @@ function toPublic({
 }: HelpRequestDetails): HelpRequestPublic {
   return rest;
 }
+
+const toPublicUser = ({
+  id,
+  displayName,
+  verified,
+  trustScore,
+  ratingAverage,
+  ratingCount,
+}: User): UserPublic => ({
+  id,
+  displayName,
+  verified,
+  trustScore,
+  ratingAverage,
+  ratingCount,
+});
 
 function toCategory(category: BackendCategory): Category {
   if (category === 'MEDICINE' || category === 'GROCERIES') return 'BASIC_NEEDS';
@@ -126,21 +145,42 @@ export async function getRequest(id: string): Promise<HelpRequestDetails> {
   return apiRequest(`/api/requests/${id}`);
 }
 
+const CATEGORY_KEYWORDS: [Category, RegExp][] = [
+  ['BASIC_NEEDS', /lek|aptek|recept|zakup|jedzeni|paczk/i],
+  ['EQUIPMENT_LOAN', /pożycz|drabin|wiertark|sprzęt|narzędz|wózek/i],
+  ['HOME_SUPPORT', /kran|napraw|żarówk|montaż|złoż|awari|sprząt/i],
+  ['SOCIAL', /spacer|towarzyst|rozmow|samotn/i],
+];
+
+/** Keyword stand-in for the backend LLM classifier, same response shape. */
+function classifyLocally({ title, description }: ClassifyRequestDto): AiClassification {
+  const text = `${title} ${description}`;
+  const category =
+    CATEGORY_KEYWORDS.find(([, pattern]) => pattern.test(text))?.[0] ?? 'HOME_SUPPORT';
+  const riskFlags: RiskFlag[] = [];
+  if (/blik|przelew|numer karty|pin/i.test(text)) riskFlags.push('SCAM_SUSPECTED');
+  if (/duszno|zawał|nieprzytomn|krwaw|udar/i.test(text)) riskFlags.push('MEDICAL_EMERGENCY');
+  const priority: Priority = /lek|serce|pilne|ból|awari|zalew/i.test(text)
+    ? 1
+    : /dziś|szybko|jak najszybciej/i.test(text)
+      ? 2
+      : 3;
+  const tags =
+    text
+      .toLowerCase()
+      .match(/[a-ząćęłńóśźż]{5,}/g)
+      ?.filter((word, index, all) => all.indexOf(word) === index)
+      .slice(0, 3) ?? [];
+  return { category, priority, tags, riskFlags, source: 'FALLBACK' };
+}
+
 export async function classifyRequest(dto: ClassifyRequestDto): Promise<AiClassification> {
-  if (USE_MOCKS) {
-    const urgent = /lek|serce|pilne|ból|awaria/i.test(`${dto.title} ${dto.description}`);
-    return mockResponse(
-      {
-        category: 'BASIC_NEEDS',
-        priority: urgent ? 1 : 3,
-        tags: urgent ? ['pilne'] : [],
-        riskFlags: [],
-        suspicious: false,
-      },
-      800,
-    );
-  }
-  return apiRequest('/api/requests/classify', { method: 'POST', body: dto });
+  if (USE_MOCKS) return mockResponse(classifyLocally(dto), 800);
+  const result = await apiRequest<Omit<AiClassification, 'priority'> & { priority: number }>(
+    '/api/requests/classify',
+    { method: 'POST', body: dto },
+  );
+  return { ...result, priority: toPriority(result.priority) };
 }
 
 export async function createRequest(dto: CreateHelpRequestDto): Promise<HelpRequestDetails> {
@@ -150,12 +190,12 @@ export async function createRequest(dto: CreateHelpRequestDto): Promise<HelpRequ
       title: dto.title,
       description: dto.description,
       category: dto.category,
-      priority: 2,
+      priority: dto.priority ?? 2,
       status: 'OPEN',
-      tags: [],
+      tags: dto.tags ?? [],
       accessibilitySupport: dto.accessibilitySupport,
       area: { center: dto.location, radiusMeters: 300 },
-      requester: mockRequests[0].requester,
+      requester: toPublicUser(mockUsers.find((u) => u.id === getApiUserId()) ?? mockUsers[0]),
       createdAt: new Date().toISOString(),
       exactLocation: dto.location,
       address: dto.address,
@@ -163,5 +203,40 @@ export async function createRequest(dto: CreateHelpRequestDto): Promise<HelpRequ
     mockRequests.unshift(created);
     return mockResponse(created);
   }
-  return apiRequest('/api/requests', { method: 'POST', body: dto });
+  // TODO(backend): create endpoint not available yet.
+  return apiRequest('/api/help-requests', { method: 'POST', body: dto });
+}
+
+function findMockRequest(id: string) {
+  const request = mockRequests.find((r) => r.id === id);
+  if (!request) throw new ApiError(404, 'Nie znaleziono zgłoszenia');
+  return request;
+}
+
+/**
+ * Volunteer offers help: OPEN -> OFFERED.
+ * TODO(backend): state machine endpoints are planned for stage 3, paths to confirm.
+ */
+export async function offerHelp(id: string): Promise<HelpRequestDetails> {
+  if (USE_MOCKS) {
+    const request = findMockRequest(id);
+    const volunteer = mockUsers.find((u) => u.id === getApiUserId());
+    if (request.status !== 'OPEN') throw new ApiError(409, 'Ktoś już zgłosił się do pomocy');
+    if (!volunteer) throw new ApiError(401, 'Zaloguj się ponownie');
+    request.status = 'OFFERED';
+    request.volunteer = toPublicUser(volunteer);
+    return mockResponse({ ...request });
+  }
+  return apiRequest(`/api/help-requests/${id}/offer`, { method: 'POST' });
+}
+
+/** Requester accepts the offer: OFFERED -> ACCEPTED, the volunteer now sees the exact address. */
+export async function acceptOffer(id: string): Promise<HelpRequestDetails> {
+  if (USE_MOCKS) {
+    const request = findMockRequest(id);
+    if (request.status !== 'OFFERED') throw new ApiError(409, 'Brak oferty do zaakceptowania');
+    request.status = 'ACCEPTED';
+    return mockResponse({ ...request });
+  }
+  return apiRequest(`/api/help-requests/${id}/accept`, { method: 'POST' });
 }

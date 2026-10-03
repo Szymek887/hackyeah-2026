@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { RatingStars } from '@/components/ui/rating-stars';
 import { Radius, Spacing } from '@/constants/theme';
+import { RoleLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
 
 const initials = (name: string) =>
@@ -29,15 +30,23 @@ export function ProfileHeader({ user }: { user: User }) {
 
       <View style={styles.info}>
         <ThemedText type="subtitle">{user.displayName}</ThemedText>
-        <RatingStars value={user.ratingAverage} count={user.ratingCount} />
+        {user.role !== 'CITY_ADMIN' && (
+          <RatingStars value={user.ratingAverage} count={user.ratingCount} />
+        )}
         <View style={styles.badges}>
-          <Badge label={user.role === 'VOLUNTEER' ? 'Wolontariusz' : 'Potrzebujący'} />
-          {user.verified && (
+          <Badge label={RoleLabels[user.role]} />
+          {user.verified ? (
             <Badge
               dot
               label="Zweryfikowany"
               color={theme.success}
               backgroundColor={theme.successSoft}
+            />
+          ) : (
+            <Badge
+              label="Niezweryfikowany"
+              color={theme.textSecondary}
+              backgroundColor={theme.backgroundMuted}
             />
           )}
         </View>

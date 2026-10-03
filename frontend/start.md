@@ -91,3 +91,11 @@ Zainstaluj rozszerzenia polecane przez VS Code (Prettier, ESLint, Expo Tools). F
 ## Styl wizualny
 
 Clean & casual: białe karty na jasnoniebieskim tle, niebieski akcent (`primary`), granatowy tekst, cienkie obramowania zamiast cieni, bez gradientów i rozmyć. Gotowe klocki w `src/components/ui/`: `Screen`, `Card`, `Button` (`primary` / `secondary` / `outline`), `Badge`, `Input`, `RatingStars`. Nagłówek ekranu: `<ThemedText type="title">`.
+
+## Logowanie (od teraz zamiast przełącznika ról)
+
+- Aplikacja startuje od ekranu `/login`. Konta demo odpowiadają seederowi backendu: 1 Anna K., 2 Marek S., 3 Ewa P. (potrzebujący), 4 Kuba W. (wolontariusz), 5 konto miasta.
+- Zalogowany użytkownik jest wysyłany do backendu w nagłówku `X-User-Id` (robi to `apiRequest`).
+- W kodzie: `useSession()` zwraca `{ user, role, signOut, updateProfile }`, `useAuth()` działa też bez zalogowania.
+- Przepływ zadania: OPEN → „Chcę pomóc” (OFFERED) → akceptacja zgłaszającego (ACCEPTED) → skan QR (COMPLETED) → ocena (RATED). Zakładka „Zadania” dzieli je na Oczekujące / W toku / Zakończone.
+- Animacje: gotowe ustawienia w `src/lib/motion.ts` (`enterItem(index)`, `layoutTransition`), `Screen` sam robi fade-in.

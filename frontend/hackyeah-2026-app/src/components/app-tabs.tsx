@@ -25,6 +25,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="list.bullet" md="list" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="tasks">
+        <NativeTabs.Trigger.Label>Zadania</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="checklist" md="task_alt" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="new">
         <NativeTabs.Trigger.Label>Dodaj</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
