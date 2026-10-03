@@ -1,5 +1,10 @@
 import { apiRequest } from '@/api/client';
-import type { CreateUserDto, UpdateLanguagesDto, UserProfile } from '@/api/types';
+import type {
+  CreateUserDto,
+  UpdateLanguagesDto,
+  UpdateSpecialNeedsConsentDto,
+  UserProfile,
+} from '@/api/types';
 
 /**
  * Backend auth is a mock: the user is identified by the `X-User-Id` header.
@@ -20,3 +25,10 @@ export const createUser = (dto: CreateUserDto) =>
 /** `PUT /api/users/me/languages` – replaces the languages the caller speaks. → 200 UserProfile. */
 export const updateMyLanguages = (dto: UpdateLanguagesDto) =>
   apiRequest<UserProfile>('/api/users/me/languages', { method: 'PUT', body: dto });
+
+/**
+ * `PUT /api/users/me/special-needs-consent` – gives or withdraws consent to tell the accepted
+ * volunteer about the caller's special needs. Takes effect immediately. → 200 UserProfile.
+ */
+export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto) =>
+  apiRequest<UserProfile>('/api/users/me/special-needs-consent', { method: 'PUT', body: dto });

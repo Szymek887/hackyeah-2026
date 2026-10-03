@@ -29,6 +29,7 @@ import type {
   RequestStatus,
   UserProfile,
   UpdateLanguagesDto,
+  UpdateSpecialNeedsConsentDto,
   UserSummary,
   ViewerRole,
 } from '@/api/types';
@@ -73,6 +74,12 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     'PUT',
     /^\/api\/users\/me\/languages$/,
     ({ req }) => updateLanguages(currentUser(req), req.body as UpdateLanguagesDto),
+  ],
+  [
+    'PUT',
+    /^\/api\/users\/me\/special-needs-consent$/,
+    ({ req }) =>
+      updateSpecialNeedsConsent(currentUser(req), req.body as UpdateSpecialNeedsConsentDto),
   ],
   ['GET', /^\/api\/help-requests\/nearby$/, ({ req }) => nearby(req.query)],
   ['POST', /^\/api\/help-requests\/along-route$/, ({ req }) => alongRoute(req.body)],
@@ -174,6 +181,7 @@ function createUser(body: CreateUserDto): UserProfile {
     role: body.role,
     identityVerified: false,
     specialNeeds: body.role === 'REQUESTER' && Boolean(body.specialNeeds),
+    shareSpecialNeeds: false,
     trustScore: NEW_USER_TRUST,
     ratingCount: 0,
     ratingAverage: null,
@@ -204,6 +212,22 @@ function updateLanguages(user: UserProfile, body: UpdateLanguagesDto) {
     });
   user.languages = normalizeLanguages(languages);
   return user;
+}
+
+// UserController.updateSpecialNeedsConsent: explicit boolean required, revocable, effective at once.
+function updateSpecialNeedsConsent(user: UserProfile, body: UpdateSpecialNeedsConsentDto) {
+  if (typeof body?.shareWithVolunteer !== 'boolean')
+    throw new ApiError(400, 'Request validation failed', {
+      shareWithVolunteer: 'must not be null',
+    });
+  user.shareSpecialNeeds = body.shareWithVolunteer;
+  return user;
+}
+
+/** AppUser.sharesSpecialNeeds: true only with special needs AND consent. */
+function sharesSpecialNeeds(userId: number) {
+  const user = users.find((u) => u.id === userId);
+  return Boolean(user?.specialNeeds && user.shareSpecialNeeds);
 }
 
 // ---------- Views (HelpRequestViewMapper + policies) ----------
@@ -290,6 +314,8 @@ function toFull(r: MockHelpRequest, u: UserProfile): HelpRequestFull {
     buildingNumber: r.buildingNumber,
     apartmentNumber: r.apartmentNumber,
     requester: summaryOf(r.requesterId)!,
+    // FULL goes only to the requester and the volunteer from ACCEPTED on (canSeeFull).
+    requesterSpecialNeeds: sharesSpecialNeeds(r.requesterId),
     volunteer: summaryOf(r.volunteerId),
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { CategoryColors, Spacing } from '@/constants/theme';
 import { DisabilityLabels } from '@/features/accessibility/accessibility-settings';
+import { SpecialNeedsConsent } from '@/features/profile/components/special-needs-consent';
 import { languageName } from '@/features/profile/languages';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,6 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
 export function ProfileAbout({ user, profile }: { user: UserProfile; profile: ProfileDetails }) {
   const theme = useTheme();
   const isVolunteer = user.role === 'VOLUNTEER';
+  const canShareSpecialNeeds = user.role === 'REQUESTER' && user.specialNeeds;
 
   return (
     <>
@@ -74,9 +76,16 @@ export function ProfileAbout({ user, profile }: { user: UserProfile; profile: Pr
             }
           />
           <ThemedText type="caption" themeColor="textSecondary">
-            Widoczne tylko dla wolontariusza, którego pomoc zaakceptujesz.
+            Te szczegóły widzisz tylko Ty.
           </ThemedText>
         </View>
+
+        {/* Consent only matters for requesters the backend knows have special needs (contract §3.6). */}
+        {canShareSpecialNeeds && (
+          <View style={styles.consent}>
+            <SpecialNeedsConsent />
+          </View>
+        )}
       </Card>
 
       <Card>
@@ -117,5 +126,8 @@ const styles = StyleSheet.create({
   },
   empty: {
     fontStyle: 'italic',
+  },
+  consent: {
+    paddingTop: Spacing.two,
   },
 });
