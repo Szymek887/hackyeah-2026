@@ -49,6 +49,8 @@ public class HelpRequestViewMapper {
                 request.getBuildingNumber(),
                 request.getApartmentNumber(),
                 UserSummary.from(request.getRequester()),
+                // FULL is shown only to the requester and to the volunteer from ACCEPTED on, see the policy
+                request.getRequester().sharesSpecialNeeds(),
                 UserSummary.from(request.getVolunteer()),
                 request.getCreatedAt(),
                 request.getUpdatedAt(),

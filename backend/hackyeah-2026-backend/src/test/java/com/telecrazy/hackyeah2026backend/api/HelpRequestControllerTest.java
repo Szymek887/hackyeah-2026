@@ -28,6 +28,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -152,6 +153,63 @@ class HelpRequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visibility").value("PUBLIC"))
                 .andExpect(jsonPath("$.street").doesNotExist());
+    }
+
+    @Test
+    void assignedVolunteerLearnsAboutSpecialNeedsOnlyWithConsent() throws Exception {
+        requester.setSpecialNeeds(true);
+        HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
+        request.setVolunteer(volunteer);
+        given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
+
+        mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibility").value("FULL"))
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
+
+        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+
+        mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(true));
+    }
+
+    @Test
+    void consentWithoutSpecialNeedsRevealsNothing() throws Exception {
+        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+        HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
+        request.setVolunteer(volunteer);
+        given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
+
+        mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
+    }
+
+    @Test
+    void specialNeedsNeverReachPublicViewsOrVolunteerBeforeAcceptance() throws Exception {
+        requester.setSpecialNeeds(true);
+        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+        HelpRequest offered = storedRequest(HelpRequestStatus.OFFERED);
+        offered.setVolunteer(volunteer);
+        given(helpRequestRepository.findById(10L)).willReturn(Optional.of(offered));
+        given(helpRequestRepository.findOpenWithinRadius(EXACT_LAT, EXACT_LNG, 3000))
+                .willReturn(List.of(storedRequest(HelpRequestStatus.OPEN)));
+
+        String volunteerBeforeAcceptance = mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+                .andExpect(jsonPath("$.visibility").value("PUBLIC"))
+                .andReturn().getResponse().getContentAsString();
+        String stranger = mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "6"))
+                .andExpect(jsonPath("$.visibility").value("PUBLIC"))
+                .andReturn().getResponse().getContentAsString();
+        String nearby = mockMvc.perform(get("/api/help-requests/nearby")
+                        .param("lat", String.valueOf(EXACT_LAT))
+                        .param("lng", String.valueOf(EXACT_LNG)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        for (String body : List.of(volunteerBeforeAcceptance, stranger, nearby)) {
+            assertThat(body).doesNotContainIgnoringCase("specialNeeds");
+        }
     }
 
     @Test

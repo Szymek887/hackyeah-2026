@@ -57,6 +57,40 @@ X-User-Id: {{requesterId}}
     });
 %}
 
+### Give consent to share special needs with the accepted volunteer (profile switch)
+PUT {{host}}/api/users/me/special-needs-consent
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "shareWithVolunteer": true
+}
+
+> {%
+    client.test("Consent is stored", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.shareSpecialNeeds === true, "Expected shareSpecialNeeds = true");
+    });
+%}
+
+### Withdraw the consent
+PUT {{host}}/api/users/me/special-needs-consent
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "shareWithVolunteer": false
+}
+
+> {%
+    client.test("Consent is withdrawn", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.shareSpecialNeeds === false, "Expected shareSpecialNeeds = false");
+    });
+%}
+
 ### Missing X-User-Id header
 GET {{host}}/api/users/me
 Accept: application/json

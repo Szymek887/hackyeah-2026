@@ -50,10 +50,10 @@ The frontend has a clean seam for integration: every call goes through `src/api/
 | Requester name / trust on cards and details | public list/details have no requester at all (by design) | `requesterTrust` (anonymous) on PUBLIC details; cards drop the name |
 | "Is this my request / my offer?" | PUBLIC view has no ids | `viewerRole` on both views |
 | Tags on map/list | not in list items | add `tags` to `PublicHelpRequestResponse` |
-| Accessibility badge | no field anywhere | `accessibilitySupport` on entity, create body, responses |
+| Special needs of the requester | sensitive (health data) | ✅ consent-based: `shareSpecialNeeds` switch on the profile, `requesterSpecialNeeds` only in `FULL` for the accepted volunteer (contract §3.6). No public badge. |
 | Star rating (`ratingAverage`) | only `ratingCount` | add `ratingAverage` to `UserSummary` and profile |
 | City points on profile | none | `cityPoints` on profile (awarded with ratings) |
-| User-picked category in form | backend ignores it, always uses AI | optional `category` override on create |
+| User-picked category in form | backend ignores it, always uses AI | **decided: AI only**, no override – the form shows the AI suggestion read-only |
 | Dashboard: active volunteers, satisfaction | none | `activeVolunteers`, `averageStars` on summary |
 | Dashboard: districts, response time, CO₂ | none | **not planned** – hide or label as demo data |
 
@@ -103,9 +103,10 @@ All backend endpoints here are already live, so this is frontend-only work again
 
 | # | Task | Owner |
 |---|---|---|
-| 2.1 | `createRequest`: send the flat body from contract §4.5 (`lat`, `lng`, `street`, `buildingNumber`, `apartmentNumber`, plus `category`, `accessibilitySupport` – ignored until 2.3). Drop `city`, `priority`, `tags`. | FE1 |
+| 2.1 | ✅ `createRequest`: send the flat body from contract §4.5 (`lat`, `lng`, `street`, `buildingNumber`, `apartmentNumber`). Drop `city`, `priority`, `tags`. | FE1 |
 | 2.2 | Real location: device location via `expo-location` with "pick on map" fallback; city centre only as last resort. | FE1 + FE2 |
-| 2.3 | Backend: optional `category` override and `accessibilitySupport` on create + entity + responses; `tags` + `accessibilitySupport` in list items. | Dev 2 (create) / Dev 1 (list) |
+| 2.3 | ✅ Backend: special needs with consent – `PUT /api/users/me/special-needs-consent`, `shareSpecialNeeds` on profile, `requesterSpecialNeeds` in `FULL` (contract §3.6). ~~`category` override~~ and ~~`accessibilitySupport`~~ dropped. Still open: `tags` in list items (Dev 1). | Dev 2 / Dev 1 |
+| 2.3a | Frontend: consent switch on the profile (requesters with `specialNeeds` only, with an explanation who sees it and when); neutral note on the volunteer's task screen when `requesterSpecialNeeds` is `true`. | FE1 |
 | 2.4 | Handle `status: UNDER_REVIEW` in the create response ("Twoje zgłoszenie czeka na weryfikację"). | FE1 |
 
 ### Phase 3 – Volunteer flow: state machine, QR, ratings (⏱ ~6–8 h, critical path for the demo)

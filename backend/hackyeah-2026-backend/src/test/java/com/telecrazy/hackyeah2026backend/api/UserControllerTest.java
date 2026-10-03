@@ -1,5 +1,6 @@
 package com.telecrazy.hackyeah2026backend.api;
 
+import com.telecrazy.hackyeah2026backend.config.ClockConfig;
 import com.telecrazy.hackyeah2026backend.config.WebConfig;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -27,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import(WebConfig.class)
+@Import({WebConfig.class, ClockConfig.class})
 class UserControllerTest {
 
     @Autowired
@@ -124,6 +126,53 @@ class UserControllerTest {
     }
 
     @Test
+    void specialNeedsConsentIsOffByDefault() throws Exception {
+        given(userRepository.findById(1L)).willReturn(Optional.of(requesterWithSpecialNeeds()));
+
+        mockMvc.perform(get("/api/users/me").header("X-User-Id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialNeeds").value(true))
+                .andExpect(jsonPath("$.shareSpecialNeeds").value(false));
+    }
+
+    @Test
+    void specialNeedsConsentCanBeGivenAndWithdrawn() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        mockMvc.perform(put("/api/users/me/special-needs-consent")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"shareWithVolunteer\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.shareSpecialNeeds").value(true));
+        assertThat(anna.sharesSpecialNeeds()).isTrue();
+        assertThat(anna.getSpecialNeedsConsentUpdatedAt()).isNotNull();
+
+        mockMvc.perform(put("/api/users/me/special-needs-consent")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"shareWithVolunteer\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.shareSpecialNeeds").value(false));
+        assertThat(anna.sharesSpecialNeeds()).isFalse();
+    }
+
+    @Test
+    void specialNeedsConsentRequiresExplicitValue() throws Exception {
+        given(userRepository.findById(1L)).willReturn(Optional.of(requesterWithSpecialNeeds()));
+
+        mockMvc.perform(put("/api/users/me/special-needs-consent")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.shareWithVolunteer").exists());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
     void missingHeaderReturns401() throws Exception {
         mockMvc.perform(get("/api/users/me"))
                 .andExpect(status().isUnauthorized())
@@ -146,6 +195,12 @@ class UserControllerTest {
         mockMvc.perform(get("/api/users/me").header("X-User-Id", "999"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Unknown user 999"));
+    }
+
+    private static AppUser requesterWithSpecialNeeds() {
+        AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, true, 72);
+        anna.setId(1L);
+        return anna;
     }
 
     private static AppUser user(long id, String name, UserRole role) {

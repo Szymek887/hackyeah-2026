@@ -139,6 +139,7 @@ Token (32 losowe bajty, base64url, 43 znaki) w polach `HelpRequest.handoffToken*
 - ✅ `SCAM_SUSPECTED` → status `UNDER_REVIEW`: znika z `nearby`/`along-route` (filtrują po `OPEN`) oraz z całej analityki – heatmapy i `summary` (także przy jawnym `?status=UNDER_REVIEW`, klucz nie pojawia się w `byStatus`); `GET /{id}` zwraca 404 wszystkim poza autorem.
 - ✅ `MEDICAL_EMERGENCY` → zgłoszenie zostaje `OPEN`, flaga w `riskFlags` (front pokazuje komunikat o 112).
 - ✅ `PERSONAL_DATA` → we wszystkich widokach publicznych (szczegóły, `nearby`, `along-route`) `title` zastąpiony ogólnym tytułem z kategorii, `description = null` (`PublicTextPolicy`). Autor widzi oryginał.
+- ✅ Niepełnosprawność (dane o zdrowiu, RODO art. 9) udostępniana tylko za zgodą: `AppUser.shareSpecialNeeds` (domyślnie `false`, z datą zmiany), `PUT /api/users/me/special-needs-consent`, pole `requesterSpecialNeeds` wyłącznie w widoku `FULL` (przypisany wolontariusz od `ACCEPTED`). `false` = brak potrzeb **lub** brak zgody. Cofnięcie zgody działa od razu. Test „brak wycieku” obejmuje widok `PUBLIC`, wolontariusza w `OFFERED` i listę `nearby`. Kontrakt §3.6.
 - ✅ `CITY_ADMIN` nie tworzy zgłoszeń (403).
 - ✅ `StatusConstraintInitializer` odtwarza przy starcie `CHECK` na `help_requests.status` z enuma (`ddl-auto=update` go nie aktualizuje) – nowe statusy działają bez resetu bazy.
 - ⏳ Ręczny przegląd zgłoszeń `UNDER_REVIEW` (np. przez `CITY_ADMIN`) – poza zakresem MVP.

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
 
@@ -22,9 +23,11 @@ public class UserController {
             .thenComparing(AppUser::getId);
 
     private final AppUserRepository userRepository;
+    private final Clock clock;
 
-    public UserController(AppUserRepository userRepository) {
+    public UserController(AppUserRepository userRepository, Clock clock) {
         this.userRepository = userRepository;
+        this.clock = clock;
     }
 
     /**
@@ -51,6 +54,19 @@ public class UserController {
             @Valid @RequestBody UpdateLanguagesRequest request
     ) {
         user.replaceLanguages(request.languages());
+        return UserProfileResponse.from(userRepository.save(user));
+    }
+
+    /**
+     * Gives or withdraws consent to tell the assigned volunteer (after acceptance) about the caller's
+     * special needs. Takes effect immediately for every request, including already accepted ones.
+     */
+    @PutMapping("/me/special-needs-consent")
+    public UserProfileResponse updateSpecialNeedsConsent(
+            @CurrentUser AppUser user,
+            @Valid @RequestBody UpdateSpecialNeedsConsentRequest request
+    ) {
+        user.updateSpecialNeedsConsent(request.shareWithVolunteer(), clock.instant());
         return UserProfileResponse.from(userRepository.save(user));
     }
 }

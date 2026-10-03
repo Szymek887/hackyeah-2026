@@ -153,7 +153,8 @@ type UserProfileResponse = {
   displayName: string;
   role: UserRole;
   identityVerified: boolean;
-  specialNeeds: boolean;
+  specialNeeds: boolean;        // sensitive (health data), see §3.6
+  shareSpecialNeeds: boolean;   // consent to tell the accepted volunteer, default false, see §3.6
   trustScore: number;
   ratingCount: number;
   ratingAverage: number | null;
@@ -179,13 +180,14 @@ type PublicHelpRequestResponse = {
   maskedArea: GeoJsonPolygon;          // that grid cell
   createdAt: string;
   tags: string[];                      // [+]
-  accessibilitySupport: boolean;       // [+]
 };
 ```
 
+No disability / special-needs information ever appears in list items (§3.6).
+
 ### 3.5 `HelpRequestView` (single request) — 🟡 `CHANGE`
 
-Discriminated union on **`visibility`**. `viewerRole` is ✅ live; `accessibilitySupport` and `requesterTrust` are still **[+]**.
+Discriminated union on **`visibility`**. `viewerRole` and `requesterSpecialNeeds` are ✅ live; `requesterTrust` is still **[+]**.
 
 ```ts
 type HelpRequestView = FullHelpRequestResponse | PublicHelpRequestDetailsResponse;
@@ -214,8 +216,8 @@ type FullHelpRequestResponse = {
   street: string;
   buildingNumber: string;
   apartmentNumber: string | null;
-  accessibilitySupport: boolean;       // [+]
   requester: UserSummary;
+  requesterSpecialNeeds: boolean;      // true only with the requester's consent, see §3.6
   volunteer: UserSummary | null;
   createdAt: string;
   updatedAt: string;
@@ -237,7 +239,6 @@ type PublicHelpRequestDetailsResponse = {
   tags: string[];
   approximateLocation: GeoJsonPoint;
   maskedArea: GeoJsonPolygon;
-  accessibilitySupport: boolean;       // [+]
   requesterTrust: {                    // [+] anonymous trust info, no name / id
     identityVerified: boolean;
     trustScore: number;
@@ -252,6 +253,23 @@ type PublicHelpRequestDetailsResponse = {
 > Why `viewerRole`: the PUBLIC variant has no `requester`/`volunteer`, so the client cannot compute "is this mine?" by comparing ids. The backend already knows the answer.
 >
 > Why `requesterTrust`: volunteers decide whether to help based on trust (core feature), but the requester's name must stay hidden until acceptance.
+
+### 3.6 Special needs (disability) – consent-based sharing — ✅ `LIVE`
+
+Disability is **health data** (GDPR art. 9, special category). Rules:
+
+| Rule | How |
+|---|---|
+| Stored on the profile | `specialNeeds` – used **internally** to raise request priority (§6.6 of the backend plan). |
+| Shared only with consent | `shareSpecialNeeds` on the profile, **`false` by default**, changed by the user with a checkbox / switch (`PUT /api/users/me/special-needs-consent`, §4.2). Revocable at any time; the time of the last change is recorded. |
+| Only the accepted volunteer learns it | `requesterSpecialNeeds` exists **only in `FULL`** (requester always, assigned volunteer from `ACCEPTED`). It is `true` only when `specialNeeds && shareSpecialNeeds`. |
+| Never public | Not in list items, `PUBLIC` details (also for a volunteer in `OFFERED`), `UserSummary`, analytics. Covered by the "no leak" test. |
+| No inference from a refusal | `false` means "no special needs **or** no consent" – the volunteer cannot tell which. |
+| Live | Withdrawing consent hides it immediately, also on already accepted requests. |
+
+UI: the profile shows the switch only to requesters with `specialNeeds`, with a short explanation who will see it and when. The volunteer's task screen shows a neutral note (e.g. „Osoba zgłaszająca prosi o uwzględnienie szczególnych potrzeb”) when `requesterSpecialNeeds` is `true` – no diagnosis.
+
+> Known limitation of the mock login (accepted, presented in the pitch): `GET /api/users/demo` is public and returns `UserProfileResponse`, i.e. also `specialNeeds` / `shareSpecialNeeds`. A real deployment needs real authentication and a separate public account DTO.
 
 ---
 
@@ -302,6 +320,19 @@ Request (`CreateUserRequest`):
 
 → `201 UserProfileResponse` (+ `Location: /api/users/{id}`), with `identityVerified = false`, `trustScore = 50`, no ratings, 0 city points. The new account appears in `GET /api/users/demo`.
 400 `Request validation failed` with `errors.displayName` / `errors.role`.
+
+#### `PUT /api/users/me/special-needs-consent` — ✅ `LIVE`
+Auth required. Gives or withdraws consent to tell the assigned volunteer about the caller's special needs (§3.6). Takes effect immediately.
+
+Request (`UpdateSpecialNeedsConsentRequest`):
+```json
+{ "shareWithVolunteer": true }
+```
+| Field | Rules |
+|---|---|
+| `shareWithVolunteer` | required boolean |
+
+→ `200 UserProfileResponse` (with the new `shareSpecialNeeds`). 400 `errors.shareWithVolunteer` when missing. Allowed for every role; it only has an effect for users with `specialNeeds`.
 
 #### `POST /api/users/me/verify` — 🔵 `PROPOSED` (optional, low priority)
 Auth required. Mock mObywatel: sets `identityVerified = true`. No body. → `200 UserProfileResponse`.
@@ -377,8 +408,8 @@ Auth required. Requests the caller is involved in, newest first.
 
 ### 4.5 Help requests – create
 
-#### `POST /api/help-requests` — 🟡 `CHANGE`
-Auth required. Runs AI classification server-side (category, priority, tags, risk flags). `CITY_ADMIN` → 403.
+#### `POST /api/help-requests` — ✅ `LIVE`
+Auth required. Runs AI classification server-side (category, priority, tags, risk flags). The category always comes from the AI (decided: no user override). `CITY_ADMIN` → 403.
 
 Request:
 ```json
@@ -389,9 +420,7 @@ Request:
   "lng": 19.9449,
   "street": "Floriańska",
   "buildingNumber": "15",
-  "apartmentNumber": "4",
-  "category": "MEDICINE",
-  "accessibilitySupport": true
+  "apartmentNumber": "4"
 }
 ```
 | Field | Rules |
@@ -402,10 +431,8 @@ Request:
 | `street` | required, ≤ 255 |
 | `buildingNumber` | required, ≤ 20 |
 | `apartmentNumber` | optional, ≤ 20 |
-| `category` | **[+]** optional. When present it overrides the AI category (the user picked it in the form). Today it is ignored. |
-| `accessibilitySupport` | **[+]** optional, default = requester's `specialNeeds`. Today it is ignored. |
 
-Not accepted (the server decides): `priority`, `tags`, `status`. City is always Kraków in the MVP (no `city` field).
+Not accepted (the server decides): `category`, `priority`, `tags`, `status`. Special needs are not sent per request – they come from the profile and are shared only with consent (§3.6). City is always Kraków in the MVP (no `city` field).
 
 → `201 FullHelpRequestResponse`, `Location: /api/help-requests/{id}`.
 If the AI flags a scam, the response has `status: "UNDER_REVIEW"` – the UI must tell the user the request is waiting for review.
@@ -574,6 +601,7 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-03 | Special needs shared only with consent (§3.6): `shareSpecialNeeds` on the profile, new `PUT /api/users/me/special-needs-consent`, `requesterSpecialNeeds` in `FULL` only (live, additive). Dropped proposals: `accessibilitySupport` (list, details, create) and the `category` override on create – the category stays AI-only. | Dev 2 |
 | 2026-10-03 | Spoken languages: `languages` (ISO 639-1 codes) on `UserSummary` and `UserProfileResponse`, new `PUT /api/users/me/languages` (live); proposed `languages` in `requesterTrust` and in `POST /api/users`; CORS allows `PUT`. | Backend |
 | 2026-10-03 | Proposed `POST /api/users` (create account from the login screen, §4.2). | FE1 |
 | 2026-10-03 | Integration phase 0: `GET /api/users/demo` live; CORS for browser clients on `/api/**` (§1.1). | Dev 2 |
