@@ -29,7 +29,7 @@ public final class HelpRequestVisibilityPolicy {
     }
 
     public static boolean canSee(HelpRequest request, AppUser user) {
-        return request.getStatus() != HelpRequestStatus.UNDER_REVIEW || isRequester(request, user);
+        return !request.getStatus().isHiddenFromPublic() || isRequester(request, user);
     }
 
     public static boolean canSeeFullDetails(HelpRequest request, AppUser user) {

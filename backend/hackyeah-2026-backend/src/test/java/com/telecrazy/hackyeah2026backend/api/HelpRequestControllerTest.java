@@ -3,6 +3,7 @@ package com.telecrazy.hackyeah2026backend.api;
 import com.telecrazy.hackyeah2026backend.ai.ClassificationSource;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassificationService;
+import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
 import com.telecrazy.hackyeah2026backend.config.WebConfig;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
@@ -40,7 +41,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(HelpRequestController.class)
-@Import({WebConfig.class, HelpRequestDetailsService.class, LocationObfuscationService.class})
+@Import({
+        WebConfig.class,
+        HelpRequestService.class,
+        HelpRequestDetailsService.class,
+        LocationObfuscationService.class
+})
 class HelpRequestControllerTest {
 
     private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), 4326);
@@ -62,8 +68,6 @@ class HelpRequestControllerTest {
     private HelpRequestRepository helpRequestRepository;
     @MockitoBean
     private RequestClassificationService classificationService;
-    @MockitoBean
-    private HelpRequestService helpRequestService;
 
     private final AppUser requester = user(1L, REQUESTER_NAME, UserRole.REQUESTER);
     private final AppUser volunteer = user(4L, "Kuba W.", UserRole.VOLUNTEER);
@@ -95,6 +99,44 @@ class HelpRequestControllerTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(body).doesNotContain(STREET, BUILDING, APARTMENT, REQUESTER_NAME,
+                String.valueOf(EXACT_LNG), String.valueOf(EXACT_LAT));
+    }
+
+    @Test
+    void personalDataInTitleAndDescriptionIsWithheldFromPublicDetails() throws Exception {
+        HelpRequest request = storedRequest(HelpRequestStatus.OPEN);
+        request.setTitle("Leki dla Anny Tajnej, tel. 600100200");
+        request.setRiskFlags(Set.of(RiskFlag.PERSONAL_DATA));
+        given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
+
+        String body = mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "6"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Prośba o pomoc z lekami"))
+                .andExpect(jsonPath("$.description").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("600100200", "Tajnej");
+    }
+
+    @Test
+    void nearbyListNeverLeaksAddressExactLocationOrPersonalData() throws Exception {
+        HelpRequest withPersonalData = storedRequest(HelpRequestStatus.OPEN);
+        withPersonalData.setTitle("Leki dla Anny Tajnej, tel. 600100200");
+        withPersonalData.setRiskFlags(Set.of(RiskFlag.PERSONAL_DATA));
+        given(helpRequestRepository.findOpenWithinRadius(EXACT_LAT, EXACT_LNG, 3000))
+                .willReturn(List.of(withPersonalData));
+
+        String body = mockMvc.perform(get("/api/help-requests/nearby")
+                        .param("lat", String.valueOf(EXACT_LAT))
+                        .param("lng", String.valueOf(EXACT_LNG)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Prośba o pomoc z lekami"))
+                .andExpect(jsonPath("$[0].maskedArea.type").value("Polygon"))
+                .andExpect(jsonPath("$[0].street").doesNotExist())
+                .andExpect(jsonPath("$[0].location").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain(STREET, BUILDING, APARTMENT, REQUESTER_NAME, "600100200",
                 String.valueOf(EXACT_LNG), String.valueOf(EXACT_LAT));
     }
 

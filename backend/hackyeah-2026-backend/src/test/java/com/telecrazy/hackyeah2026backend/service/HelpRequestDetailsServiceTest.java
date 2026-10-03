@@ -146,13 +146,17 @@ class HelpRequestDetailsServiceTest {
     }
 
     @Test
-    void publicDetailsHideDescriptionWithPersonalData() {
+    void publicDetailsHideTitleAndDescriptionWithPersonalData() {
         given(repository.findById(10L))
                 .willReturn(Optional.of(storedRequest(HelpRequestStatus.OPEN, Set.of(RiskFlag.PERSONAL_DATA))));
 
         PublicHelpRequestDetailsResponse view = (PublicHelpRequestDetailsResponse) service.getDetails(10L, kuba);
 
+        assertThat(view.title()).isEqualTo("Prośba o pomoc z lekami");
         assertThat(view.description()).isNull();
+        assertThat(service.getDetails(10L, marek))
+                .isInstanceOfSatisfying(FullHelpRequestResponse.class,
+                        full -> assertThat(full.title()).isEqualTo("Potrzebuję leków"));
     }
 
     @Test

@@ -124,12 +124,26 @@ class AnalyticsServiceTest {
         assertThat(summary.fulfilled()).isEqualTo(4);
         assertThat(summary.cancelled()).isEqualTo(2);
         assertThat(summary.fulfillmentRate()).isEqualTo(0.5);
-        assertThat(summary.byStatus()).hasSize(HelpRequestStatus.values().length)
+        assertThat(summary.byStatus())
+                .hasSize(HelpRequestStatus.values().length - HelpRequestStatus.HIDDEN_FROM_PUBLIC.size())
                 .containsEntry(HelpRequestStatus.OFFERED, 0L);
         assertThat(summary.byCategory()).hasSize(HelpCategory.values().length)
                 .containsEntry(HelpCategory.MEDICINE, 4L)
                 .containsEntry(HelpCategory.EQUIPMENT_LOAN, 0L);
         assertThat(summary.byPriority()).containsEntry(1, 4L).containsEntry(2, 2L).containsEntry(3, 4L);
+    }
+
+    @Test
+    void summaryNeverExposesRequestsHiddenFromPublic() {
+        SummaryResponse summary = AnalyticsService.toSummary(List.of(
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.COMPLETED, 2, 1),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.UNDER_REVIEW, 3, 5)
+        ));
+
+        assertThat(summary.total()).isEqualTo(1);
+        assertThat(summary.fulfillmentRate()).isEqualTo(1.0);
+        assertThat(summary.byStatus()).doesNotContainKey(HelpRequestStatus.UNDER_REVIEW);
+        assertThat(summary.byCategory()).containsEntry(HelpCategory.GROCERIES, 1L);
     }
 
     @Test

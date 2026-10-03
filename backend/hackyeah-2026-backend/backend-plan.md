@@ -53,9 +53,9 @@ com.telecrazy.hackyeah2026backend
 
 ## 4. Model danych
 
-**User** – `id`, `displayName`, `role` (`REQUESTER` | `VOLUNTEER`), `identityVerified` (bool), `hasSpecialNeeds` (bool), `trustScore` (double), `ratingCount`, `createdAt`.
+**AppUser** (`app_users`) – `id`, `displayName`, `role` (`REQUESTER` | `VOLUNTEER` | `CITY_ADMIN`), `identityVerified` (bool), `specialNeeds` (bool), `trustScore` (int, 0–100), `ratingCount`. `CITY_ADMIN` widzi analitykę, nie tworzy zgłoszeń (403).
 
-**HelpRequest** – `id`, `requester` (FK), `volunteer` (FK, nullable), `title`, `description`, `category` (`MEDICINE`, `GROCERIES`, `EQUIPMENT_LOAN`, `HOME_SUPPORT`, `SOCIAL` – enum `HelpCategory`, wspólny dla encji i klasyfikatora AI), `priority` (1–3), `tags` (lista), `riskFlags` (lista), `status`, `location` (`Point`, 4326, dokładny), `addressDetails` (ulica, nr lokalu – tylko dla `ACCEPTED+`), `specialNeeds` (bool), `createdAt`, `updatedAt`. Indeks GiST na `location`.
+**HelpRequest** (`help_requests`) – `id`, `requester` (FK), `volunteer` (FK, nullable), `title`, `description`, `category` (`MEDICINE`, `GROCERIES`, `EQUIPMENT_LOAN`, `HOME_SUPPORT`, `SOCIAL` – enum `HelpCategory`, wspólny dla encji i klasyfikatora AI), `priority` (1–3, końcowy), `aiPriority` (1–3, wynik AI przed korektą), `tags` (`help_request_tags`), `riskFlags` (`help_request_risk_flags`: `SCAM_SUSPECTED`, `MEDICAL_EMERGENCY`, `PERSONAL_DATA`, `INAPPROPRIATE_CONTENT`), `classificationSource` (`LLM` | `FALLBACK`), `status`, `location` (`Point`, 4326, dokładny), `street`, `buildingNumber`, `apartmentNumber` (adres – tylko w widoku `FULL`), `createdAt`, `updatedAt`, `version` (`@Version`). Indeks GiST na `location`.
 
 **Handshake / QR** – `id`, `request` (FK), `token`, `expiresAt`, `usedAt`.
 
@@ -63,25 +63,27 @@ com.telecrazy.hackyeah2026backend
 
 Kolejność: `OPEN → OFFERED → ACCEPTED → COMPLETED → RATED`, z `CANCELLED` dostępnym z `OPEN/OFFERED/ACCEPTED`. (W `plan.md` `RATED` występuje w 1.1, a `CANCELLED` w B3.1 – obsługujemy oba.)
 
+`UNDER_REVIEW` – stan początkowy zamiast `OPEN`, gdy AI zgłosi `SCAM_SUSPECTED`. Ukryty publicznie (`HelpRequestStatus.HIDDEN_FROM_PUBLIC`): nie ma go w `nearby`/`along-route`, w analityce ani w `GET /{id}` dla innych niż autor. W MVP brak wyjścia z tego stanu (ręczny przegląd poza zakresem, zob. §10); docelowo `UNDER_REVIEW → OPEN` (zatwierdzenie) lub `→ CANCELLED` (odrzucenie).
+
 ## 5. API (v1)
 
-Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`.
+Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`. Zgłoszenia są pod `/api/help-requests` (wyjątek: podgląd klasyfikacji AI pod `/api/requests/classify`).
 
 | Metoda i ścieżka | Opis | Zadanie |
 |---|---|---|
 | `GET /users/me` | Profil, reputacja, flagi – ✅ zrobione | B1 |
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
-| `POST /requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI – ✅ zrobione (`POST /api/help-requests`) | B2 |
+| `POST /help-requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI – ✅ zrobione | B2 |
 | `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
 | `GET /help-requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON – ✅ zrobione | B2.1 |
 | `POST /help-requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu – ✅ zrobione | B2.2 |
-| `GET /requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` – ✅ zrobione (`GET /api/help-requests/{id}`) | B2.4 |
-| `POST /requests/{id}/offer` | Wolontariusz deklaruje pomoc (`OPEN→OFFERED`) | B3.1 |
-| `POST /requests/{id}/accept` | Zgłaszający akceptuje (`OFFERED→ACCEPTED`), generowany token QR | B3.1/B3.2 |
-| `GET /requests/{id}/qr` | Token QR dla zgłaszającego (tylko `ACCEPTED`) | B3.2 |
-| `POST /requests/{id}/complete` | Body: `token`; wolontariusz kończy (`ACCEPTED→COMPLETED`) | B3.2 |
-| `POST /requests/{id}/cancel` | Anulowanie | B3.1 |
-| `POST /requests/{id}/ratings` | Ocena drugiej strony; aktualizuje reputację | B3.3 |
+| `GET /help-requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` – ✅ zrobione | B2.4 |
+| `POST /help-requests/{id}/offer` | Wolontariusz deklaruje pomoc (`OPEN→OFFERED`) | B3.1 |
+| `POST /help-requests/{id}/accept` | Zgłaszający akceptuje (`OFFERED→ACCEPTED`), generowany token QR | B3.1/B3.2 |
+| `GET /help-requests/{id}/qr` | Token QR dla zgłaszającego (tylko `ACCEPTED`) | B3.2 |
+| `POST /help-requests/{id}/complete` | Body: `token`; wolontariusz kończy (`ACCEPTED→COMPLETED`) | B3.2 |
+| `POST /help-requests/{id}/cancel` | Anulowanie | B3.1 |
+| `POST /help-requests/{id}/ratings` | Ocena drugiej strony; aktualizuje reputację | B3.3 |
 | `GET /analytics/heatmap?category&status&from&to&cellSizeMeters` | Heksagony + liczności pod mapę cieplną (GeoJSON) – ✅ zrobione | B3.4 |
 | `GET /analytics/summary?category&from&to` | Zliczenia wg statusu, kategorii i priorytetu + wskaźnik realizacji – ✅ zrobione | B3.4 |
 
@@ -130,9 +132,9 @@ Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayeso
 
 ### 6.6a Widoczność szczegółów i flagi ryzyka (Dev 2) – ✅ zrobione
 - ✅ `HelpRequestVisibilityPolicy`: autor zawsze `FULL`; przypisany wolontariusz `FULL` od `ACCEPTED` (`ACCEPTED`/`COMPLETED`/`RATED`); pozostali `PUBLIC` (zamaskowany obszar, bez adresu, dokładnego punktu, zgłaszającego i flag ryzyka). Pole `visibility` w odpowiedzi.
-- ✅ `SCAM_SUSPECTED` → status `UNDER_REVIEW`: znika z `nearby`/`along-route` (filtrują po `OPEN`) i z heatmapy; `GET /{id}` zwraca 404 wszystkim poza autorem.
+- ✅ `SCAM_SUSPECTED` → status `UNDER_REVIEW`: znika z `nearby`/`along-route` (filtrują po `OPEN`) oraz z całej analityki – heatmapy i `summary` (także przy jawnym `?status=UNDER_REVIEW`, klucz nie pojawia się w `byStatus`); `GET /{id}` zwraca 404 wszystkim poza autorem.
 - ✅ `MEDICAL_EMERGENCY` → zgłoszenie zostaje `OPEN`, flaga w `riskFlags` (front pokazuje komunikat o 112).
-- ✅ `PERSONAL_DATA` → w widoku publicznym `description = null`.
+- ✅ `PERSONAL_DATA` → we wszystkich widokach publicznych (szczegóły, `nearby`, `along-route`) `title` zastąpiony ogólnym tytułem z kategorii, `description = null` (`PublicTextPolicy`). Autor widzi oryginał.
 - ✅ `CITY_ADMIN` nie tworzy zgłoszeń (403).
 - ✅ `StatusConstraintInitializer` odtwarza przy starcie `CHECK` na `help_requests.status` z enuma (`ddl-auto=update` go nie aktualizuje) – nowe statusy działają bez resetu bazy.
 - ⏳ Ręczny przegląd zgłoszeń `UNDER_REVIEW` (np. przez `CITY_ADMIN`) – poza zakresem MVP.
@@ -201,12 +203,12 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 ## 9. Definicja ukończenia (backend)
 
 - [ ] Cały scenariusz demo przechodzi przez API bez ręcznych zmian w bazie.
-- [ ] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny).
+- [x] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny). – `HelpRequestControllerTest`: szczegóły `PUBLIC` i lista `nearby` (surowy JSON przeszukiwany pod kątem adresu, nazwiska, telefonu i dokładnych współrzędnych); `along-route` używa tego samego mapowania co `nearby`.
 - [ ] Wszystkie geometrie w SRID 4326; zapytania odległościowe w metrach (`geography`).
 - [x] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
 - [x] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
 - [ ] Testy: zapytania geo (Testcontainers), maszyna stanów, token QR (użycie wtórne, wygaśnięcie), maskowanie.
-- [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu.
+- [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu. – są: `health`, `users`, `classify`, `help-requests` (nearby, along-route), `help-requests-crud` (create, details), `analytics`; brakuje endpointów etapu 3.
 
 ## 10. Ryzyka
 
@@ -216,4 +218,6 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 | Niezgodność bibliotek JTS/Jackson z Jackson 3 | Własne DTO GeoJSON, brak zależności od zewnętrznych modułów serializacji. |
 | Wyścig przy przejmowaniu zlecenia | `@Version` + 409; test współbieżności. |
 | Odtworzenie adresu z maskowanych punktów | Deterministyczne maskowanie, brak adresu poza `ACCEPTED+`, brak wysokiej precyzji w żadnym publicznym polu. |
+| Zgłoszenie oznaczone przez AI jako scam utyka w `UNDER_REVIEW` (brak ręcznego przeglądu w MVP) – np. fałszywy alarm w scenariuszu demo | Sprawdzić treść zgłoszeń demo na `POST /requests/classify` przed pokazem; w razie potrzeby endpoint przeglądu dla `CITY_ADMIN` (`UNDER_REVIEW → OPEN/CANCELLED`). |
+| Test `AnalyticsRepositoryTest` działa na lokalnej bazie deweloperskiej; skala heksagonów zależy od średniej szerokości **wszystkich** zgłoszeń, więc dodatkowe lokalne dane mogą zmienić wynik `largerCellsMergeDistantRequests` | Uruchamiać na bazie z samym seedem albo przenieść test na Testcontainers / liczyć skalę tylko z przefiltrowanych wierszy (Dev 3). |
 | Zakres większy niż czas | Priorytet: B2.1 → B2.4 → B3.1/B3.2 → B2.3 → B3.3 → B3.4; ocena i heatmapa mogą być uproszczone. |

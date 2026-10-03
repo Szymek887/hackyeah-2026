@@ -3,7 +3,6 @@ package com.telecrazy.hackyeah2026backend.service;
 import com.telecrazy.hackyeah2026backend.ai.ClassificationInput;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassificationService;
-import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
 import com.telecrazy.hackyeah2026backend.api.CreateHelpRequestRequest;
 import com.telecrazy.hackyeah2026backend.api.FullHelpRequestResponse;
 import com.telecrazy.hackyeah2026backend.api.GeoJsonPoint;
@@ -119,11 +118,10 @@ public class HelpRequestDetailsService {
     }
 
     private PublicHelpRequestDetailsResponse toPublicResponse(HelpRequest request) {
-        boolean descriptionHasPersonalData = request.getRiskFlags().contains(RiskFlag.PERSONAL_DATA);
         return new PublicHelpRequestDetailsResponse(
                 request.getId(),
-                request.getTitle(),
-                descriptionHasPersonalData ? null : request.getDescription(),
+                PublicTextPolicy.publicTitle(request),
+                PublicTextPolicy.publicDescription(request),
                 request.getCategory(),
                 request.getPriority(),
                 request.getStatus(),

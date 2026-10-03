@@ -118,6 +118,20 @@ class AnalyticsRepositoryTest {
         assertThat(summary.byPriority()).containsEntry(1, 2L).containsEntry(2, 2L).containsEntry(3, 1L);
     }
 
+    @Test
+    void requestsUnderReviewAreNeverCounted() {
+        save(HelpCategory.GROCERIES, 3, HelpRequestStatus.UNDER_REVIEW, 19.9373, 50.0614);
+
+        SummaryResponse summary = analyticsService.summary(IN_WINDOW);
+        assertThat(summary.total()).isEqualTo(5);
+        assertThat(summary.fulfillmentRate()).isEqualTo(0.25);
+        assertThat(summary.byStatus()).doesNotContainKey(HelpRequestStatus.UNDER_REVIEW);
+
+        AnalyticsFilter underReviewOnly = new AnalyticsFilter(
+                null, Set.of(HelpRequestStatus.UNDER_REVIEW), WINDOW_START, WINDOW_END);
+        assertThat(analyticsService.heatmap(underReviewOnly, 500).totalRequests()).isZero();
+    }
+
     private void save(HelpCategory category, int priority, HelpRequestStatus status, double lng, double lat) {
         HelpRequest request = new HelpRequest(
                 requester, "Test", "Test", category, priority,

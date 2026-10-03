@@ -98,11 +98,15 @@ public class AnalyticsService {
 
     static SummaryResponse toSummary(List<SummaryRow> rows) {
         Map<HelpRequestStatus, Long> byStatus = zeroCounts(HelpRequestStatus.class);
+        byStatus.keySet().removeAll(HelpRequestStatus.HIDDEN_FROM_PUBLIC);
         Map<HelpCategory, Long> byCategory = zeroCounts(HelpCategory.class);
         Map<Integer, Long> byPriority = new TreeMap<>(Map.of(1, 0L, 2, 0L, 3, 0L));
         long total = 0;
 
         for (SummaryRow row : rows) {
+            if (row.status().isHiddenFromPublic()) {
+                continue;
+            }
             byStatus.merge(row.status(), row.count(), Long::sum);
             byCategory.merge(row.category(), row.count(), Long::sum);
             byPriority.merge(row.priority(), row.count(), Long::sum);

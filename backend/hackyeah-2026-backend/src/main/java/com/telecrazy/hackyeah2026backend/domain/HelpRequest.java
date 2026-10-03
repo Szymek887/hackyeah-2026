@@ -21,6 +21,7 @@ import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.ColumnDefault;
 import org.locationtech.jts.geom.Point;
 
@@ -72,11 +73,13 @@ public class HelpRequest {
     private ClassificationSource classificationSource;
 
     @ElementCollection
+    @BatchSize(size = 50)
     @CollectionTable(name = "help_request_tags", joinColumns = @JoinColumn(name = "help_request_id"))
     @Column(name = "tag", nullable = false, length = 60)
     private List<String> tags = new ArrayList<>();
 
     @ElementCollection
+    @BatchSize(size = 50)
     @CollectionTable(name = "help_request_risk_flags", joinColumns = @JoinColumn(name = "help_request_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "risk_flag", nullable = false)

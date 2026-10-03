@@ -9,7 +9,8 @@ import java.util.List;
 
 /**
  * Public help request details: masked area only, no address, exact location or requester identity.
- * {@code description} is {@code null} when the classifier detected personal data in it.
+ * When the classifier detected personal data, {@code title} is a generic one built from the category
+ * and {@code description} is {@code null}.
  */
 public record PublicHelpRequestDetailsResponse(
         Long id,
