@@ -1,6 +1,7 @@
+import { router } from 'expo-router';
 import MapView, { Callout, Marker, Polyline } from 'react-native-maps';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorMessage } from '@/api/errors';
@@ -40,6 +41,7 @@ export function RoutePlannerScreen() {
   const [editedEndpoint, setEditedEndpoint] = useState<EditedEndpoint>('start');
   const [start, setStart] = useState<RouteCoordinate>(DEFAULT_START);
   const [end, setEnd] = useState<RouteCoordinate>(DEFAULT_END);
+  const [isRouteConfirmed, setIsRouteConfirmed] = useState(false);
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
   );
@@ -74,6 +76,7 @@ export function RoutePlannerScreen() {
   }, [drivingRoute, route]);
 
   const updateEndpoint = (endpoint: EditedEndpoint, coordinate: RouteCoordinate) => {
+    setIsRouteConfirmed(false);
     if (endpoint === 'start') setStart(coordinate);
     else setEnd(coordinate);
   };
@@ -82,6 +85,7 @@ export function RoutePlannerScreen() {
     setStart(DEFAULT_START);
     setEnd(DEFAULT_END);
     setEditedEndpoint('start');
+    setIsRouteConfirmed(false);
   };
 
   return (
@@ -187,6 +191,11 @@ export function RoutePlannerScreen() {
             </ThemedText>
             <Button title="Resetuj" variant="ghost" inline onPress={resetRoute} />
           </View>
+          <Button
+            title={isRouteConfirmed ? 'Trasa zatwierdzona' : 'Zatwierdź trasę'}
+            disabled={isRouting || isPending || isRouteConfirmed}
+            onPress={() => setIsRouteConfirmed(true)}
+          />
           {drivingRoute && (
             <ThemedText type="small" themeColor="textSecondary">
               Trasa drogami: {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
@@ -206,6 +215,45 @@ export function RoutePlannerScreen() {
           )}
           {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
           {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
+          {isRouteConfirmed && (
+            <View style={styles.results}>
+              <ThemedText type="smallBold">Komu możesz pomóc</ThemedText>
+              {matchingRequests.length > 0 ? (
+                <ScrollView
+                  style={styles.requestList}
+                  contentContainerStyle={styles.requestListContent}>
+                  {matchingRequests.map((request) => (
+                    <Pressable
+                      key={request.id}
+                      onPress={() =>
+                        router.push({ pathname: '/request/[id]', params: { id: request.id } })
+                      }
+                      style={({ pressed }) => [styles.requestRow, pressed && styles.pressed]}>
+                      <View
+                        style={[
+                          styles.requestDot,
+                          {
+                            backgroundColor: CategoryColors[request.category].color,
+                            borderColor: PriorityColors[request.priority].color,
+                          },
+                        ]}
+                      />
+                      <View style={styles.requestText}>
+                        <ThemedText type="smallBold">{request.title}</ThemedText>
+                        <ThemedText type="caption" themeColor="textSecondary">
+                          Priorytet {request.priority}
+                        </ThemedText>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Brak zgłoszeń przy tej trasie. Przesuń start albo cel i spróbuj ponownie.
+                </ThemedText>
+              )}
+            </View>
+          )}
         </ThemedView>
       </View>
     </ThemedView>
@@ -243,6 +291,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  results: {
+    gap: Spacing.two,
+  },
+  requestList: {
+    maxHeight: 180,
+  },
+  requestListContent: {
+    gap: Spacing.two,
+  },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  requestDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
+  },
+  requestText: {
+    flex: 1,
+    gap: Spacing.half,
   },
   clusterMarker: {
     width: 30,

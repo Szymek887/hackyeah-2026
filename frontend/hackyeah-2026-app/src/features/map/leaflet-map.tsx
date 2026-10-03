@@ -140,6 +140,7 @@ export function LeafletMap({
 
         endpointEntries.forEach(([endpoint, coordinate, label, color]) => {
           const marker = L.marker([coordinate.latitude, coordinate.longitude], {
+            bubblingMouseEvents: false,
             draggable: true,
             icon: L.divIcon({
               className: '',
@@ -178,6 +179,7 @@ export function LeafletMap({
       requestClusters.forEach((cluster) => {
         if (cluster.requests.length > 1) {
           const marker = L.marker([cluster.coordinate.latitude, cluster.coordinate.longitude], {
+            bubblingMouseEvents: false,
             icon: L.divIcon({
               className: '',
               html: `<div style="width:30px;height:30px;border-radius:15px;background:${Colors.light.primary};color:${Colors.light.onPrimary};border:2px solid ${Colors.light.backgroundElement};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.24)">${cluster.requests.length}</div>`,
@@ -201,6 +203,7 @@ export function LeafletMap({
         const priorityColor = PriorityColors[request.priority].color;
 
         const marker = L.circleMarker([coordinate.latitude, coordinate.longitude], {
+          bubblingMouseEvents: false,
           color: priorityColor,
           fillColor: categoryColor,
           fillOpacity: 1,
