@@ -11,10 +11,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 import org.locationtech.jts.geom.Point;
 
 import java.time.Instant;
@@ -68,8 +71,19 @@ public class HelpRequest {
 
     private String apartmentNumber;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "volunteer_id")
+    private AppUser volunteer;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    private Instant updatedAt;
+
+    @Version
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private long version;
 
     public HelpRequest(
             AppUser requester,
@@ -93,5 +107,11 @@ public class HelpRequest {
         this.buildingNumber = buildingNumber;
         this.apartmentNumber = apartmentNumber;
         this.createdAt = Instant.now();
+        this.updatedAt = this.createdAt;
+    }
+
+    @PreUpdate
+    void touchUpdatedAt() {
+        this.updatedAt = Instant.now();
     }
 }
