@@ -48,7 +48,7 @@ com.telecrazy.hackyeah2026backend
 
 **User** – `id`, `displayName`, `role` (`REQUESTER` | `VOLUNTEER`), `identityVerified` (bool), `hasSpecialNeeds` (bool), `trustScore` (double), `ratingCount`, `createdAt`.
 
-**HelpRequest** – `id`, `requester` (FK), `volunteer` (FK, nullable), `title`, `description`, `category` (`BASIC_NEEDS`, `EQUIPMENT_LOAN`, `HOME_SUPPORT`, `SOCIAL`), `priority` (1–3), `tags` (lista), `riskFlags` (lista), `status`, `location` (`Point`, 4326, dokładny), `addressDetails` (ulica, nr lokalu – tylko dla `ACCEPTED+`), `specialNeeds` (bool), `createdAt`, `updatedAt`. Indeks GiST na `location`.
+**HelpRequest** – `id`, `requester` (FK), `volunteer` (FK, nullable), `title`, `description`, `category` (`MEDICINE`, `GROCERIES`, `EQUIPMENT_LOAN`, `HOME_SUPPORT`, `SOCIAL` – enum `HelpCategory`, wspólny dla encji i klasyfikatora AI), `priority` (1–3), `tags` (lista), `riskFlags` (lista), `status`, `location` (`Point`, 4326, dokładny), `addressDetails` (ulica, nr lokalu – tylko dla `ACCEPTED+`), `specialNeeds` (bool), `createdAt`, `updatedAt`. Indeks GiST na `location`.
 
 **Handshake / QR** – `id`, `request` (FK), `token`, `expiresAt`, `usedAt`.
 
@@ -87,7 +87,7 @@ Zasady: współrzędne spoza zakresu → **400**; brak zgłoszenia → **404**; 
   "type": "Feature",
   "geometry": { "type": "Point", "coordinates": [19.9449, 50.0647] },
   "properties": {
-    "id": 42, "category": "BASIC_NEEDS", "priority": 1,
+    "id": 42, "category": "MEDICINE", "priority": 1,
     "tags": ["leki"], "status": "OPEN", "areaRadiusMeters": 300
   }
 }
@@ -126,9 +126,16 @@ Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayeso
 - ✅ Flagi ryzyka: `SCAM_SUSPECTED`, `MEDICAL_EMERGENCY`, `PERSONAL_DATA`, `INAPPROPRIATE_CONTENT`.
 - ✅ **Fallback:** `KeywordRequestClassifier` (polskie rdzenie słów) przy wyłączonym AI (`AI_ENABLED=false`), błędzie połączenia, timeoucie (15 s) lub błędnym JSON-ie. Pole `source` = `LLM` / `FALLBACK`.
 - ✅ Konfiguracja `app.ai.*` (`OLLAMA_URL`, `OLLAMA_MODEL`, timeout, `keep-alive` 30 min), testy jednostkowe, żądania `http/classify.http`.
+- ✅ Test na prawdziwym modelu (`qwen2.5:7b`, Ollama 0.35): wszystkie przypadki z `http/classify.http` klasyfikowane przez LLM, ~2–2,5 s na zapytanie.
+- ✅ **Poprawki po teście na modelu:**
+  - Klasyfikator używa `domain.HelpCategory` (`MEDICINE`, `GROCERIES`, …) zamiast osobnego `RequestCategory` (usunięty) – wynik można zapisać wprost w `HelpRequest`.
+  - Prompt: kategoria wybierana według faktycznej potrzeby także przy flagach ryzyka (objawy/nagły wypadek → `MEDICINE`, prośba o pieniądze → potrzeba, której dotyczy, dokumenty → `HOME_SUPPORT`, `SOCIAL` tylko dla towarzystwa); doprecyzowane priorytety (brak jedzenia/zakupy na jutro → 2); tagi w mianowniku z przykładami; dane osobowe same w sobie nie są `INAPPROPRIATE_CONTENT`.
+  - Walidacja tagów: tylko polskie litery, maks. 3 słowa i 30 znaków; tagi z cyframi odrzucane (ochrona przed wyciekiem PESEL/telefonu). Literówek złożonych z polskich liter (np. „pomoć”) nie da się tak wykryć.
+  - Rozgrzewka modelu (`OllamaWarmUp`): po starcie aplikacji w tle wykonywana jest przykładowa klasyfikacja, co ładuje model i cache promptu – pierwsze zapytanie ~2,4 s zamiast ~8,5 s. Błąd rozgrzewki tylko logowany.
+  - Fallback: `BASIC_NEEDS` rozdzielone na `MEDICINE` / `GROCERIES`, nagły wypadek → `MEDICINE`; rdzenie słów dopasowywane tylko na początku wyrazu (wcześniej „lek” pasowało do „mleka”); „pożycz” ma pierwszeństwo przed słowami o naprawach.
 - ⏳ Podpięcie klasyfikacji do `POST /requests` (po encji `HelpRequest`, Dev 1/2).
 - ⏳ Podejrzenie scamu → zgłoszenie nie pojawia się publicznie do ręcznego przeglądu (lub oznaczone) – wymaga `POST /requests`.
-- ⏳ Frontend (`AiClassification` w `types.ts`) oczekuje pola `suspicious: boolean` – do uzgodnienia (dodać w backendzie lub używać `riskFlags`).
+- ⏳ Frontend (`types.ts`) oczekuje kategorii `BASIC_NEEDS` i pola `suspicious: boolean` – do zmiany po stronie frontu (`MEDICINE`/`GROCERIES`; `suspicious` = `riskFlags` zawiera `SCAM_SUSPECTED`) lub dodania pola w backendzie.
 
 ### 6.8 Analityka (Dev 3)
 Heatmapa: grupowanie po siatce (`ST_SnapToGrid` lub `ST_ClusterDBSCAN`) i kategorii, zwrot środków komórek + liczności (dane już zagregowane, bez danych osobowych). Podsumowanie: liczba zgłoszeń wg kategorii/statusu i liczba zrealizowanych pomocy per dzielnica.
@@ -148,7 +155,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 ### Etap 1 (0–6 h)
 - **Dev 1:** dodać `hibernate-spatial`; encje `User`, `HelpRequest`, `Rating`; `GeometryFactory` SRID 4326; init `postgis`; DTO GeoJSON (**B1.2, B1.4**).
 - **Dev 2:** ✅ mock autentykacji (`X-User-Id` → `@CurrentUser AppUser`, brak/nieznany użytkownik → 401), ✅ `GET /users/me`, ✅ `@RestControllerAdvice` z `ProblemDetail`, ✅ pola encji pod maszynę stanów; ⏳ `RequestStateService` (przeniesione do etapu 3).
-- **Dev 3:** ✅ prototyp promptu, ✅ `OllamaClient`; ⏳ konfiguracja Ollamy lokalnie + test ręczny na prawdziwym modelu.
+- **Dev 3:** ✅ prototyp promptu, ✅ `OllamaClient`, ✅ konfiguracja Ollamy lokalnie + test ręczny na prawdziwym modelu.
 - **Dev 1 (po encjach):** seeder (**B1.3**).
 
 ### Etap 2 (6–18 h)
@@ -170,7 +177,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 - [ ] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny).
 - [ ] Wszystkie geometrie w SRID 4326; zapytania odległościowe w metrach (`geography`).
 - [x] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
-- [ ] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
+- [x] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
 - [ ] Testy: zapytania geo (Testcontainers), maszyna stanów, token QR (użycie wtórne, wygaśnięcie), maskowanie.
 - [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu.
 
