@@ -91,6 +91,10 @@ public class AnalyticsRepository {
 
     private static String where(AnalyticsFilter filter, MapSqlParameterSource params) {
         List<String> conditions = new ArrayList<>();
+        // Public endpoints: requests hidden from the public (e.g. suspected scams) are never counted,
+        // even when such a status is requested explicitly.
+        conditions.add("r.status NOT IN (:hiddenStatuses)");
+        params.addValue("hiddenStatuses", HelpRequestStatus.HIDDEN_FROM_PUBLIC.stream().map(Enum::name).toList());
         if (filter.category() != null) {
             conditions.add("r.category = :category");
             params.addValue("category", filter.category().name());
@@ -107,6 +111,6 @@ public class AnalyticsRepository {
             conditions.add("r.created_at < :to");
             params.addValue("to", Timestamp.from(filter.to()));
         }
-        return conditions.isEmpty() ? "" : "WHERE " + String.join(" AND ", conditions);
+        return "WHERE " + String.join(" AND ", conditions);
     }
 }

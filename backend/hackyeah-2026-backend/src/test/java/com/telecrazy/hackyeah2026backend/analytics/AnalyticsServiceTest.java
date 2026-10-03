@@ -62,6 +62,7 @@ class AnalyticsServiceTest {
         verify(repository).heatmap(filter.capture(), any(Double.class));
         assertThat(filter.getValue().statuses())
                 .doesNotContain(HelpRequestStatus.CANCELLED)
+                .doesNotContain(HelpRequestStatus.UNDER_REVIEW)
                 .contains(HelpRequestStatus.OPEN, HelpRequestStatus.COMPLETED);
     }
 
@@ -72,6 +73,26 @@ class AnalyticsServiceTest {
         ArgumentCaptor<AnalyticsFilter> filter = ArgumentCaptor.forClass(AnalyticsFilter.class);
         verify(repository).heatmap(filter.capture(), any(Double.class));
         assertThat(filter.getValue().statuses()).containsExactly(HelpRequestStatus.CANCELLED);
+    }
+
+    @Test
+    void heatmapDropsUnderReviewFromExplicitStatuses() {
+        service.heatmap(new AnalyticsFilter(null, Set.of(HelpRequestStatus.OPEN, HelpRequestStatus.UNDER_REVIEW), null, null), 500);
+
+        ArgumentCaptor<AnalyticsFilter> filter = ArgumentCaptor.forClass(AnalyticsFilter.class);
+        verify(repository).heatmap(filter.capture(), any(Double.class));
+        assertThat(filter.getValue().statuses()).containsExactly(HelpRequestStatus.OPEN);
+    }
+
+    @Test
+    void heatmapReturnsEmptyWhenOnlyUnderReviewRequested() {
+        HeatmapResponse response = service.heatmap(
+                new AnalyticsFilter(null, Set.of(HelpRequestStatus.UNDER_REVIEW), null, null),
+                500
+        );
+
+        assertThat(response.totalRequests()).isZero();
+        assertThat(response.features()).isEmpty();
     }
 
     @Test
@@ -103,12 +124,26 @@ class AnalyticsServiceTest {
         assertThat(summary.fulfilled()).isEqualTo(4);
         assertThat(summary.cancelled()).isEqualTo(2);
         assertThat(summary.fulfillmentRate()).isEqualTo(0.5);
-        assertThat(summary.byStatus()).hasSize(HelpRequestStatus.values().length)
+        assertThat(summary.byStatus())
+                .hasSize(HelpRequestStatus.values().length - HelpRequestStatus.HIDDEN_FROM_PUBLIC.size())
                 .containsEntry(HelpRequestStatus.OFFERED, 0L);
         assertThat(summary.byCategory()).hasSize(HelpCategory.values().length)
                 .containsEntry(HelpCategory.MEDICINE, 4L)
                 .containsEntry(HelpCategory.EQUIPMENT_LOAN, 0L);
         assertThat(summary.byPriority()).containsEntry(1, 4L).containsEntry(2, 2L).containsEntry(3, 4L);
+    }
+
+    @Test
+    void summaryNeverExposesRequestsHiddenFromPublic() {
+        SummaryResponse summary = AnalyticsService.toSummary(List.of(
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.COMPLETED, 2, 1),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.UNDER_REVIEW, 3, 5)
+        ));
+
+        assertThat(summary.total()).isEqualTo(1);
+        assertThat(summary.fulfillmentRate()).isEqualTo(1.0);
+        assertThat(summary.byStatus()).doesNotContainKey(HelpRequestStatus.UNDER_REVIEW);
+        assertThat(summary.byCategory()).containsEntry(HelpCategory.GROCERIES, 1L);
     }
 
     @Test

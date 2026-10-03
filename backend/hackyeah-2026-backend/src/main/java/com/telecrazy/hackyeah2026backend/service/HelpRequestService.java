@@ -6,6 +6,7 @@ import com.telecrazy.hackyeah2026backend.api.RouteSearchRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.repository.HelpRequestRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.List;
@@ -29,6 +30,7 @@ public class HelpRequestService {
         this.locationObfuscationService = locationObfuscationService;
     }
 
+    @Transactional(readOnly = true)
     public List<PublicHelpRequestResponse> findNearby(double lat, double lng, double radiusKm) {
         validateCoordinates(lat, lng);
         if (radiusKm <= 0 || radiusKm > 25) {
@@ -41,6 +43,7 @@ public class HelpRequestService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<PublicHelpRequestResponse> findAlongRoute(RouteSearchRequest request) {
         validateRouteRequest(request);
 
@@ -62,7 +65,7 @@ public class HelpRequestService {
     private PublicHelpRequestResponse toPublicResponse(HelpRequest request) {
         return new PublicHelpRequestResponse(
                 request.getId(),
-                request.getTitle(),
+                PublicTextPolicy.publicTitle(request),
                 request.getCategory(),
                 request.getPriority(),
                 request.getStatus(),

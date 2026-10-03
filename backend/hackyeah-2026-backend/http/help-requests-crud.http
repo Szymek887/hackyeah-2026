@@ -1,0 +1,124 @@
+### Create help request as requester "Anna K." (id 1, has special needs -> priority bumped)
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: 1
+
+{
+  "title": "Potrzebuję leków",
+  "description": "Skończyły mi się leki na serce, nie mam jak wyjść z domu. Recepta jest w aplikacji.",
+  "lat": 52.22977,
+  "lng": 21.01178,
+  "street": "Marszałkowska",
+  "buildingNumber": "84",
+  "apartmentNumber": "12"
+}
+
+> {%
+    client.test("Request created with full details", function () {
+        client.assert(response.status === 201, "Expected status 201");
+        client.assert(response.headers.valueOf("Location").endsWith("/api/help-requests/" + response.body.id), "Expected Location header");
+        client.assert(response.body.visibility === "FULL", "Expected FULL visibility");
+        client.assert(response.body.street === "Marszałkowska", "Author sees the address");
+    });
+    client.global.set("helpRequestId", response.body.id);
+%}
+
+### Read as the author -> FULL
+GET {{host}}/api/help-requests/{{helpRequestId}}
+X-User-Id: 1
+
+> {%
+    client.test("Author sees full details", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.visibility === "FULL", "Expected FULL visibility");
+    });
+%}
+
+### Read as volunteer "Kuba W." (id 4) before acceptance -> PUBLIC, no address
+GET {{host}}/api/help-requests/{{helpRequestId}}
+X-User-Id: 4
+
+> {%
+    client.test("Others see only masked public details", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.visibility === "PUBLIC", "Expected PUBLIC visibility");
+        client.assert(response.body.street === undefined, "Street must not be exposed");
+        client.assert(response.body.apartmentNumber === undefined, "Apartment must not be exposed");
+        client.assert(response.body.location === undefined, "Exact location must not be exposed");
+        client.assert(response.body.maskedArea.type === "Polygon", "Expected masked area");
+    });
+%}
+
+### Suspected scam -> UNDER_REVIEW, hidden from others
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: 2
+
+{
+  "title": "Pilnie pieniądze",
+  "description": "Proszę o przelew 500 zł na konto albo kod BLIK, oddam jutro.",
+  "lat": 52.23,
+  "lng": 21.01,
+  "street": "Złota",
+  "buildingNumber": "1"
+}
+
+> {%
+    client.test("Scam goes to review", function () {
+        client.assert(response.status === 201, "Expected status 201");
+        client.assert(response.body.status === "UNDER_REVIEW", "Expected UNDER_REVIEW");
+    });
+    client.global.set("scamRequestId", response.body.id);
+%}
+
+### Scam request is not visible to other users
+GET {{host}}/api/help-requests/{{scamRequestId}}
+X-User-Id: 4
+
+> {%
+    client.test("Request under review returns 404 for others", function () {
+        client.assert(response.status === 404, "Expected status 404");
+    });
+%}
+
+### City admin cannot create help requests
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: 5
+
+{
+  "title": "Test",
+  "description": "Test",
+  "lat": 52.23,
+  "lng": 21.01,
+  "street": "Złota",
+  "buildingNumber": "1"
+}
+
+> {%
+    client.test("City admin gets 403", function () {
+        client.assert(response.status === 403, "Expected status 403");
+    });
+%}
+
+### Validation errors
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: 1
+
+{
+  "title": "",
+  "description": "x",
+  "lat": 95,
+  "street": "Złota",
+  "buildingNumber": "1"
+}
+
+> {%
+    client.test("Invalid body returns 400 with per-field errors", function () {
+        client.assert(response.status === 400, "Expected status 400");
+        client.assert(response.body.errors.title !== undefined, "Expected title error");
+        client.assert(response.body.errors.lat !== undefined, "Expected lat error");
+        client.assert(response.body.errors.lng !== undefined, "Expected lng error");
+    });
+%}

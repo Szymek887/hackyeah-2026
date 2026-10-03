@@ -28,7 +28,8 @@ public class AnalyticsController {
     /**
      * Requests grouped into hexagons, as a GeoJSON FeatureCollection.
      *
-     * @param status         repeatable; defaults to every status except {@code CANCELLED}
+     * @param status         repeatable; defaults to statuses visible on the public map (excluding
+     *                       {@code CANCELLED} and {@code UNDER_REVIEW})
      * @param cellSizeMeters hexagon side length, 100–5000
      */
     @GetMapping("/heatmap")
