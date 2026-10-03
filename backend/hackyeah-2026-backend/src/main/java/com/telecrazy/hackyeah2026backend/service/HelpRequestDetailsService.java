@@ -5,10 +5,7 @@ import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassificationService;
 import com.telecrazy.hackyeah2026backend.api.CreateHelpRequestRequest;
 import com.telecrazy.hackyeah2026backend.api.FullHelpRequestResponse;
-import com.telecrazy.hackyeah2026backend.api.GeoJsonPoint;
 import com.telecrazy.hackyeah2026backend.api.HelpRequestView;
-import com.telecrazy.hackyeah2026backend.api.PublicHelpRequestDetailsResponse;
-import com.telecrazy.hackyeah2026backend.api.UserSummary;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
@@ -24,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Creating help requests and reading their details with role- and status-dependent visibility.
@@ -36,16 +32,16 @@ public class HelpRequestDetailsService {
 
     private final HelpRequestRepository helpRequestRepository;
     private final RequestClassificationService classificationService;
-    private final LocationObfuscationService locationObfuscationService;
+    private final HelpRequestViewMapper viewMapper;
 
     public HelpRequestDetailsService(
             HelpRequestRepository helpRequestRepository,
             RequestClassificationService classificationService,
-            LocationObfuscationService locationObfuscationService
+            HelpRequestViewMapper viewMapper
     ) {
         this.helpRequestRepository = helpRequestRepository;
         this.classificationService = classificationService;
-        this.locationObfuscationService = locationObfuscationService;
+        this.viewMapper = viewMapper;
     }
 
     /**
@@ -79,7 +75,7 @@ public class HelpRequestDetailsService {
             request.setStatus(HelpRequestStatus.UNDER_REVIEW);
         }
 
-        return toFullResponse(helpRequestRepository.save(request));
+        return viewMapper.toFullResponse(helpRequestRepository.save(request), requester);
     }
 
     @Transactional(readOnly = true)
@@ -88,48 +84,7 @@ public class HelpRequestDetailsService {
                 .filter(found -> HelpRequestVisibilityPolicy.canSee(found, user))
                 .orElseThrow(() -> new NotFoundException("Help request " + id + " not found"));
 
-        if (HelpRequestVisibilityPolicy.canSeeFullDetails(request, user)) {
-            return toFullResponse(request);
-        }
-        return toPublicResponse(request);
-    }
-
-    private FullHelpRequestResponse toFullResponse(HelpRequest request) {
-        return new FullHelpRequestResponse(
-                request.getId(),
-                request.getTitle(),
-                request.getDescription(),
-                request.getCategory(),
-                request.getPriority(),
-                request.getAiPriority(),
-                request.getStatus(),
-                List.copyOf(request.getTags()),
-                Set.copyOf(request.getRiskFlags()),
-                request.getClassificationSource(),
-                GeoJsonPoint.of(request.getLocation().getX(), request.getLocation().getY()),
-                request.getStreet(),
-                request.getBuildingNumber(),
-                request.getApartmentNumber(),
-                UserSummary.from(request.getRequester()),
-                UserSummary.from(request.getVolunteer()),
-                request.getCreatedAt(),
-                request.getUpdatedAt()
-        );
-    }
-
-    private PublicHelpRequestDetailsResponse toPublicResponse(HelpRequest request) {
-        return new PublicHelpRequestDetailsResponse(
-                request.getId(),
-                PublicTextPolicy.publicTitle(request),
-                PublicTextPolicy.publicDescription(request),
-                request.getCategory(),
-                request.getPriority(),
-                request.getStatus(),
-                List.copyOf(request.getTags()),
-                locationObfuscationService.approximate(request.getLocation()),
-                locationObfuscationService.maskedArea(request.getLocation()),
-                request.getCreatedAt()
-        );
+        return viewMapper.toView(request, user);
     }
 
     private static String blankToNull(String value) {

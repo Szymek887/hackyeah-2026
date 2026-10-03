@@ -14,6 +14,7 @@ import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
 import com.telecrazy.hackyeah2026backend.repository.HelpRequestRepository;
 import com.telecrazy.hackyeah2026backend.service.HelpRequestDetailsService;
 import com.telecrazy.hackyeah2026backend.service.HelpRequestService;
+import com.telecrazy.hackyeah2026backend.service.HelpRequestViewMapper;
 import com.telecrazy.hackyeah2026backend.service.LocationObfuscationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         WebConfig.class,
         HelpRequestService.class,
         HelpRequestDetailsService.class,
+        HelpRequestViewMapper.class,
         LocationObfuscationService.class
 })
 class HelpRequestControllerTest {

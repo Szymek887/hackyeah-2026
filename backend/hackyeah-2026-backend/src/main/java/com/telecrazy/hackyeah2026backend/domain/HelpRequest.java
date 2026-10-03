@@ -104,6 +104,14 @@ public class HelpRequest {
     @JoinColumn(name = "volunteer_id")
     private AppUser volunteer;
 
+    /** Single-use QR token shown by the requester and scanned by the volunteer to complete the request. */
+    @Column(length = 64)
+    private String handoffToken;
+
+    private Instant handoffTokenExpiresAt;
+
+    private Instant handoffTokenUsedAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
