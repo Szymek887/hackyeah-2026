@@ -39,3 +39,13 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Project conventions (PoDrodze)
+
+Team rules live in `../start.md`. In short:
+
+- Screens in `src/app/` stay thin; screen logic and components go to `src/features/<area>/`.
+- Data access only through `src/api/*.ts` functions (mock/real switch via `EXPO_PUBLIC_USE_MOCKS`) and TanStack Query hooks in `src/features/*/hooks.ts`.
+- `src/api/types.ts` is the backend contract: GeoJSON with `[lng, lat]` (WGS84). List payloads never contain exact location or address.
+- Use `ThemedText`/`ThemedView`, `src/components/ui/*` and tokens from `src/constants/theme.ts`; no hard-coded colors.
+- Run `npm run check` before declaring a task done.
