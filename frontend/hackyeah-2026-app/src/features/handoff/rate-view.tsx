@@ -102,11 +102,9 @@ export function RateView({ requestId }: RateViewProps) {
             )}
           </ThemedView>
 
-          <Button title="Przejdź do panelu miasta" onPress={() => router.replace('/dashboard')} />
           <Button
-            title="Wróć do listy zgłoszeń"
-            variant="secondary"
-            onPress={() => router.replace('/(tabs)/requests')}
+            title="Wróć do moich zadań"
+            onPress={() => router.replace({ pathname: '/tasks', params: { tab: 'done' } })}
           />
         </ThemedView>
       </Screen>

@@ -11,7 +11,7 @@ import {
   offerHelp,
   rejectOffer,
 } from '@/api/requests';
-import type { AlongRouteQuery, HelpRequestView, NearbyQuery } from '@/api/types';
+import type { AlongRouteQuery, HelpRequestView, NearbyQuery, RequestStatus } from '@/api/types';
 
 export const requestKeys = {
   all: ['requests'] as const,
@@ -35,11 +35,22 @@ export function useRequestsAlongRoute(query: AlongRouteQuery) {
   });
 }
 
+/**
+ * While a request waits for the other side (offer, acceptance, QR scan) we poll, so e.g. the
+ * requester showing the QR code sees "completed" a moment after the volunteer scans it.
+ * TODO(backend): replace with push / SSE when available.
+ */
+const LIVE_POLL_MS = 4000;
+const WAITING_STATUSES: RequestStatus[] = ['OPEN', 'OFFERED', 'ACCEPTED'];
+const isWaiting = (view: HelpRequestView) => WAITING_STATUSES.includes(view.status);
+
 export function useRequest(id: number) {
   return useQuery({
     queryKey: requestKeys.detail(id),
     queryFn: () => getRequest(id),
     enabled: Number.isInteger(id),
+    refetchInterval: (query) =>
+      query.state.data && isWaiting(query.state.data) ? LIVE_POLL_MS : false,
   });
 }
 
@@ -48,6 +59,7 @@ export function useMyRequests(userId: number) {
   return useQuery({
     queryKey: requestKeys.mine(userId),
     queryFn: getMyRequests,
+    refetchInterval: (query) => (query.state.data?.some(isWaiting) ? LIVE_POLL_MS : false),
   });
 }
 

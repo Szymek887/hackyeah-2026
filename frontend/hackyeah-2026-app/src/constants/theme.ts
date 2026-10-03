@@ -26,6 +26,11 @@ export const Colors = {
     primaryStrong: '#1667B3',
     primarySoft: '#E3F0FD',
     onPrimary: '#FFFFFF',
+    /** "Poproś o pomoc" – the one warm call to action, stands out from the blue UI. */
+    accent: '#D9480F',
+    accentStrong: '#B83C0B',
+    accentSoft: '#FFF0E6',
+    onAccent: '#FFFFFF',
     border: '#D5E5F6',
     danger: '#C93B3B',
     dangerSoft: '#FCEBEB',
@@ -45,6 +50,10 @@ export const Colors = {
     primaryStrong: '#80BEF8',
     primarySoft: '#173353',
     onPrimary: '#0B1522',
+    accent: '#FF8A4C',
+    accentStrong: '#FFA673',
+    accentSoft: '#3A2216',
+    onAccent: '#0B1522',
     border: '#22344A',
     danger: '#F07272',
     dangerSoft: '#3A1D22',
@@ -115,7 +124,6 @@ export const Radius = {
   pill: 999,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 720;
 /** Height of the web top navigation bar. */
 export const WebNavHeight = 64;

@@ -11,8 +11,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { enterScreen } from '@/lib/motion';
 
 const GROUP_LABELS: Record<UserRole, string> = {
-  REQUESTER: 'Osoby potrzebujące',
-  VOLUNTEER: 'Wolontariusze',
+  REQUESTER: 'Potrzebuję pomocy',
+  VOLUNTEER: 'Potrzebuję i pomagam',
   CITY_ADMIN: 'Urząd miasta',
 };
 const ROLES = Object.keys(GROUP_LABELS) as UserRole[];

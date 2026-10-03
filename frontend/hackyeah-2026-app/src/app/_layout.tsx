@@ -15,7 +15,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const theme = useTheme();
 
   if (status === 'restoring') {
@@ -27,6 +27,8 @@ function RootNavigator() {
   }
 
   const signedIn = status === 'signedIn';
+  // The city admin sees only the city panel; residents never see it.
+  const isAdmin = signedIn && user?.role === 'CITY_ADMIN';
 
   return (
     <Stack
@@ -37,7 +39,11 @@ function RootNavigator() {
         animationDuration: 250,
         contentStyle: { backgroundColor: theme.background },
       }}>
-      <Stack.Protected guard={signedIn}>
+      <Stack.Protected guard={isAdmin}>
+        <Stack.Screen name="dashboard" options={{ headerShown: false, animation: 'fade' }} />
+      </Stack.Protected>
+
+      <Stack.Protected guard={signedIn && !isAdmin}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="request/[id]" options={{ title: 'Zgłoszenie' }} />
         <Stack.Screen name="route-planner" options={{ title: 'Moja trasa' }} />

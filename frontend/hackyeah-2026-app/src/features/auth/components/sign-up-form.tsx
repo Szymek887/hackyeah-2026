@@ -12,16 +12,10 @@ import { useAuth } from '@/features/auth/session-context';
 
 const DISPLAY_NAME_MAX = 60;
 
-const ROLE_OPTIONS: { value: CreateUserDto['role']; label: string }[] = [
-  { value: 'REQUESTER', label: 'Potrzebuję pomocy' },
-  { value: 'VOLUNTEER', label: 'Chcę pomagać' },
-];
-
-/** `POST /api/users` – a new, unverified account. */
-export function SignUpForm() {
+/** `POST /api/users` – a new, unverified account. The account type is chosen above the form. */
+export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
   const { signUp } = useAuth();
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<CreateUserDto['role']>('REQUESTER');
   const [specialNeeds, setSpecialNeeds] = useState(false);
   const [nameError, setNameError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
@@ -67,20 +61,6 @@ export function SignUpForm() {
         error={nameError}
       />
 
-      <View style={styles.field}>
-        <ThemedText type="smallBold">Jak chcesz korzystać z PoDrodze?</ThemedText>
-        <View style={styles.chips}>
-          {ROLE_OPTIONS.map((option) => (
-            <Chip
-              key={option.value}
-              label={option.label}
-              selected={role === option.value}
-              onPress={() => setRole(option.value)}
-            />
-          ))}
-        </View>
-      </View>
-
       {role === 'REQUESTER' && (
         <View style={styles.field}>
           <Chip
@@ -120,10 +100,5 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: Spacing.one,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
   },
 });

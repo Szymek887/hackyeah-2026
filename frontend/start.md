@@ -88,6 +88,14 @@ Clean & casual: białe karty na jasnoniebieskim tle, niebieski akcent (`primary`
 - `useSession()` zwraca `{ user: UserProfile, role, signOut, refreshUser, profileDetails }`. `profileDetails` (opis, potrzeby) jest tylko po stronie aplikacji – backend jeszcze tego nie przechowuje.
 - Przepływ: OPEN → „Chcę pomóc” (OFFERED) → przyjęcie lub odrzucenie przez zgłaszającego → ACCEPTED → skan QR (COMPLETED) → oceny obu stron (RATED). Zgłaszający może anulować do momentu ACCEPTED włącznie.
 
+## Role i nawigacja
+
+- Zakładki są w `src/components/navigation/nav-items.ts` (wspólne dla telefonu i webu). „Poproś o pomoc” jest zawsze na środku, w kolorze `accent`.
+- **Potrzebuję pomocy** (`REQUESTER`): 3 duże zakładki – Moje prośby, Poproś o pomoc, Profil. Bez mapy.
+- **Potrzebuję i pomagam** (`VOLUNTEER`): Mapa, Zgłoszenia, Poproś o pomoc, Zadania, Profil. Wolontariusz też może prosić o pomoc (backend na to pozwala, ale nie można zaoferować pomocy przy własnym zgłoszeniu).
+- **Urząd miasta** (`CITY_ADMIN`): osobne logowanie i tylko `app/dashboard.tsx` (bez zakładek). Pozostałe role nie mają dostępu do panelu – pilnuje tego `Stack.Protected` w `app/_layout.tsx`.
+- Odświeżanie: `<Screen scroll onRefresh={…}>` albo `RefreshControl` + `useRefresh` dla `FlatList`. Zgłoszenia czekające na drugą stronę są odpytywane co 4 s (`useRequest`, `useMyRequests`).
+
 ## Do ustalenia z backendem
 
 (Gotowe po stronie backendu: CORS dla wersji webowej i `GET /api/users/demo`.)

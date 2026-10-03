@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, StyleSheet } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { errorMessage } from '@/api/errors';
@@ -8,13 +8,17 @@ import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
 import { RequestCard } from '@/features/requests/components/request-card';
 import { useNearbyRequests } from '@/features/requests/hooks';
+import { useRefresh } from '@/hooks/use-refresh';
+import { useTheme } from '@/hooks/use-theme';
 import { DEFAULT_CENTER } from '@/lib/geo';
 import { enterItem } from '@/lib/motion';
 
 const QUERY = { ...DEFAULT_CENTER, radiusKm: 5 };
 
 export default function RequestsScreen() {
-  const { data, isPending, error } = useNearbyRequests(QUERY);
+  const theme = useTheme();
+  const { data, isPending, error, refetch } = useNearbyRequests(QUERY);
+  const refresh = useRefresh(refetch);
 
   return (
     <Screen>
@@ -30,6 +34,14 @@ export default function RequestsScreen() {
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refresh.refreshing}
+            onRefresh={refresh.onRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
         renderItem={({ item, index }) => (
           <Animated.View entering={enterItem(index)}>
             <RequestCard

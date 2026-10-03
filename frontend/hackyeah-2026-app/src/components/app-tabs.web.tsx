@@ -11,35 +11,64 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from './themed-text';
 
+import { BrandLogo } from '@/components/brand-logo';
+import { ALL_TABS, navItemsFor, type NavItem } from '@/components/navigation/nav-items';
 import { Button } from '@/components/ui/button';
 import { Motion, Radius, Spacing, WebNavHeight } from '@/constants/theme';
-import { useAuth } from '@/features/auth/session-context';
+import { useAuth, useSession } from '@/features/auth/session-context';
 import { useTheme } from '@/hooks/use-theme';
-
-const NAV_ITEMS = [
-  { name: 'index', href: '/', label: 'Mapa' },
-  { name: 'requests', href: '/requests', label: 'Zgłoszenia' },
-  { name: 'tasks', href: '/tasks', label: 'Moje zadania' },
-  { name: 'dashboard', href: '/dashboard', label: 'Panel miasta' },
-  { name: 'new', href: '/new', label: 'Nowe zgłoszenie' },
-  { name: 'profile', href: '/profile', label: 'Profil' },
-] as const;
 
 /** Web navigation: classic top bar (brand · links · account) instead of the mobile bottom tabs. */
 export default function AppTabs() {
+  const { role } = useSession();
+  const items = navItemsFor(role);
+  const visible = new Set(items.map((item) => item.name));
+
   return (
     <Tabs style={styles.root}>
       <TabList asChild>
         <TopNav>
-          {NAV_ITEMS.map((item) => (
+          {items.map((item) => (
             <TabTrigger key={item.name} name={item.name} href={item.href} asChild>
-              <NavLink>{item.label}</NavLink>
+              {item.primary ? <AskForHelpLink item={item} /> : <NavLink>{item.label}</NavLink>}
             </TabTrigger>
+          ))}
+          {/* Routes hidden for this role stay registered, so typed URLs do not crash. */}
+          {ALL_TABS.filter((tab) => !visible.has(tab.name)).map((tab) => (
+            <TabTrigger key={tab.name} name={tab.name} href={tab.href} style={styles.hidden} />
           ))}
         </TopNav>
       </TabList>
       <TabSlot style={styles.slot} />
     </Tabs>
+  );
+}
+
+/** "Poproś o pomoc" – filled warm pill, the most visible element of the bar. */
+function AskForHelpLink({ item, isFocused, ...props }: TabTriggerSlotProps & { item: NavItem }) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      {...props}
+      accessibilityRole="link"
+      accessibilityState={{ selected: isFocused }}
+      style={(state) => {
+        const { hovered } = state as typeof state & { hovered?: boolean };
+        return [
+          styles.cta,
+          {
+            backgroundColor: hovered || state.pressed ? theme.accentStrong : theme.accent,
+            outlineColor: theme.accentSoft,
+            outlineWidth: isFocused ? 3 : 0,
+            outlineStyle: 'solid',
+          } as object,
+        ];
+      }}>
+      <ThemedText type="defaultBold" style={{ color: theme.onAccent }}>
+        + {item.label}
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -92,12 +121,7 @@ function TopNav({ children, ...props }: TabListProps) {
       ]}>
       <View style={styles.inner}>
         <Link href="/" style={styles.brand}>
-          <View style={[styles.logo, { backgroundColor: theme.primary }]}>
-            <ThemedText type="smallBold" themeColor="onPrimary">
-              P
-            </ThemedText>
-          </View>
-          <ThemedText type="defaultBold"> PoDrodze</ThemedText>
+          <BrandLogo />
         </Link>
 
         <ScrollView
@@ -146,12 +170,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  logo: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.small,
-    alignItems: 'center',
+  hidden: {
+    display: 'none',
+  },
+  cta: {
     justifyContent: 'center',
+    height: 40,
+    paddingHorizontal: Spacing.three,
+    marginHorizontal: Spacing.two,
+    borderRadius: Radius.pill,
   },
   linksScroll: {
     flex: 1,

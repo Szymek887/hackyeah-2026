@@ -26,7 +26,7 @@ import { useTheme } from '@/hooks/use-theme';
 /** F2.4 – `GET /api/help-requests/{id}` with the offer / accept / reject / cancel actions. */
 export function RequestDetailsScreen({ id }: { id: number }) {
   const theme = useTheme();
-  const { data: request, isPending, error } = useRequest(id);
+  const { data: request, isPending, error, refetch } = useRequest(id);
 
   if (isPending) {
     return (
@@ -46,7 +46,7 @@ export function RequestDetailsScreen({ id }: { id: number }) {
   }
 
   return (
-    <Screen scroll>
+    <Screen scroll onRefresh={refetch}>
       <View style={styles.block}>
         <View style={styles.badges}>
           <PriorityBadge priority={request.priority} />

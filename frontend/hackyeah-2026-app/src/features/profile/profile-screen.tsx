@@ -15,15 +15,14 @@ import { ProfileStats } from '@/features/profile/components/profile-stats';
 import { enterScreen, layoutTransition } from '@/lib/motion';
 
 export function ProfileScreen() {
-  const { user, profileDetails, updateProfileDetails, signOut } = useSession();
+  const { user, profileDetails, updateProfileDetails, signOut, refreshUser } = useSession();
   const [editing, setEditing] = useState(false);
-  const isCity = user.role === 'CITY_ADMIN';
 
   return (
-    <Screen scroll>
+    <Screen scroll onRefresh={refreshUser}>
       <View style={styles.titleRow}>
         <ThemedText type="title">Profil</ThemedText>
-        {!isCity && !editing && (
+        {!editing && (
           <Button
             title="Edytuj profil"
             variant="secondary"
@@ -34,7 +33,7 @@ export function ProfileScreen() {
       </View>
 
       <ProfileHeader user={user} />
-      {!isCity && <ProfileStats user={user} />}
+      <ProfileStats user={user} />
 
       {/* Key swap re-runs the fade when switching between view and edit mode. */}
       <Animated.View
@@ -53,16 +52,12 @@ export function ProfileScreen() {
             }}
           />
         ) : (
-          !isCity && <ProfileAbout user={user} profile={profileDetails} />
+          <ProfileAbout user={user} profile={profileDetails} />
         )}
       </Animated.View>
 
       <View style={styles.actions}>
-        {isCity ? (
-          <Button title="Otwórz panel miasta" onPress={() => router.push('/dashboard')} />
-        ) : (
-          <Button title="Moje zadania" variant="secondary" onPress={() => router.push('/tasks')} />
-        )}
+        <Button title="Moje zadania" variant="secondary" onPress={() => router.push('/tasks')} />
         <Button title="Wyloguj się" variant="danger" onPress={signOut} />
       </View>
     </Screen>

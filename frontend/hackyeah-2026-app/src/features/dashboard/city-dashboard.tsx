@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -6,8 +7,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Screen } from '@/components/ui/screen';
 import { CategoryColors, Spacing } from '@/constants/theme';
 import type { Category } from '@/api/types';
+import { AdminBar } from '@/features/dashboard/admin-bar';
 import { CityHeatmapMap } from '@/features/dashboard/city-heatmap-map';
-import { useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
+import { dashboardKeys, useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -24,6 +26,7 @@ const dominantCategory = (byCategory: Record<Category, number>) =>
 
 export function CityDashboard() {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
 
   const { data: summary, isPending: summaryLoading } = useCitySummary();
@@ -57,7 +60,8 @@ export function CityDashboard() {
   }
 
   return (
-    <Screen scroll>
+    <Screen scroll onRefresh={() => queryClient.invalidateQueries({ queryKey: dashboardKeys.all })}>
+      <AdminBar />
       {/* Top Bar / Navigation */}
       <View style={styles.headerRow}>
         <View>

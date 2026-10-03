@@ -1,5 +1,6 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +20,7 @@ import { Spacing } from '@/constants/theme';
 import { useCompleteRequest, useHandoffToken } from '@/features/handoff/hooks';
 import { QrCodeCard } from '@/features/handoff/qr-code-card';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
-import { useRequest } from '@/features/requests/hooks';
+import { requestKeys, useRequest } from '@/features/requests/hooks';
 import { formatAddress, isFull, mapsQuery } from '@/features/requests/view-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -30,7 +31,25 @@ type ActiveTaskViewProps = {
 export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
   const theme = useTheme();
   const router = useRouter();
-  const { data: request, isPending, error } = useRequest(requestId);
+  const queryClient = useQueryClient();
+  const { data: request, isPending, error, refetch } = useRequest(requestId);
+  const status = request?.status;
+  const viewerRole = request?.viewerRole;
+  const previousStatus = useRef(status);
+
+  // useRequest polls while ACCEPTED. When the volunteer scans the QR code, the requester's
+  // screen moves on by itself: lists are refreshed and the rating screen opens.
+  useEffect(() => {
+    if (
+      previousStatus.current === 'ACCEPTED' &&
+      status === 'COMPLETED' &&
+      viewerRole === 'REQUESTER'
+    ) {
+      queryClient.invalidateQueries({ queryKey: requestKeys.all });
+      router.replace({ pathname: '/rate/[id]', params: { id: requestId } });
+    }
+    previousStatus.current = status;
+  }, [status, viewerRole, requestId, queryClient, router]);
   // Only the requester of an ACCEPTED request may fetch the QR token (backend: 403 / 409 otherwise).
   const { data: qrData, isPending: qrLoading } = useHandoffToken(
     requestId,
@@ -98,7 +117,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
   };
 
   return (
-    <Screen scroll>
+    <Screen scroll onRefresh={refetch}>
       {/* Status banner */}
       <ThemedView
         style={[

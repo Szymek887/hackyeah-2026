@@ -35,6 +35,6 @@ export function timeAgo(iso: string) {
 
 export const RoleLabels: Record<UserRole, string> = {
   REQUESTER: 'Potrzebuję pomocy',
-  VOLUNTEER: 'Wolontariusz',
+  VOLUNTEER: 'Potrzebuję i pomagam',
   CITY_ADMIN: 'Urząd miasta',
 };

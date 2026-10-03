@@ -1,6 +1,7 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { errorMessage } from '@/api/errors';
@@ -21,6 +22,7 @@ import {
   useMyTasks,
   type TaskTab,
 } from '@/features/tasks/hooks';
+import { useRefresh } from '@/hooks/use-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { enterItem, exitItem, layoutTransition } from '@/lib/motion';
 
@@ -37,31 +39,11 @@ export function TasksScreen() {
   const params = useLocalSearchParams<{ tab?: TaskTab }>();
   const [selected, setSelected] = useState<TaskTab | null>(null);
   const tab = selected ?? (params.tab && TASK_TABS.includes(params.tab) ? params.tab : 'active');
-  const { data = [], isPending, error } = useMyTasks();
-
-  if (role === 'CITY_ADMIN') {
-    return (
-      <Screen>
-        <View style={styles.header}>
-          <ThemedText type="title">Moje zadania</ThemedText>
-          <ThemedText themeColor="textSecondary">
-            Zadania są realizowane przez wolontariuszy dla osób potrzebujących.
-          </ThemedText>
-        </View>
-        <Card highlighted style={styles.empty}>
-          <ThemedText themeColor="textSecondary">
-            Konto miejskie monitoruje deficyty i koordynuje wsparcie. Przejdź do dedykowanej
-            zakładki „Panel miasta”, aby wyświetlić mapę cieplną oraz statystyki.
-          </ThemedText>
-          <Button
-            title="Przejdź do: Panel miasta"
-            inline
-            onPress={() => router.push('/dashboard')}
-          />
-        </Card>
-      </Screen>
-    );
-  }
+  const { data = [], isPending, error, refetch } = useMyTasks();
+  const queryClient = useQueryClient();
+  const refresh = useRefresh(() =>
+    Promise.all([refetch(), queryClient.invalidateQueries({ queryKey: ['users', 'me'] })]),
+  );
 
   const groups = groupTasks(data);
   const tasks: Record<TaskTab, HelpRequestView[]> = {
@@ -73,10 +55,12 @@ export function TasksScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <ThemedText type="title">Moje zadania</ThemedText>
+        <ThemedText type="title">
+          {role === 'VOLUNTEER' ? 'Moje zadania' : 'Moje prośby'}
+        </ThemedText>
         <ThemedText themeColor="textSecondary">
           {role === 'VOLUNTEER'
-            ? 'Zgłoszenia, którym pomagasz. Zakończysz je, skanując kod QR u osoby potrzebującej.'
+            ? 'Zgłoszenia, którym pomagasz, i Twoje własne prośby. Pomoc kończy skan kodu QR.'
             : 'Twoje zgłoszenia. Pokaż kod QR wolontariuszowi, aby potwierdzić otrzymaną pomoc.'}
         </ThemedText>
       </View>
@@ -101,6 +85,14 @@ export function TasksScreen() {
         keyExtractor={(task) => String(task.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refresh.refreshing}
+            onRefresh={refresh.onRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
         ListHeaderComponent={
           tab === 'ratings' ? (
             <View style={styles.ratingsHeader}>
@@ -115,9 +107,9 @@ export function TasksScreen() {
           isPending ? null : (
             <Card highlighted style={styles.empty}>
               <ThemedText themeColor="textSecondary">{EMPTY_TEXT[tab]}</ThemedText>
-              {tab === 'active' && role === 'REQUESTER' && (
+              {tab === 'active' && (
                 <Button
-                  title="Dodaj zgłoszenie"
+                  title="Poproś o pomoc"
                   variant="secondary"
                   inline
                   onPress={() => router.push('/new')}

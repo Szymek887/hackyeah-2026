@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -13,23 +14,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getDemoAccounts } from '@/api/auth';
 import { errorMessage } from '@/api/errors';
+import type { UserRole } from '@/api/types';
+import { BrandLogo } from '@/components/brand-logo';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
 import { Radius, Spacing } from '@/constants/theme';
 import { AccountSelect } from '@/features/auth/components/account-select';
+import { RoleChoice, type ResidentRole } from '@/features/auth/components/role-choice';
 import { SignUpForm } from '@/features/auth/components/sign-up-form';
 import { useAuth } from '@/features/auth/session-context';
 import { useTheme } from '@/hooks/use-theme';
 import { enterScreen } from '@/lib/motion';
 
 /**
- * Login portal. The backend has mock auth only (`X-User-Id` header): the user picks an account
- * from `GET /api/users/demo` or creates a new one (`POST /api/users`).
+ * Login portal. The backend has mock auth only (`X-User-Id` header): residents pick an account
+ * from `GET /api/users/demo` or create one (`POST /api/users`); the city office has its own entry.
  */
 export function LoginScreen() {
   const theme = useTheme();
   const [mode, setMode] = useState<Mode>('signIn');
+  const [role, setRole] = useState<ResidentRole>('REQUESTER');
+  const isAdmin = mode === 'admin';
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -39,28 +45,53 @@ export function LoginScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Animated.View entering={enterScreen} style={styles.container}>
             <View style={styles.header}>
-              <View style={[styles.logo, { backgroundColor: theme.primary }]}>
-                <ThemedText type="subtitle" themeColor="onPrimary">
-                  P
-                </ThemedText>
-              </View>
-              <ThemedText type="title">Witaj w PoDrodze</ThemedText>
+              <BrandLogo size="large" />
               <ThemedText themeColor="textSecondary">
-                Sąsiedzka pomoc po drodze. Zaloguj się, aby zgłosić potrzebę albo pomóc komuś na
-                swojej trasie.
+                {isAdmin
+                  ? 'Panel miasta: mapa potrzeb i statystyki pomocy sąsiedzkiej.'
+                  : 'Sąsiedzka pomoc po drodze. Poproś o pomoc albo pomóż komuś na swojej trasie.'}
               </ThemedText>
             </View>
 
-            <View
+            <Animated.View
+              key={isAdmin ? 'admin' : 'resident'}
+              entering={enterScreen}
               style={[
                 styles.panel,
                 { backgroundColor: theme.backgroundElement, borderColor: theme.border },
               ]}>
-              <SegmentedControl value={mode} onChange={setMode} options={MODE_OPTIONS} />
-              <Animated.View key={mode} entering={enterScreen}>
-                {mode === 'signIn' ? <SignInForm /> : <SignUpForm />}
-              </Animated.View>
-            </View>
+              {isAdmin ? (
+                <>
+                  <View style={styles.field}>
+                    <ThemedText type="subtitle">Logowanie urzędu miasta</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Dostęp tylko dla pracowników urzędu. Konto miasta widzi wyłącznie panel
+                      miasta.
+                    </ThemedText>
+                  </View>
+                  <SignInForm roles={ADMIN_ROLES} buttonLabel="Zaloguj do panelu miasta" />
+                </>
+              ) : (
+                <>
+                  <RoleChoice value={role} onChange={setRole} />
+                  <SegmentedControl value={mode} onChange={setMode} options={MODE_OPTIONS} />
+                  <Animated.View key={mode} entering={enterScreen}>
+                    {mode === 'signIn' ? <SignInForm roles={[role]} /> : <SignUpForm role={role} />}
+                  </Animated.View>
+                </>
+              )}
+            </Animated.View>
+
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => setMode(isAdmin ? 'signIn' : 'admin')}
+              style={styles.switchLink}>
+              <ThemedText type="smallBold" themeColor="primary">
+                {isAdmin
+                  ? '← Wróć do logowania mieszkańca'
+                  : 'Urząd miasta? Zaloguj się do panelu →'}
+              </ThemedText>
+            </Pressable>
 
             <ThemedText type="caption" themeColor="textSecondary" style={styles.footnote}>
               Wersja demonstracyjna – tożsamość zweryfikowana z makietą Profilu Zaufanego /
@@ -73,14 +104,22 @@ export function LoginScreen() {
   );
 }
 
-type Mode = 'signIn' | 'signUp';
+type Mode = 'signIn' | 'signUp' | 'admin';
 
 const MODE_OPTIONS: SegmentOption<Mode>[] = [
   { value: 'signIn', label: 'Mam konto' },
   { value: 'signUp', label: 'Nowe konto' },
 ];
 
-function SignInForm() {
+const ADMIN_ROLES: UserRole[] = ['CITY_ADMIN'];
+
+type SignInFormProps = {
+  /** Only accounts with these roles are offered. */
+  roles: UserRole[];
+  buttonLabel?: string;
+};
+
+function SignInForm({ roles, buttonLabel }: SignInFormProps) {
   const theme = useTheme();
   const { signIn } = useAuth();
   const accounts = useQuery({ queryKey: ['users', 'demo'], queryFn: getDemoAccounts });
@@ -88,8 +127,8 @@ function SignInForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const selectedAccount =
-    accounts.data?.find((a) => a.id === selectedId) ?? accounts.data?.[0] ?? null;
+  const options = (accounts.data ?? []).filter((account) => roles.includes(account.role));
+  const selectedAccount = options.find((a) => a.id === selectedId) ?? options[0] ?? null;
 
   const handleSignIn = async () => {
     if (!selectedAccount) {
@@ -125,12 +164,20 @@ function SignInForm() {
     );
   }
 
+  if (options.length === 0) {
+    return (
+      <ThemedText themeColor="textSecondary">
+        Brak kont tego typu. Załóż nowe konto w zakładce „Nowe konto”.
+      </ThemedText>
+    );
+  }
+
   return (
     <View style={styles.form}>
       <View style={styles.field}>
         <ThemedText type="smallBold">Konto</ThemedText>
         <AccountSelect
-          accounts={accounts.data}
+          accounts={options}
           value={selectedAccount}
           onChange={(account) => {
             setSelectedId(account.id);
@@ -149,7 +196,8 @@ function SignInForm() {
         title={
           pending
             ? 'Logowanie…'
-            : `Zaloguj jako ${selectedAccount?.displayName ?? 'wybrany użytkownik'}`
+            : (buttonLabel ??
+              `Zaloguj jako ${selectedAccount?.displayName ?? 'wybrany użytkownik'}`)
         }
         size="large"
         disabled={pending || !selectedAccount}
@@ -180,14 +228,6 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.two,
   },
-  logo: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.two,
-  },
   panel: {
     padding: Spacing.four,
     borderRadius: Radius.large,
@@ -199,6 +239,11 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: Spacing.one,
+  },
+  switchLink: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
   },
   footnote: {
     textAlign: 'center',
