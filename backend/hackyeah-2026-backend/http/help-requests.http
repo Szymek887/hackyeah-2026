@@ -1,17 +1,18 @@
 ### Nearby open help requests
-GET {{host}}/api/help-requests/nearby?lat=52.22977&lng=21.01178&radiusKm=3
+GET {{host}}/api/help-requests/nearby?lat=50.0614&lng=19.9366&radiusKm=4
 
-### Open help requests along a commute route
+### Open help requests along the Krakow demo commute route
 POST {{host}}/api/help-requests/along-route
 Content-Type: application/json
 
 {
   "points": [
-    { "lat": 52.22977, "lng": 21.01178 },
-    { "lat": 52.23372, "lng": 21.01831 },
-    { "lat": 52.23614, "lng": 20.99858 }
+    { "lat": 50.0541, "lng": 19.9272 },
+    { "lat": 50.0585, "lng": 19.9385 },
+    { "lat": 50.0647, "lng": 19.945 },
+    { "lat": 50.0709, "lng": 19.9561 }
   ],
-  "bufferMeters": 500
+  "bufferMeters": 450
 }
 
 ### Invalid route: route requires at least two points
@@ -20,7 +21,7 @@ Content-Type: application/json
 
 {
   "points": [
-    { "lat": 52.22977, "lng": 21.01178 }
+    { "lat": 50.0614, "lng": 19.9366 }
   ],
   "bufferMeters": 500
 }
