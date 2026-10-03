@@ -8,12 +8,15 @@ export type AgeGroup = 'AGE_18_39' | 'AGE_40_59' | 'AGE_60_74' | 'AGE_75_PLUS';
 
 export type TextSize = 'standard' | 'comfortable' | 'large' | 'xlarge';
 
+/** Color palette: `standard` = brand colors (light/dark), the senior ones are light-only. */
+export type ColorPalette = 'standard' | 'senior' | 'seniorPlus';
+
 export type AccessibilitySettings = {
   /** null until the user picks one – the app then uses the standard look. */
   ageGroup: AgeGroup | null;
   textSize: TextSize;
-  /** Darker text, stronger borders and saturated colors (WCAG AAA-ish contrast). */
-  highContrast: boolean;
+  /** See `SeniorColors` / `SeniorPlusColors` in constants/theme.ts. */
+  palette: ColorPalette;
   /** Bigger buttons, chips and map markers. */
   largeTouchTargets: boolean;
   /** Turns off entrance and press animations. */
@@ -41,7 +44,7 @@ export const AgeGroups: {
     description: 'Standardowy wygląd',
     preset: {
       textSize: 'standard',
-      highContrast: false,
+      palette: 'standard',
       largeTouchTargets: false,
       reduceMotion: false,
     },
@@ -52,7 +55,7 @@ export const AgeGroups: {
     description: 'Nieco większy tekst',
     preset: {
       textSize: 'comfortable',
-      highContrast: false,
+      palette: 'standard',
       largeTouchTargets: false,
       reduceMotion: false,
     },
@@ -60,10 +63,10 @@ export const AgeGroups: {
   {
     value: 'AGE_60_74',
     label: '60–74 lata',
-    description: 'Duży tekst, wyraźny kontrast, większe przyciski',
+    description: 'Duży tekst, wyraźne kolory, większe przyciski',
     preset: {
       textSize: 'large',
-      highContrast: true,
+      palette: 'senior',
       largeTouchTargets: true,
       reduceMotion: false,
     },
@@ -71,10 +74,10 @@ export const AgeGroups: {
   {
     value: 'AGE_75_PLUS',
     label: '75+ lat',
-    description: 'Bardzo duży tekst, wysoki kontrast, bez animacji',
+    description: 'Bardzo duży tekst, najwyższy kontrast, bez animacji',
     preset: {
       textSize: 'xlarge',
-      highContrast: true,
+      palette: 'seniorPlus',
       largeTouchTargets: true,
       reduceMotion: true,
     },

@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
  * Age group picker. The choice alone sets text size, contrast and button size for the whole app
  * and applies at once, so the person immediately sees whether the text is readable for them.
  */
-export function AccessibilityPanel() {
+export function AccessibilityPanel({ onChange }: { onChange?: () => void }) {
   const theme = useTheme();
   const { settings, setAgeGroup } = useAccessibility();
 
@@ -24,7 +24,10 @@ export function AccessibilityPanel() {
             accessibilityRole="radio"
             accessibilityState={{ checked: selected }}
             accessibilityLabel={`${group.label}. ${group.description}`}
-            onPress={() => setAgeGroup(group.value)}
+            onPress={() => {
+              setAgeGroup(group.value);
+              onChange?.();
+            }}
             style={(state) => {
               const { hovered, focused } = state as typeof state & {
                 hovered?: boolean;

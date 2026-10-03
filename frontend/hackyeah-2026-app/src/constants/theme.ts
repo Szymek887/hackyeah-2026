@@ -65,58 +65,65 @@ export const Colors = {
 } as const;
 
 /**
- * High-contrast variant (accessibility setting, default for seniors): near-black text, darker
- * secondary text, strong borders and deeper brand colors. Text colors meet WCAG AAA (≥ 7:1)
- * on the backgrounds.
+ * Age-based palettes for older users (chosen automatically from the age group, never by hand).
+ * Based on research on ageing vision:
+ * - the eye lens yellows with age, so blues / greens look faded and light-blue tints disappear,
+ *   therefore selected / soft backgrounds are neutral or warm instead of light blue;
+ * - dark text on a light background reads better than light on dark, so dark mode is not used;
+ * - warm colors (orange, red) stay easy to see, so the main call to action stays orange;
+ * - yellow can almost disappear (cataract), so warnings are dark amber, not yellow;
+ * - grey "secondary" text is darkened: every text color is ≥ 7:1 on white (WCAG 1.4.6 AAA).
+ * Sources: NIA/NLM "Making your website senior friendly", W3C WAI-AGE, Discovery Eye Foundation.
  */
-export const HighContrastColors = {
-  light: {
-    text: '#000000',
-    textSecondary: '#28323F',
-    background: '#FFFFFF',
-    backgroundElement: '#FFFFFF',
-    backgroundMuted: '#EEF2F7',
-    backgroundSelected: '#D2E4FA',
-    primary: '#0A4A92',
-    primaryStrong: '#06366D',
-    primarySoft: '#D2E4FA',
-    onPrimary: '#FFFFFF',
-    // Still clearly orange; white text on it is 5.4:1 (AA, AAA for large text).
-    accent: '#B83C0B',
-    accentStrong: '#8F2E07',
-    accentSoft: '#FFE3D2',
-    onAccent: '#FFFFFF',
-    border: '#3A4757',
-    danger: '#961A1A',
-    dangerSoft: '#FBDEDE',
-    warning: '#6E3E00',
-    warningSoft: '#FFE9BD',
-    success: '#165231',
-    successSoft: '#D5EFDF',
-  },
-  dark: {
-    text: '#FFFFFF',
-    textSecondary: '#D6E1EE',
-    background: '#000000',
-    backgroundElement: '#0C141E',
-    backgroundMuted: '#111D2A',
-    backgroundSelected: '#1C3A5E',
-    primary: '#93CCFF',
-    primaryStrong: '#BCE0FF',
-    primarySoft: '#1C3A5E',
-    onPrimary: '#000000',
-    accent: '#FFB48F',
-    accentStrong: '#FFCCB2',
-    accentSoft: '#3D2414',
-    onAccent: '#000000',
-    border: '#93A8C0',
-    danger: '#FFA3A3',
-    dangerSoft: '#3D1A1E',
-    warning: '#FFD27F',
-    warningSoft: '#3A2C12',
-    success: '#8EE6B4',
-    successSoft: '#143324',
-  },
+
+/** 60–74 lat: near-black text, deep royal blue, strong orange, neutral warm tints. */
+export const SeniorColors = {
+  text: '#111111',
+  textSecondary: '#3A3A3A',
+  background: '#FFFFFF',
+  backgroundElement: '#FFFFFF',
+  backgroundMuted: '#F4F1EC',
+  backgroundSelected: '#EDEAE4',
+  primary: '#0A3D8F',
+  primaryStrong: '#072C68',
+  primarySoft: '#EDEAE4',
+  onPrimary: '#FFFFFF',
+  accent: '#B34700',
+  accentStrong: '#8A3600',
+  accentSoft: '#FFF0E3',
+  onAccent: '#FFFFFF',
+  border: '#5C5C5C',
+  danger: '#A31919',
+  dangerSoft: '#FBE0E0',
+  warning: '#7A4100',
+  warningSoft: '#FBEBCF',
+  success: '#1D5C2E',
+  successSoft: '#E1EFE3',
+} as const;
+
+/** 75+ lat: maximum contrast – pure black text and borders, navy actions, deep orange. */
+export const SeniorPlusColors = {
+  text: '#000000',
+  textSecondary: '#1F1F1F',
+  background: '#FFFFFF',
+  backgroundElement: '#FFFFFF',
+  backgroundMuted: '#F2F2F2',
+  backgroundSelected: '#EBEBEB',
+  primary: '#00297A',
+  primaryStrong: '#001A4D',
+  primarySoft: '#EBEBEB',
+  onPrimary: '#FFFFFF',
+  accent: '#A33A00',
+  accentStrong: '#7A2B00',
+  accentSoft: '#FFE0C2',
+  onAccent: '#FFFFFF',
+  border: '#000000',
+  danger: '#8B0000',
+  dangerSoft: '#FFE0E0',
+  warning: '#663300',
+  warningSoft: '#FFEBC7',
+  success: '#0F4D1F',
+  successSoft: '#DDEFE0',
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;

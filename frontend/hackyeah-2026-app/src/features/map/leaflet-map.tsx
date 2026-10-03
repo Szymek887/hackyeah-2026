@@ -11,7 +11,7 @@ import { CategoryColors, PriorityColors, Radius, type ThemePalette } from '@/con
 import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import { KRAKOW_INITIAL_REGION, toLatLng } from '@/features/map/krakow-map-data';
-import { clusterRequests } from '@/features/map/map-clustering';
+import { clusterRequests, MAX_MAP_ZOOM, NO_CLUSTER_ZOOM } from '@/features/map/map-clustering';
 import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
 import type { RouteCoordinate } from '@/lib/route-matching';
@@ -109,6 +109,28 @@ function leafletCss(theme: ThemePalette, textScale: number) {
     outline: 3px solid ${theme.primary};
     outline-offset: 2px;
   }
+  .podrodze-label {
+    font: 700 ${px(12)}/${px(16)} var(--font-display);
+    color: ${theme.text};
+    background: ${theme.backgroundElement};
+    border: 2px solid ${theme.border};
+    border-radius: 4px;
+    padding: 4px 8px;
+    width: max-content;
+    max-width: ${Math.round(170 * Math.min(textScale, 1.3))}px;
+    white-space: normal;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+  }
+  .podrodze-label.pd-label-hidden {
+    visibility: hidden;
+  }
+  .podrodze-label .pd-label-meta {
+    display: block;
+    font-weight: 600;
+    font-size: ${px(11)};
+    color: ${theme.textSecondary};
+  }
   .podrodze-tooltip {
     font: 600 ${px(13)}/${px(18)} var(--font-display);
     color: ${theme.text};
@@ -120,6 +142,33 @@ function leafletCss(theme: ThemePalette, textScale: number) {
     white-space: normal;
   }
 `;
+}
+
+type LabeledMarker = { marker: Marker; priority: number };
+
+/**
+ * Hides labels that would overlap one already shown. More urgent requests (lower priority number)
+ * keep their label; the hidden ones appear when the point is hovered or focused.
+ */
+function declutterLabels(labels: LabeledMarker[]) {
+  const shown: DOMRect[] = [];
+  [...labels]
+    .sort((a, b) => a.priority - b.priority)
+    .forEach(({ marker }) => {
+      const element = marker.getTooltip()?.getElement();
+      if (!element) return;
+      element.classList.remove('pd-label-hidden');
+      const rect = element.getBoundingClientRect();
+      const overlaps = shown.some(
+        (other) =>
+          rect.left < other.right + 4 &&
+          rect.right + 4 > other.left &&
+          rect.top < other.bottom + 4 &&
+          rect.bottom + 4 > other.top,
+      );
+      if (overlaps) element.classList.add('pd-label-hidden');
+      else shown.push(rect);
+    });
 }
 
 function escapeHtml(value: string) {
@@ -191,6 +240,7 @@ export function LeafletMap({
   /** Request whose popup is open; reopened after the markers are redrawn (zoom, new data). */
   const openRequestIdRef = useRef<number | null>(null);
   const redrawingRef = useRef(false);
+  const labelsRef = useRef<LabeledMarker[]>([]);
   // Latest callbacks without redrawing the map on every parent render.
   const onMapPressRef = useRef(onMapPress);
   const onEndpointChangeRef = useRef(onRouteEndpointChange);
@@ -209,6 +259,7 @@ export function LeafletMap({
   );
   const selectedRequest = requests.find((request) => request.id === selectedRequestId);
   const hasMapPress = Boolean(onMapPress);
+  const showLabels = zoom >= NO_CLUSTER_ZOOM;
   const markerSize = settings.largeTouchTargets ? 26 : 18;
 
   // Base map + click handler.
@@ -222,11 +273,14 @@ export function LeafletMap({
         zoom: 14,
         scrollWheelZoom: true,
         keyboard: true,
+        maxZoom: MAX_MAP_ZOOM,
       });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
+        maxZoom: MAX_MAP_ZOOM,
       }).addTo(map);
       map.on('zoomend', () => setZoom(map.getZoom()));
+      map.on('moveend', () => declutterLabels(labelsRef.current));
       map.on('click', ({ latlng }) =>
         onMapPressRef.current?.({ latitude: latlng.lat, longitude: latlng.lng }),
       );
@@ -284,7 +338,7 @@ export function LeafletMap({
         }
         L.polyline(routePositions, {
           color: theme.primary,
-          weight: settings.highContrast ? 7 : 5,
+          weight: settings.palette !== 'standard' ? 7 : 5,
           interactive: false,
         }).addTo(overlays);
 
@@ -325,6 +379,7 @@ export function LeafletMap({
       }
 
       const markersById = new Map<number, Marker>();
+      const labels: LabeledMarker[] = [];
 
       requestClusters.forEach((cluster) => {
         if (cluster.requests.length > 1) {
@@ -341,18 +396,23 @@ export function LeafletMap({
             }),
           }).addTo(overlays);
           marker.on('click', () => {
-            map.flyTo(
-              [cluster.coordinate.latitude, cluster.coordinate.longitude],
-              Math.min(18, map.getZoom() + 2),
-              { animate: !settings.reduceMotion },
-            );
+            // Zoom exactly to the grouped points; close up they split into separate ones.
+            const points = cluster.requests.map((r) => {
+              const { latitude, longitude } = toLatLng(r.approximateLocation.coordinates);
+              return [latitude, longitude] as [number, number];
+            });
+            map.flyToBounds(points, {
+              padding: [80, 80],
+              maxZoom: MAX_MAP_ZOOM,
+              animate: !settings.reduceMotion,
+            });
           });
           return;
         }
 
         const request = cluster.requests[0];
         const alongRoute = matchingIds.has(request.id);
-        const coordinate = toLatLng(request.approximateLocation.coordinates);
+        const coordinate = cluster.coordinate;
         const fill = CategoryColors[request.category].color;
         const ring = PriorityColors[request.priority].color;
         const size = alongRoute ? markerSize + 6 : markerSize;
@@ -370,11 +430,21 @@ export function LeafletMap({
             iconSize: [size, size],
           }),
         })
-          .bindTooltip(escapeHtml(label), {
-            className: 'podrodze-tooltip',
-            direction: 'top',
-            offset: [0, -size / 2],
-          })
+          .bindTooltip(
+            showLabels
+              ? `${escapeHtml(request.title)}<span class="pd-label-meta">${escapeHtml(
+                  `${CategoryLabels[request.category]} · ${PriorityLabels[request.priority]}`,
+                )}</span>`
+              : escapeHtml(label),
+            {
+              // Close up: a permanent rectangular label above the point, clickable like the point.
+              className: showLabels ? 'podrodze-label' : 'podrodze-tooltip',
+              direction: 'top',
+              offset: [0, -size / 2],
+              permanent: showLabels,
+              interactive: showLabels,
+            },
+          )
           .bindPopup(() => requestPopup(request, alongRoute), {
             className: 'podrodze-request-popup',
             closeButton: true,
@@ -387,7 +457,7 @@ export function LeafletMap({
         marker.on('click', () => setSelectedRequestId(request.id));
         marker.on('popupopen', () => {
           openRequestIdRef.current = request.id;
-          marker.closeTooltip();
+          if (!showLabels) marker.closeTooltip();
           // Move keyboard focus into the popup so Enter reaches the action button.
           marker.getPopup()?.getElement()?.querySelector<HTMLButtonElement>('.pd-action')?.focus();
         });
@@ -396,8 +466,28 @@ export function LeafletMap({
           openRequestIdRef.current = null;
           setSelectedRequestId(null);
         });
+        if (showLabels) {
+          labels.push({ marker, priority: request.priority });
+          const reveal = () => {
+            const element = marker.getTooltip()?.getElement();
+            element?.classList.remove('pd-label-hidden');
+            if (element) element.style.zIndex = '1000';
+          };
+          const restore = () => {
+            const element = marker.getTooltip()?.getElement();
+            if (element) element.style.zIndex = '';
+            declutterLabels(labelsRef.current);
+          };
+          marker.on('mouseover', reveal);
+          marker.on('mouseout', restore);
+          marker.getElement()?.addEventListener('focus', reveal);
+          marker.getElement()?.addEventListener('blur', restore);
+        }
         markersById.set(request.id, marker);
       });
+
+      labelsRef.current = labels;
+      declutterLabels(labels);
 
       const reopen = openRequestIdRef.current;
       if (reopen !== null) markersById.get(reopen)?.openPopup();
@@ -418,8 +508,9 @@ export function LeafletMap({
     matchingIds,
     requestClusters,
     routeCoordinates,
-    settings.highContrast,
+    settings.palette,
     settings.reduceMotion,
+    showLabels,
     showRouteBuffer,
     textScale,
     theme,
