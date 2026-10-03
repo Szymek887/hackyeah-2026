@@ -80,6 +80,8 @@ export const users: UserProfile[] = SEED_USERS.map(
     role,
     identityVerified,
     specialNeeds,
+    // Consent is off by default, as in the backend seeder.
+    shareSpecialNeeds: false,
     trustScore,
     ratingCount: 0,
     ratingAverage: null,

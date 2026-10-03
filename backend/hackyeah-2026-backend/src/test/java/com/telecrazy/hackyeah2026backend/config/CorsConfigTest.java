@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Uses the default {@code app.cors.allowed-origin-patterns} from application.properties.
  */
 @WebMvcTest(UserController.class)
-@Import(WebConfig.class)
+@Import({WebConfig.class, ClockConfig.class})
 class CorsConfigTest {
 
     @Autowired

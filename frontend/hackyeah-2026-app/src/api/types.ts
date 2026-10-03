@@ -72,7 +72,10 @@ export type UserProfile = {
   displayName: string;
   role: UserRole;
   identityVerified: boolean;
+  /** Sensitive (health data). Never shown to others without consent, see `shareSpecialNeeds`. */
   specialNeeds: boolean;
+  /** Consent to tell the accepted volunteer about the special needs. Off by default (contract §3.6). */
+  shareSpecialNeeds: boolean;
   trustScore: number;
   ratingCount: number;
   /** null until the user is rated. */
@@ -97,6 +100,11 @@ export type UserSummary = {
 /** `UpdateLanguagesRequest` – `PUT /api/users/me/languages`, 1–10 codes, replaces the list. */
 export type UpdateLanguagesDto = {
   languages: LanguageCode[];
+};
+
+/** `UpdateSpecialNeedsConsentRequest` – `PUT /api/users/me/special-needs-consent` (profile switch). */
+export type UpdateSpecialNeedsConsentDto = {
+  shareWithVolunteer: boolean;
 };
 
 /**
@@ -147,6 +155,11 @@ export type HelpRequestFull = {
   buildingNumber: string;
   apartmentNumber: string | null;
   requester: UserSummary;
+  /**
+   * true only when the requester has special needs AND consented to share it with the accepted
+   * volunteer; false does not say which of the two is missing. Never present in PUBLIC views.
+   */
+  requesterSpecialNeeds: boolean;
   volunteer: UserSummary | null;
   createdAt: string;
   updatedAt: string;

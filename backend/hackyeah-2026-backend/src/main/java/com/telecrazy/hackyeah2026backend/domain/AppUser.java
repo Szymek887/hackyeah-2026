@@ -19,6 +19,7 @@ import lombok.Setter;
 import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -44,8 +45,22 @@ public class AppUser {
     @Column(nullable = false)
     private boolean identityVerified;
 
+    /** Sensitive (health data). Used internally for the priority bump; never shown without consent. */
     @Column(nullable = false)
     private boolean specialNeeds;
+
+    /**
+     * Consent to tell the assigned volunteer (once the requester accepted their offer) that the requester
+     * has special needs. Off by default, revocable at any time, see {@link #updateSpecialNeedsConsent}.
+     */
+    @ColumnDefault("false")
+    @Column(nullable = false)
+    @Setter(AccessLevel.NONE)
+    private boolean shareSpecialNeeds;
+
+    /** When the consent was last given or withdrawn (record of consent). */
+    @Setter(AccessLevel.NONE)
+    private Instant specialNeedsConsentUpdatedAt;
 
     @Column(nullable = false)
     private int trustScore;
@@ -90,6 +105,19 @@ public class AppUser {
         Set<String> normalized = SpokenLanguages.normalize(codes);
         languages.clear();
         languages.addAll(normalized);
+    }
+
+    public void updateSpecialNeedsConsent(boolean share, Instant now) {
+        this.shareSpecialNeeds = share;
+        this.specialNeedsConsentUpdatedAt = now;
+    }
+
+    /**
+     * What the assigned volunteer may learn: {@code true} only when the user has special needs
+     * <em>and</em> consented. {@code false} does not reveal which of the two is missing.
+     */
+    public boolean sharesSpecialNeeds() {
+        return specialNeeds && shareSpecialNeeds;
     }
 
     public void addRating(int stars) {

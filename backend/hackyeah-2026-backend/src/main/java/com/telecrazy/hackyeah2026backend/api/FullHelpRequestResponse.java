@@ -13,6 +13,10 @@ import java.util.Set;
 /**
  * Full help request details: exact location and address. Only for the requester and,
  * after acceptance, the assigned volunteer.
+ *
+ * @param requesterSpecialNeeds {@code true} only when the requester has special needs and consented to share it
+ *                              with the assigned volunteer; {@code false} does not tell which of the two is missing.
+ *                              Never present in public views.
  */
 public record FullHelpRequestResponse(
         Long id,
@@ -30,6 +34,7 @@ public record FullHelpRequestResponse(
         String buildingNumber,
         String apartmentNumber,
         UserSummary requester,
+        boolean requesterSpecialNeeds,
         UserSummary volunteer,
         Instant createdAt,
         Instant updatedAt,
