@@ -7,8 +7,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Runs one sample classification in the background once the app has started. This loads the model and lets
- * Ollama cache the system prompt, so the first real classification is as fast as later ones.
+ * Runs one sample classification and one transcript formatting in the background once the app has started.
+ * This loads the model and lets Ollama cache both system prompts, so the first real calls are as fast as later ones.
  * Failures are only logged: classification still falls back to keyword rules if Ollama is down.
  */
 @Component
@@ -18,13 +18,17 @@ class OllamaWarmUp {
 
     private static final ClassificationInput SAMPLE =
             new ClassificationInput("Zakupy", "Potrzebuję chleba i mleka ze sklepu.");
+    private static final TranscriptInput SAMPLE_TRANSCRIPT =
+            new TranscriptInput("dzień dobry yyy potrzebuję chleba i mleka ze sklepu");
 
     private final AiProperties properties;
     private final LlmRequestClassifier llmClassifier;
+    private final LlmTranscriptFormatter llmFormatter;
 
-    OllamaWarmUp(AiProperties properties, LlmRequestClassifier llmClassifier) {
+    OllamaWarmUp(AiProperties properties, LlmRequestClassifier llmClassifier, LlmTranscriptFormatter llmFormatter) {
         this.properties = properties;
         this.llmClassifier = llmClassifier;
+        this.llmFormatter = llmFormatter;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -36,6 +40,7 @@ class OllamaWarmUp {
             long start = System.nanoTime();
             try {
                 llmClassifier.classify(SAMPLE);
+                llmFormatter.format(SAMPLE_TRANSCRIPT);
                 log.info("Model {} warmed up in {} ms", properties.model(), (System.nanoTime() - start) / 1_000_000);
             } catch (RuntimeException e) {
                 log.warn("Could not load model {}, keyword fallback will be used until Ollama is available: {}",

@@ -320,9 +320,9 @@ function Preview({ draft, onAccept, onRetry, onCancel }: PreviewProps) {
           Podgląd zgłoszenia
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {classification.source === 'LLM'
-            ? 'Asystent AI przeanalizował Twoją wypowiedź. Sprawdź, czy wszystko się zgadza.'
-            : 'Rozpoznaliśmy słowa kluczowe w Twojej wypowiedzi. Sprawdź, czy wszystko się zgadza.'}
+          {draft.formattedBy === 'LLM'
+            ? 'Asystent AI zapisał Twoją prośbę krótko i jasno. Sprawdź, czy wszystko się zgadza.'
+            : 'Asystent AI jest teraz niedostępny, więc zapisaliśmy prośbę prawie tak, jak ją powiedziałeś. Sprawdź ją i w razie potrzeby popraw.'}
         </ThemedText>
 
         <View style={styles.field}>
