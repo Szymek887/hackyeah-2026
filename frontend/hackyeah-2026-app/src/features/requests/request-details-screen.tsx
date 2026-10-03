@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { errorMessage } from '@/api/errors';
 import type { HelpRequestView, UserSummary } from '@/api/types';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { RatingStars } from '@/components/ui/rating-stars';
 import { Screen } from '@/components/ui/screen';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/features/auth/session-context';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import {
@@ -19,13 +19,15 @@ import {
   useRejectOffer,
   useRequest,
 } from '@/features/requests/hooks';
-import { StatusLabels, timeAgo } from '@/features/requests/labels';
+import { CategoryLabels, StatusLabels, timeAgo } from '@/features/requests/labels';
 import { formatAddress, isFull } from '@/features/requests/view-helpers';
+import { useVoiceAssistant } from '@/features/voice/use-voice-assistant';
 import { useTheme } from '@/hooks/use-theme';
 
 /** F2.4 – `GET /api/help-requests/{id}` with the offer / accept / reject / cancel actions. */
 export function RequestDetailsScreen({ id }: { id: number }) {
   const theme = useTheme();
+  const voice = useVoiceAssistant();
   const { data: request, isPending, error, refetch } = useRequest(id);
 
   if (isPending) {
@@ -61,6 +63,30 @@ export function RequestDetailsScreen({ id }: { id: number }) {
         <ThemedText type="small" themeColor="textSecondary">
           Dodano {timeAgo(request.createdAt)}
         </ThemedText>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            voice.isSpeaking ? 'Zatrzymaj czytanie na głos' : 'Odsłuchaj treść zgłoszenia na głos'
+          }
+          onPress={() => {
+            if (voice.isSpeaking) {
+              voice.stopSpeaking();
+            } else {
+              const parts = [
+                `Zgłoszenie: ${request.title}.`,
+                request.description ? `Opis: ${request.description}.` : '',
+                `Kategoria: ${CategoryLabels[request.category]}.`,
+                isFull(request) ? `Adres: ${formatAddress(request)}.` : '',
+              ].filter(Boolean);
+              voice.speak(parts.join(' '));
+            }
+          }}
+          style={[styles.listenBtn, { backgroundColor: theme.backgroundSelected }]}>
+          <ThemedText type="smallBold">
+            {voice.isSpeaking ? '⏹️ Zatrzymaj lektora' : '🔊 Odsłuchaj na głos'}
+          </ThemedText>
+        </Pressable>
       </View>
 
       <Card>
@@ -238,5 +264,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.one,
+  },
+  listenBtn: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: Radius.medium,
   },
 });

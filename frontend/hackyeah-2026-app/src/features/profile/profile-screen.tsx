@@ -100,7 +100,18 @@ export function ProfileScreen() {
       </Card>
 
       <View style={styles.actions}>
-        <Button title="Moje zadania" variant="secondary" onPress={() => router.push('/tasks')} />
+        {user.role === 'REQUESTER' && (
+          <Button
+            title="🏠 Prosty ekran startowy"
+            variant="secondary"
+            onPress={() => router.push('/start')}
+          />
+        )}
+        <Button
+          title={user.role === 'VOLUNTEER' ? 'Moje zadania' : 'Moje prośby'}
+          variant="secondary"
+          onPress={() => router.push('/tasks')}
+        />
         <Button title="Wyloguj się" variant="danger" onPress={signOut} />
       </View>
     </Screen>
