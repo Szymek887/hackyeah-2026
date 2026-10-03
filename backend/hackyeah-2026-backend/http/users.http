@@ -1,7 +1,20 @@
-### Current user profile (seeded requester "Anna K." has id 1)
+### Demo accounts for the login screen (public, no X-User-Id)
+GET {{host}}/api/users/demo
+Accept: application/json
+
+> {%
+    client.test("Lists seeded accounts ordered by role", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.length > 0, "Expected seeded users");
+        client.assert(response.body[0].role === "REQUESTER", "Requesters come first");
+        client.assert(response.body[response.body.length - 1].role === "CITY_ADMIN", "City admin comes last");
+    });
+%}
+
+### Current user profile (seeded requester "Anna K.")
 GET {{host}}/api/users/me
 Accept: application/json
-X-User-Id: 1
+X-User-Id: {{requesterId}}
 
 > {%
     client.test("Returns profile of the mocked user", function () {
@@ -29,5 +42,18 @@ X-User-Id: 999999
 > {%
     client.test("Unknown user returns 401", function () {
         client.assert(response.status === 401, "Expected status 401");
+    });
+%}
+
+### CORS preflight from Expo web (browser sends this before a request with X-User-Id)
+OPTIONS {{host}}/api/users/me
+Origin: http://localhost:8081
+Access-Control-Request-Method: GET
+Access-Control-Request-Headers: X-User-Id
+
+> {%
+    client.test("Expo web origin is allowed", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.headers.valueOf("Access-Control-Allow-Origin") === "http://localhost:8081", "Expected allowed origin");
     });
 %}
