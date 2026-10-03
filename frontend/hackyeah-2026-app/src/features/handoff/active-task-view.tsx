@@ -128,7 +128,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
           <View
             style={[
               styles.categoryBadge,
-              { backgroundColor: CategoryColors[request.category] ?? theme.primary },
+              { backgroundColor: CategoryColors[request.category]?.color ?? theme.primary },
             ]}>
             <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
               {request.category}
@@ -138,7 +138,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
           <View
             style={[
               styles.priorityBadge,
-              { backgroundColor: PriorityColors[request.priority] ?? theme.danger },
+              { backgroundColor: PriorityColors[request.priority]?.color ?? theme.danger },
             ]}>
             <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
               Pilność:{' '}
