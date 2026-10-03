@@ -1,10 +1,10 @@
-import { Link } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+import { ActivityIndicator, FlatList, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
-import { PriorityColors, Spacing } from '@/constants/theme';
+import { Screen } from '@/components/ui/screen';
+import { Spacing } from '@/constants/theme';
+import { RequestCard } from '@/features/requests/components/request-card';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { DEFAULT_CENTER } from '@/lib/geo';
 
@@ -14,49 +14,32 @@ export default function RequestsScreen() {
   const { data, isPending, error } = useNearbyRequests(QUERY);
 
   return (
-    <ScreenPlaceholder title="Zgłoszenia" owner="FE1" tasks={['F2.4 karty zgłoszeń']}>
+    <Screen>
+      <ThemedText type="title">Zgłoszenia</ThemedText>
+      <ThemedText themeColor="textSecondary">Prośby o pomoc w promieniu 5 km</ThemedText>
+
       {isPending && <ActivityIndicator />}
       {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <Link href={{ pathname: '/request/[id]', params: { id: item.id } }} asChild>
-            <Pressable>
-              <ThemedView type="backgroundElement" style={styles.card}>
-                <ThemedView
-                  style={[styles.priority, { backgroundColor: PriorityColors[item.priority] }]}
-                />
-                <ThemedText type="smallBold" style={styles.title}>
-                  {item.title}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          </Link>
+          <RequestCard
+            request={item}
+            onPress={() => router.push({ pathname: '/request/[id]', params: { id: item.id } })}
+          />
         )}
       />
-    </ScreenPlaceholder>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   list: {
-    gap: Spacing.two,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-  },
-  priority: {
-    width: Spacing.two,
-    height: Spacing.two,
-    borderRadius: Spacing.one,
-  },
-  title: {
-    flex: 1,
+    gap: Spacing.three,
+    paddingBottom: Spacing.three,
   },
 });

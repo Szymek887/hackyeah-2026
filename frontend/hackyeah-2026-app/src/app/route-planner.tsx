@@ -1,11 +1,5 @@
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { RoutePlannerScreen as CommuteRoutePlannerScreen } from '@/features/commute/route-planner-screen';
 
-export default function RoutePlannerScreen() {
-  return (
-    <ScreenPlaceholder
-      title="Moja trasa"
-      owner="FE2"
-      tasks={['F2.3 planer trasy + filtr korytarza']}
-    />
-  );
+export default function RoutePlannerRoute() {
+  return <CommuteRoutePlannerScreen />;
 }

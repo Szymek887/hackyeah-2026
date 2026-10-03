@@ -9,6 +9,7 @@
 - `docker-compose.yml` z PostgreSQL 17 + PostGIS 3.5 (obraz `imresamu/postgis`, multi-arch dla Apple Silicon) – **B1.1 zrobione**.
 - Połączenie z bazą w `application.properties`, `ddl-auto=update`.
 - `GET /api/health` + żądania IntelliJ w `backend/hackyeah-2026-backend/http/`.
+- Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (bez podpięcia do `POST /requests`, które jeszcze nie istnieje). Model: `qwen2.5:7b` w Ollamie.
 
 ## 2. Decyzje techniczne
 
@@ -64,7 +65,7 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`.
 | `GET /users/me` | Profil, reputacja, flagi | B1 |
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
 | `POST /requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI | B2 |
-| `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) | B2.3 |
+| `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
 | `GET /requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON | B2.1 |
 | `POST /requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu | B2.2 |
 | `GET /requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` | B2.4 |
@@ -116,11 +117,15 @@ Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayeso
 ### 6.6 Priorytet i niepełnosprawność
 `finalPriority = max(1, aiPriority − 1)` gdy zgłaszający ma `hasSpecialNeeds` (priorytet 1 = najpilniejszy). Zapis zarówno wyniku AI, jak i końcowego priorytetu.
 
-### 6.7 AI (Dev 3)
-- `RequestClassifier` buduje prompt systemowy (kategorie, skala pilności 1–3, flagi ryzyka, wykrywanie oszustw) i wywołuje Ollamę z `format: json`.
-- Odpowiedź parsowana do rekordu `{category, urgency, tags[], riskFlags[], scamSuspected}`; wartości spoza dozwolonych zbiorów odrzucane/korygowane.
-- **Fallback:** timeout (np. 8 s) lub błąd parsowania → klasyfikacja regułowa po słowach kluczowych („leki”, „serce”, „zakupy”…), aby demo nie zależało od LLM.
-- Podejrzenie scamu → flaga `riskFlags` i zgłoszenie nie pojawia się publicznie do ręcznego przeglądu (lub oznaczone).
+### 6.7 AI (Dev 3) – ✅ zrobione (poza podpięciem do tworzenia zgłoszenia)
+- ✅ `LlmRequestClassifier` ładuje prompt systemowy z `prompts/classify-request.txt` (kategorie, priorytet 1–3, tagi, flagi ryzyka) i wywołuje Ollamę (`OllamaClient`, `/api/chat`) ze schematem JSON w polu `format`.
+- ✅ Odpowiedź normalizowana do `RequestClassification {category, priority, tags[], riskFlags[], source}`; nieznana kategoria → wyjątek i fallback, priorytet przycinany do 1–3, maks. 5 tagów, nieznane flagi pomijane. `MEDICAL_EMERGENCY` zawsze wymusza priorytet 1.
+- ✅ Flagi ryzyka: `SCAM_SUSPECTED`, `MEDICAL_EMERGENCY`, `PERSONAL_DATA`, `INAPPROPRIATE_CONTENT`.
+- ✅ **Fallback:** `KeywordRequestClassifier` (polskie rdzenie słów) przy wyłączonym AI (`AI_ENABLED=false`), błędzie połączenia, timeoucie (15 s) lub błędnym JSON-ie. Pole `source` = `LLM` / `FALLBACK`.
+- ✅ Konfiguracja `app.ai.*` (`OLLAMA_URL`, `OLLAMA_MODEL`, timeout, `keep-alive` 30 min), testy jednostkowe, żądania `http/classify.http`.
+- ⏳ Podpięcie klasyfikacji do `POST /requests` (po encji `HelpRequest`, Dev 1/2).
+- ⏳ Podejrzenie scamu → zgłoszenie nie pojawia się publicznie do ręcznego przeglądu (lub oznaczone) – wymaga `POST /requests`.
+- ⏳ Frontend (`AiClassification` w `types.ts`) oczekuje pola `suspicious: boolean` – do uzgodnienia (dodać w backendzie lub używać `riskFlags`).
 
 ### 6.8 Analityka (Dev 3)
 Heatmapa: grupowanie po siatce (`ST_SnapToGrid` lub `ST_ClusterDBSCAN`) i kategorii, zwrot środków komórek + liczności (dane już zagregowane, bez danych osobowych). Podsumowanie: liczba zgłoszeń wg kategorii/statusu i liczba zrealizowanych pomocy per dzielnica.
@@ -140,13 +145,13 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 ### Etap 1 (0–6 h)
 - **Dev 1:** dodać `hibernate-spatial`; encje `User`, `HelpRequest`, `Rating`; `GeometryFactory` SRID 4326; init `postgis`; DTO GeoJSON (**B1.2, B1.4**).
 - **Dev 2:** mock autentykacji (`X-User-Id`), `GET /users/me`, `@RestControllerAdvice` z `ProblemDetail`; szkielet enumów i maszyny stanów.
-- **Dev 3:** konfiguracja Ollamy lokalnie, prototyp promptu, `OllamaClient` + test ręczny.
+- **Dev 3:** ✅ prototyp promptu, ✅ `OllamaClient`; ⏳ konfiguracja Ollamy lokalnie + test ręczny na prawdziwym modelu.
 - **Dev 1 (po encjach):** seeder (**B1.3**).
 
 ### Etap 2 (6–18 h)
 - **Dev 1:** `nearby` i `along-route` + testy Testcontainers (**B2.1, B2.2**), `LocationMasker` i odpowiedzi publiczne (**B2.4** wspólnie z Dev 2).
 - **Dev 2:** `POST /requests`, `GET /requests/{id}` z widocznością zależną od stanu i roli (**B2.4**).
-- **Dev 3:** `RequestClassifier`, `POST /requests/classify`, fallback regułowy, podpięcie do tworzenia zgłoszenia (**B2.3**).
+- **Dev 3:** ✅ `RequestClassifier`, ✅ `POST /requests/classify`, ✅ fallback regułowy; ⏳ podpięcie do tworzenia zgłoszenia (**B2.3**).
 
 ### Etap 3 (18–30 h)
 - **Dev 2:** przejścia stanów, QR, `complete`, oceny i reputacja (**B3.1–B3.3**), mock weryfikacji.
