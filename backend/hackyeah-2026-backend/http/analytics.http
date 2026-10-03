@@ -1,0 +1,49 @@
+### Heatmap: all active and fulfilled requests (CANCELLED excluded by default), 500 m hexagons
+GET {{host}}/api/analytics/heatmap
+
+> {%
+    client.test("Heatmap is a GeoJSON FeatureCollection", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.type === "FeatureCollection", "Expected FeatureCollection");
+    });
+%}
+
+### Heatmap: medicine requests only, smaller hexagons
+GET {{host}}/api/analytics/heatmap?category=MEDICINE&cellSizeMeters=250
+
+### Heatmap: unmet needs only (status is repeatable)
+GET {{host}}/api/analytics/heatmap?status=OPEN&status=OFFERED
+
+### Heatmap: delivered help in a time window
+GET {{host}}/api/analytics/heatmap?status=COMPLETED&status=RATED&from=2026-10-01T00:00:00Z&to=2026-10-06T00:00:00Z
+
+### Heatmap: invalid cell size
+GET {{host}}/api/analytics/heatmap?cellSizeMeters=50
+
+> {%
+    client.test("Cell size below 100 m is rejected", function () {
+        client.assert(response.status === 400, "Expected status 400");
+    });
+%}
+
+### Summary: totals by status, category and priority
+GET {{host}}/api/analytics/summary
+
+> {%
+    client.test("Summary has totals", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(typeof response.body.total === "number", "Expected total");
+    });
+%}
+
+### Summary: one category in a time window
+GET {{host}}/api/analytics/summary?category=GROCERIES&from=2026-10-01T00:00:00Z&to=2026-10-06T00:00:00Z
+
+### Summary: 'from' after 'to'
+GET {{host}}/api/analytics/summary?from=2026-10-05T00:00:00Z&to=2026-10-01T00:00:00Z
+
+> {%
+    client.test("Inverted time window is rejected", function () {
+        client.assert(response.status === 400, "Expected status 400");
+    });
+%}
