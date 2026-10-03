@@ -14,6 +14,11 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    primary: '#208AEF',
+    onPrimary: '#ffffff',
+    border: '#D9D9E0',
+    danger: '#D93036',
+    success: '#2B9A66',
   },
   dark: {
     text: '#ffffff',
@@ -21,10 +26,30 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    primary: '#4CA2F5',
+    onPrimary: '#ffffff',
+    border: '#363A3F',
+    danger: '#EC5D5E',
+    success: '#3DD68C',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+
+/** Pin / area colors per help request category (same in light and dark mode). */
+export const CategoryColors = {
+  BASIC_NEEDS: '#E5484D',
+  EQUIPMENT_LOAN: '#F76B15',
+  HOME_SUPPORT: '#0090FF',
+  SOCIAL: '#8E4EC6',
+} as const;
+
+/** 1 = critical, 3 = low. */
+export const PriorityColors = {
+  1: '#D93036',
+  2: '#F5A623',
+  3: '#2B9A66',
+} as const;
 
 export const Fonts = Platform.select({
   ios: {
