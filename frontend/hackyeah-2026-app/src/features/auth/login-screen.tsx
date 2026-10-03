@@ -40,6 +40,8 @@ import { enterScreen } from '@/lib/motion';
 export function LoginScreen() {
   const theme = useTheme();
   const { settings } = useAccessibility();
+  // Every login starts with the age group: it sets the look of the whole app (the profile has no
+  // age setting). A previously chosen group is preselected.
   const [step, setStep] = useState<Step>('age');
   const [mode, setMode] = useState<Mode>('signIn');
   const [role, setRole] = useState<ResidentRole>('REQUESTER');
@@ -76,7 +78,7 @@ export function LoginScreen() {
                     Ile masz lat?
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    Dopasujemy wielkość tekstu, kontrast i przyciski. Zmienisz to później w profilu.
+                    Dopasujemy wielkość tekstu, kolory i przyciski.
                   </ThemedText>
                 </View>
                 <AccessibilityPanel />
@@ -91,14 +93,14 @@ export function LoginScreen() {
               <>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Zmień wiek. Wybrano: ${ageLabel ?? 'brak'}`}
+                  accessibilityLabel={`Wróć do wyboru wieku. Wybrano: ${ageLabel ?? 'brak'}`}
                   onPress={() => {
                     setMode('signIn');
                     setStep('age');
                   }}
                   style={styles.backLink}>
                   <ThemedText type="smallBold" themeColor="primary">
-                    ← Zmień wiek{ageLabel ? ` (${ageLabel})` : ''}
+                    ← Wróć do wyboru wieku{ageLabel ? ` (${ageLabel})` : ''}
                   </ThemedText>
                 </Pressable>
 

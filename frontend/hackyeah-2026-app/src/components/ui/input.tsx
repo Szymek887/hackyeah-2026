@@ -40,7 +40,7 @@ export function Input({ label, error, multiline, style, onFocus, onBlur, ...rest
           {
             fontSize: Math.round(16 * textScale),
             minHeight: minTouchSize,
-            borderWidth: settings.highContrast || focused ? 2 : 1,
+            borderWidth: settings.palette !== 'standard' || focused ? 2 : 1,
           },
           style,
         ]}

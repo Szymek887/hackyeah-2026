@@ -160,8 +160,8 @@ export function RoutePlannerScreen() {
       {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
-        latitudeDelta: Math.max(mapRegion.latitudeDelta / 3, 0.004),
-        longitudeDelta: Math.max(mapRegion.longitudeDelta / 3, 0.004),
+        latitudeDelta: Math.max(mapRegion.latitudeDelta / 3, 0.0015),
+        longitudeDelta: Math.max(mapRegion.longitudeDelta / 3, 0.0015),
       },
       260,
     );

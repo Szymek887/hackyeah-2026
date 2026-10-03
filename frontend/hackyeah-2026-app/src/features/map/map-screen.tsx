@@ -10,7 +10,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
 import { getAreaPolygonRings } from '@/features/map/area-geometry';
-import { clusterRequests, zoomFromLongitudeDelta } from '@/features/map/map-clustering';
+import {
+  clusterRequests,
+  NO_CLUSTER_ZOOM,
+  zoomFromLongitudeDelta,
+} from '@/features/map/map-clustering';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import { timeAgo } from '@/features/requests/labels';
@@ -59,6 +63,8 @@ export function MapScreen() {
     [displayRequests, mapZoom],
   );
 
+  // Close up every request is its own point with a rectangular label above it.
+  const showLabels = mapZoom >= NO_CLUSTER_ZOOM;
   const selectedRequest = displayRequests.find((request) => request.id === selectedRequestId);
   const selectedAreaRings = selectedRequest ? getAreaPolygonRings(selectedRequest.maskedArea) : [];
   const [selectedOuterRing, ...selectedHoles] = selectedAreaRings;
@@ -69,8 +75,8 @@ export function MapScreen() {
       {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
-        latitudeDelta: Math.max(mapRegion.latitudeDelta / 3, 0.004),
-        longitudeDelta: Math.max(mapRegion.longitudeDelta / 3, 0.004),
+        latitudeDelta: Math.max(mapRegion.latitudeDelta / 3, 0.0015),
+        longitudeDelta: Math.max(mapRegion.longitudeDelta / 3, 0.0015),
       },
       260,
     );
@@ -162,16 +168,32 @@ export function MapScreen() {
             <Marker
               key={request.id}
               coordinate={cluster.coordinate}
+              // Close up the label sits above the dot, so the dot's bottom marks the spot.
+              anchor={showLabels ? { x: 0.5, y: 1 } : { x: 0.5, y: 0.5 }}
+              accessibilityLabel={request.title}
               onPress={() => setSelectedRequestId(request.id)}>
-              <View
-                style={[
-                  styles.requestMarker,
-                  {
-                    backgroundColor: CategoryColors[request.category].color,
-                    borderColor: PriorityColors[request.priority].color,
-                  },
-                ]}
-              />
+              <View style={styles.markerColumn}>
+                {showLabels && (
+                  <View
+                    style={[
+                      styles.markerLabel,
+                      { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                    ]}>
+                    <ThemedText type="caption" numberOfLines={2}>
+                      {request.title}
+                    </ThemedText>
+                  </View>
+                )}
+                <View
+                  style={[
+                    styles.requestMarker,
+                    {
+                      backgroundColor: CategoryColors[request.category].color,
+                      borderColor: PriorityColors[request.priority].color,
+                    },
+                  ]}
+                />
+              </View>
             </Marker>
           );
         })}
@@ -437,6 +459,17 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 3,
+  },
+  markerColumn: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  markerLabel: {
+    maxWidth: 160,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 4,
+    borderWidth: 1.5,
   },
   pressed: {
     opacity: 0.7,

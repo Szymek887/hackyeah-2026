@@ -8,10 +8,8 @@ import { errorMessage } from '@/api/errors';
 import type { LanguageCode } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
-import { AccessibilityPanel } from '@/features/accessibility/components/accessibility-panel';
 import { useSession } from '@/features/auth/session-context';
 import { ProfileAbout } from '@/features/profile/components/profile-about';
 import { ProfileEditForm } from '@/features/profile/components/profile-edit-form';
@@ -88,16 +86,6 @@ export function ProfileScreen() {
           <ProfileAbout user={user} profile={profileDetails} />
         )}
       </Animated.View>
-
-      <Card style={styles.section}>
-        <ThemedText type="subtitle" accessibilityRole="header">
-          Twój wiek
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Na jego podstawie dobieramy wielkość tekstu, kontrast i przyciski.
-        </ThemedText>
-        <AccessibilityPanel />
-      </Card>
 
       <View style={styles.actions}>
         {user.role === 'REQUESTER' && (
