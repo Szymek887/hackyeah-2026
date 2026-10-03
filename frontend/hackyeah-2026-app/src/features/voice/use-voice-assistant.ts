@@ -8,12 +8,12 @@ export type VoiceState = {
   isSupported: boolean;
   error: string | null;
   isSpeaking: boolean;
+  volumeLevel: number; // 0.0 to 1.0 real-time audio volume
   startListening: () => Promise<void>;
   stopListening: () => void;
   speak: (text: string) => void;
   stopSpeaking: () => void;
   resetTranscript: () => void;
-  simulateSpeech: (text: string) => void;
 };
 
 function getSpeechRecognition(): any {
@@ -33,7 +33,12 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
   const [transcript, setTranscript] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [volumeLevel, setVolumeLevel] = useState(0);
+
   const recognitionRef = useRef<any>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const silenceTimerRef = useRef<any>(null);
 
   const isSupported =
@@ -62,7 +67,6 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
 
       stopSpeaking();
 
-      // Ensure web speech synthesis context is active
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
           window.speechSynthesis.resume();
@@ -82,7 +86,6 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
           onDone: () => setIsSpeaking(false),
           onStopped: () => setIsSpeaking(false),
           onError: () => {
-            // Web fallback
             if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
               try {
                 const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -119,6 +122,30 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
     [stopSpeaking],
   );
 
+  const cleanupAudio = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {
+        // Ignored
+      }
+      audioContextRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      } catch {
+        // Ignored
+      }
+      mediaStreamRef.current = null;
+    }
+    setVolumeLevel(0);
+  }, []);
+
   const stopListening = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -132,28 +159,14 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
       }
       recognitionRef.current = null;
     }
+    cleanupAudio();
     setIsListening(false);
-  }, []);
+  }, [cleanupAudio]);
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
     setError(null);
   }, []);
-
-  const simulateSpeech = useCallback(
-    (text: string) => {
-      const clean = text.trim();
-      if (!clean) return;
-      stopListening();
-      setError(null);
-      setTranscript(clean);
-      if (onResult) {
-        onResult(clean);
-      }
-      speak(clean);
-    },
-    [onResult, speak, stopListening],
-  );
 
   const startListening = useCallback(async () => {
     setError(null);
@@ -161,26 +174,57 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
 
     const SpeechRecognitionConstructor = getSpeechRecognition();
 
-    if (!SpeechRecognitionConstructor) {
-      setError(
-        'Twoja przeglądarka nie obsługuje bezpośredniego nagrywania mowy. Skorzystaj z gotowych próśb poniżej.',
-      );
-      return;
-    }
+    let stream: MediaStream | null = null;
 
-    // Explicitly prompt for microphone permission in browser if available
+    // Start AudioContext & Analyser for real-time volume reactivity
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((track) => track.stop());
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const audioCtx = new AudioContextClass();
+          audioContextRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.3;
+          source.connect(analyser);
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+          const updateVolume = () => {
+            if (!analyser) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            // Map 0..255 to normalized 0.0..1.0
+            const level = Math.min(1, Math.max(0, (average - 6) / 45));
+            setVolumeLevel(level);
+            animationFrameRef.current = requestAnimationFrame(updateVolume);
+          };
+
+          updateVolume();
+        }
       } catch (err: any) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError(
-            'Dostęp do mikrofonu został zablokowany. Kliknij ikonę kłódki przy adresie strony i zezwól na mikrofon.',
+            'Dostęp do mikrofonu został zablokowany. Kliknij ikonę kłódki przy pasku adresu i zezwól na mikrofon.',
           );
           return;
         }
       }
+    }
+
+    if (!SpeechRecognitionConstructor) {
+      setError(
+        'Twoja przeglądarka nie obsługuje Web Speech API. Użyj przeglądarki Chrome lub Edge, albo wpisz treść ręcznie.',
+      );
+      return;
     }
 
     try {
@@ -209,32 +253,33 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
           fullText += event.results[i][0].transcript;
         }
         const clean = fullText.trim();
-        setTranscript(clean);
-        if (onResult && clean) {
-          onResult(clean);
+        if (clean) {
+          setTranscript(clean);
+          if (onResult) {
+            onResult(clean);
+          }
         }
 
-        // Reset silence timeout on every detected speech snippet
+        // Keep listening active while speaking
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
         silenceTimerRef.current = setTimeout(() => {
           stopListening();
-        }, 4500);
+        }, 5000);
       };
 
       recognition.onerror = (event: any) => {
-        setIsListening(false);
         if (event.error === 'not-allowed') {
           setError(
-            'Brak dostępu do mikrofonu. Kliknij ikonę kłódki obok adresu strony i zezwól na dostęp.',
+            'Brak dostępu do mikrofonu. Kliknij ikonę kłódki przy adresie strony i zezwól na mikrofon.',
           );
+          stopListening();
         } else if (event.error === 'no-speech') {
-          setError('Nie usłyszano głosu. Powiedz głośniej lub wybierz gotową prośbę poniżej.');
+          // Keep listening
         } else if (event.error === 'network') {
-          setError(
-            'Błąd połączenia z usługą rozpoznawania mowy. Możesz wybrać gotową prośbę poniżej.',
-          );
+          setError('Błąd sieci rozpoznawania mowy. Upewnij się, że masz połączenie z internetem.');
+          stopListening();
         } else {
           setError(`Komunikat rozpoznawania: ${event.error}`);
         }
@@ -242,15 +287,17 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
 
       recognition.onend = () => {
         setIsListening(false);
+        cleanupAudio();
       };
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err: any) {
       setIsListening(false);
-      setError(err?.message || 'Nie udało się uruchomić mikrofonu.');
+      cleanupAudio();
+      setError(err?.message || 'Nie udało się uruchomić rozpoznawania mowy.');
     }
-  }, [onResult, stopListening, stopSpeaking]);
+  }, [cleanupAudio, onResult, stopListening, stopSpeaking]);
 
   useEffect(() => {
     return () => {
@@ -264,9 +311,10 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
           // Ignored
         }
       }
+      cleanupAudio();
       stopSpeaking();
     };
-  }, [stopSpeaking]);
+  }, [cleanupAudio, stopSpeaking]);
 
   return {
     isListening,
@@ -274,11 +322,11 @@ export function useVoiceAssistant(onResult?: (text: string) => void): VoiceState
     isSupported,
     error,
     isSpeaking,
+    volumeLevel,
     startListening,
     stopListening,
     speak,
     stopSpeaking,
     resetTranscript,
-    simulateSpeech,
   };
 }

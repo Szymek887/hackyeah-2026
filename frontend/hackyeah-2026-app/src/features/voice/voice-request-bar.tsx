@@ -14,29 +14,6 @@ type VoiceRequestBarProps = {
   autoNavigate?: boolean;
 };
 
-const SAMPLE_REQUESTS = [
-  {
-    icon: '💊',
-    title: 'Leki z apteki',
-    text: 'Proszę o wykupienie leków na receptę w najbliższej aptece.',
-  },
-  {
-    icon: '🍞',
-    title: 'Zakupy spożywcze',
-    text: 'Potrzebuję zakupu pieczywa, mleka i wody w pobliskiej Biedronce.',
-  },
-  {
-    icon: '📦',
-    title: 'Wniesienie paczki',
-    text: 'Proszę o pomoc z wniesieniem ciężkiej paczki na 3. piętro bez windy.',
-  },
-  {
-    icon: '🐕',
-    title: 'Wyprowadzenie psa',
-    text: 'Szukam kogoś, kto pomoże mi wyprowadzić małego pieska w Parku Jordana.',
-  },
-];
-
 export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: VoiceRequestBarProps) {
   const theme = useTheme();
   const [capturedText, setCapturedText] = useState('');
@@ -70,17 +47,8 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
 
   const handleListenPrompt = () => {
     voice.speak(
-      'Witaj w asystencie głosowym PoDrodze. Naciśnij pomarańczowy mikrofon i powiedz, w czym sąsiad może Ci pomóc. Możesz też wybrać jedną z gotowych prośb poniżej.',
+      'Witaj w asystencie głosowym PoDrodze. Naciśnij pomarańczowy mikrofon i powiedz, w czym sąsiad może Ci pomóc.',
     );
-  };
-
-  const handleSampleClick = (sample: (typeof SAMPLE_REQUESTS)[number]) => {
-    setCapturedText(sample.text);
-    setManualText(sample.text);
-    voice.simulateSpeech(sample.text);
-    if (onTranscriptReady) {
-      onTranscriptReady(sample.text);
-    }
   };
 
   const handleClear = () => {
@@ -91,13 +59,16 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
     voice.stopSpeaking();
   };
 
+  const glowRadius = voice.isListening ? 10 + Math.round(voice.volumeLevel * 30) : 0;
+  const glowScale = voice.isListening ? 1 + voice.volumeLevel * 0.12 : 1;
+
   return (
     <Card highlighted style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.titleArea}>
           <ThemedText type="defaultBold">🎙️ Asystent głosowy</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Mów na głos do mikrofonu lub wybierz gotową prośbę.
+            Dotknij mikrofon i podyktuj treść prośby.
           </ThemedText>
         </View>
 
@@ -114,7 +85,7 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
         </Pressable>
       </View>
 
-      {/* Main Microphone Button */}
+      {/* Main Microphone Button with Sound Reactivity */}
       <View style={styles.micContainer}>
         <Pressable
           accessibilityRole="button"
@@ -127,6 +98,10 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
             {
               backgroundColor: voice.isListening ? theme.danger : theme.accent,
               borderColor: voice.isListening ? theme.dangerSoft : theme.accentSoft,
+              transform: [{ scale: glowScale }],
+              boxShadow: voice.isListening
+                ? `0 0 ${glowRadius}px rgba(220, 38, 38, ${0.4 + voice.volumeLevel * 0.5})`
+                : '0 4px 14px rgba(217, 72, 15, 0.3)',
             },
           ]}>
           <ThemedText style={styles.micIconText}>{voice.isListening ? '⏹️' : '🎙️'}</ThemedText>
@@ -135,9 +110,7 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
         <ThemedText
           type="smallBold"
           style={voice.isListening ? { color: theme.danger } : undefined}>
-          {voice.isListening
-            ? '🔴 Słucham Cię... Mów teraz do mikrofonu'
-            : 'Dotknij mikrofon, aby mówić'}
+          {voice.isListening ? '🔴 Słucham Cię... Mów teraz' : 'Dotknij mikrofon, aby mówić'}
         </ThemedText>
       </View>
 
@@ -149,30 +122,6 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
           </ThemedText>
         </View>
       )}
-
-      {/* Sample Spoken Requests (quick test / dictation fallback) */}
-      <View style={styles.sampleSection}>
-        <ThemedText type="caption" themeColor="textSecondary">
-          Przykładowe prośby (kliknij, aby przetestować):
-        </ThemedText>
-        <View style={styles.sampleChips}>
-          {SAMPLE_REQUESTS.map((sample) => (
-            <Pressable
-              key={sample.title}
-              accessibilityRole="button"
-              accessibilityLabel={`Wybierz przykładową prośbę: ${sample.title}`}
-              onPress={() => handleSampleClick(sample)}
-              style={[
-                styles.sampleChip,
-                { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-              ]}>
-              <ThemedText type="small">
-                {sample.icon} {sample.title}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </View>
 
       {/* Live Transcript / Result / Editing */}
       {activeText ? (
@@ -275,7 +224,6 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 14px rgba(217, 72, 15, 0.3)',
   },
   micIconText: {
     fontSize: 30,
@@ -286,20 +234,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     textAlign: 'center',
-  },
-  sampleSection: {
-    gap: Spacing.one,
-  },
-  sampleChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.one,
-  },
-  sampleChip: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
   },
   transcriptBox: {
     padding: Spacing.three,
