@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -16,6 +16,7 @@ import { Spacing } from '@/constants/theme';
 import { PriorityBadge } from '@/features/requests/components/request-badges';
 import { useCreateRequest } from '@/features/requests/hooks';
 import { CategoryLabels } from '@/features/requests/labels';
+import { VoiceRequestBar } from '@/features/voice/voice-request-bar';
 import { useTheme } from '@/hooks/use-theme';
 import { DEFAULT_CENTER } from '@/lib/geo';
 import { enterItem, layoutTransition } from '@/lib/motion';
@@ -30,6 +31,7 @@ type Errors = Partial<Record<'title' | 'description' | 'street' | 'buildingNumbe
 export function NewRequestScreen() {
   const theme = useTheme();
   const createMutation = useCreateRequest();
+  const params = useLocalSearchParams<{ initialVoiceText?: string }>();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -37,6 +39,25 @@ export function NewRequestScreen() {
   const [building, setBuilding] = useState('');
   const [apartment, setApartment] = useState('');
   const [errors, setErrors] = useState<Errors>({});
+
+  useEffect(() => {
+    if (params.initialVoiceText) {
+      try {
+        const text = decodeURIComponent(params.initialVoiceText).trim();
+        if (text) {
+          const words = text.split(' ');
+          if (words.length <= 6) {
+            setTitle(text);
+          } else {
+            setTitle(words.slice(0, 6).join(' '));
+          }
+          setDescription(text);
+        }
+      } catch {
+        // Ignored
+      }
+    }
+  }, [params.initialVoiceText]);
 
   const [classification, setClassification] = useState<AiClassification | null>(null);
   const [classifying, setClassifying] = useState(false);
@@ -116,6 +137,21 @@ export function NewRequestScreen() {
           Opisz, w czym potrzebujesz pomocy. Sąsiedzi zobaczą tylko przybliżoną okolicę.
         </ThemedText>
       </View>
+
+      <VoiceRequestBar
+        autoNavigate={false}
+        onTranscriptReady={(text) => {
+          const words = text.split(' ');
+          if (!title) {
+            if (words.length <= 6) {
+              setTitle(text);
+            } else {
+              setTitle(words.slice(0, 6).join(' '));
+            }
+          }
+          setDescription((prev) => (prev ? `${prev} ${text}` : text));
+        }}
+      />
 
       <Section title="1. Czego potrzebujesz?">
         <Input

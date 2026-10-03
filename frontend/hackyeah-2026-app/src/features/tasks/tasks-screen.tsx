@@ -22,6 +22,7 @@ import {
   useMyTasks,
   type TaskTab,
 } from '@/features/tasks/hooks';
+import { VoiceRequestBar } from '@/features/voice/voice-request-bar';
 import { useRefresh } from '@/hooks/use-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { enterItem, exitItem, layoutTransition } from '@/lib/motion';
@@ -64,6 +65,8 @@ export function TasksScreen() {
             : 'Twoje zgłoszenia. Pokaż kod QR wolontariuszowi, aby potwierdzić otrzymaną pomoc.'}
         </ThemedText>
       </View>
+
+      {role !== 'VOLUNTEER' && <VoiceRequestBar />}
 
       <SegmentedControl
         value={tab}

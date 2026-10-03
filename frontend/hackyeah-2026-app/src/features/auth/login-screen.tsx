@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -152,7 +153,7 @@ function SignInForm({ roles, buttonLabel }: SignInFormProps) {
     setPending(true);
     try {
       await signIn(selectedAccount.id);
-      // Route guard in app/_layout.tsx switches to the app automatically.
+      router.replace('/');
     } catch (err) {
       setError(errorMessage(err));
       setPending(false);

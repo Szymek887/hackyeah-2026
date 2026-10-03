@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -43,7 +44,7 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
       );
       // E.g. a visual impairment switches on large text and high contrast right away.
       applyDisabilities(disabilities);
-      // Route guard in app/_layout.tsx switches to the app automatically.
+      router.replace('/');
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors?.displayName) {
         setNameError('Imię jest za długie albo puste.');

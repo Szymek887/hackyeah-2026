@@ -62,8 +62,8 @@ export function navItemsFor(role: UserRole): NavItem[] {
   }
   return [
     {
-      name: 'tasks',
-      href: '/tasks',
+      name: 'index',
+      href: '/',
       label: 'Moje prośby',
       icon: { ios: 'house.fill', android: 'home' },
     },
