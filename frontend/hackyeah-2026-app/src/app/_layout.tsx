@@ -1,18 +1,19 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Stack } from 'expo-router';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { AppProviders } from '@/providers/app-providers';
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <AppProviders>
+      <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="request/[id]" options={{ title: 'Zgłoszenie' }} />
+        <Stack.Screen name="route-planner" options={{ title: 'Moja trasa' }} />
+        <Stack.Screen name="task/[id]" options={{ title: 'Aktywne zadanie' }} />
+        <Stack.Screen name="scan" options={{ title: 'Skanuj kod QR', presentation: 'modal' }} />
+        <Stack.Screen name="rate/[id]" options={{ title: 'Oceń pomoc' }} />
+        <Stack.Screen name="dashboard" options={{ title: 'Panel miasta' }} />
+      </Stack>
+    </AppProviders>
   );
 }
