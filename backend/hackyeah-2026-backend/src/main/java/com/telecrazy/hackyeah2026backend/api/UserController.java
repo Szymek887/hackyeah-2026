@@ -3,7 +3,10 @@ package com.telecrazy.hackyeah2026backend.api;
 import com.telecrazy.hackyeah2026backend.auth.CurrentUser;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,5 +42,15 @@ public class UserController {
     @GetMapping("/me")
     public UserProfileResponse me(@CurrentUser AppUser user) {
         return UserProfileResponse.from(user);
+    }
+
+    /** Replaces the languages the caller speaks. */
+    @PutMapping("/me/languages")
+    public UserProfileResponse updateLanguages(
+            @CurrentUser AppUser user,
+            @Valid @RequestBody UpdateLanguagesRequest request
+    ) {
+        user.replaceLanguages(request.languages());
+        return UserProfileResponse.from(userRepository.save(user));
     }
 }

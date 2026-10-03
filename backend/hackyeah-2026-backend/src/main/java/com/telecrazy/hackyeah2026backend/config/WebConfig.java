@@ -36,7 +36,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOriginPatterns(corsProperties.allowedOriginPatterns().toArray(String[]::new))
-                .allowedMethods("GET", "POST")
+                .allowedMethods("GET", "POST", "PUT")
                 .allowedHeaders(
                         HttpHeaders.CONTENT_TYPE,
                         HttpHeaders.ACCEPT,

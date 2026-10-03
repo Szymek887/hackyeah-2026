@@ -1,7 +1,10 @@
 package com.telecrazy.hackyeah2026backend.api;
 
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.SpokenLanguages;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
+
+import java.util.List;
 
 public record UserProfileResponse(
         Long id,
@@ -12,7 +15,8 @@ public record UserProfileResponse(
         int trustScore,
         int ratingCount,
         Double ratingAverage,
-        int cityPoints
+        int cityPoints,
+        List<String> languages
 ) {
 
     public static UserProfileResponse from(AppUser user) {
@@ -25,7 +29,8 @@ public record UserProfileResponse(
                 user.getTrustScore(),
                 user.getRatingCount(),
                 user.getRatingAverage(),
-                user.getCityPoints()
+                user.getCityPoints(),
+                SpokenLanguages.sorted(user.getLanguages())
         );
     }
 }

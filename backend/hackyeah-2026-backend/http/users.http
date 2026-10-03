@@ -24,6 +24,39 @@ X-User-Id: {{requesterId}}
     });
 %}
 
+### Replace spoken languages (ISO 639-1 codes, normalized and sorted)
+PUT {{host}}/api/users/me/languages
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "languages": ["pl", "UK", "en"]
+}
+
+> {%
+    client.test("Languages are replaced", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(JSON.stringify(response.body.languages) === JSON.stringify(["en", "pl", "uk"]), "Expected sorted lower-case codes");
+    });
+%}
+
+### Unknown language code
+PUT {{host}}/api/users/me/languages
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "languages": ["pl", "xx"]
+}
+
+> {%
+    client.test("Unknown code returns 400", function () {
+        client.assert(response.status === 400, "Expected status 400");
+    });
+%}
+
 ### Missing X-User-Id header
 GET {{host}}/api/users/me
 Accept: application/json
