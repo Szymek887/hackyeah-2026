@@ -14,6 +14,9 @@ import {
   KRAKOW_ROUTE_BUFFER,
   toLatLng,
 } from '@/features/map/krakow-map-data';
+import type { RouteCoordinate } from '@/lib/route-matching';
+
+export type RouteEndpoint = 'start' | 'end';
 
 type LeafletMapProps = {
   centerGeoJson?: FeatureCollection;
@@ -21,6 +24,11 @@ type LeafletMapProps = {
   requests: HelpRequestListItem[];
   showAreas?: boolean;
   showRouteBuffer?: boolean;
+  routeCoordinates?: RouteCoordinate[];
+  routeBufferCoordinates?: RouteCoordinate[];
+  editableRoute?: boolean;
+  onMapPress?: (coordinate: RouteCoordinate) => void;
+  onRouteEndpointChange?: (endpoint: RouteEndpoint, coordinate: RouteCoordinate) => void;
 };
 
 const leafletElementStyle: CSSProperties = {
@@ -28,20 +36,17 @@ const leafletElementStyle: CSSProperties = {
   width: '100%',
 };
 
-const routePositions = KRAKOW_COMMUTE_ROUTE.map(
-  (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
-);
-
-const bufferPositions = KRAKOW_ROUTE_BUFFER.map(
-  (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
-);
-
 export function LeafletMap({
   centerGeoJson,
   matchingRequests,
   requests,
   showAreas = true,
   showRouteBuffer = false,
+  routeCoordinates = KRAKOW_COMMUTE_ROUTE,
+  routeBufferCoordinates = KRAKOW_ROUTE_BUFFER,
+  editableRoute = false,
+  onMapPress,
+  onRouteEndpointChange,
 }: LeafletMapProps) {
   const elementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMapInstance | null>(null);
@@ -71,6 +76,19 @@ export function LeafletMap({
 
       const overlays = L.layerGroup().addTo(mapRef.current);
       overlayRef.current = overlays;
+      const routePositions = routeCoordinates.map(
+        (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
+      );
+      const bufferPositions = routeBufferCoordinates.map(
+        (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
+      );
+
+      mapRef.current.off('click');
+      if (onMapPress) {
+        mapRef.current.on('click', ({ latlng }) => {
+          onMapPress({ latitude: latlng.lat, longitude: latlng.lng });
+        });
+      }
 
       if (centerGeoJson) {
         L.geoJSON(centerGeoJson, {
@@ -78,7 +96,7 @@ export function LeafletMap({
         }).addTo(overlays);
       }
 
-      if (showRouteBuffer) {
+      if (showRouteBuffer && bufferPositions.length >= 3) {
         L.polygon(bufferPositions, {
           color: '#1A73D1',
           fillColor: '#E6F1FD',
@@ -87,11 +105,40 @@ export function LeafletMap({
         }).addTo(overlays);
       }
 
-      L.polyline(routePositions, {
-        color: '#1A73D1',
-        dashArray: showRouteBuffer ? undefined : '8 6',
-        weight: 5,
-      }).addTo(overlays);
+      if (routePositions.length >= 2) {
+        L.polyline(routePositions, {
+          color: '#1A73D1',
+          dashArray: showRouteBuffer ? undefined : '8 6',
+          weight: 5,
+        }).addTo(overlays);
+      }
+
+      if (editableRoute && routeCoordinates.length >= 2) {
+        const endpointEntries: [RouteEndpoint, RouteCoordinate, string, string][] = [
+          ['start', routeCoordinates[0], 'A', PriorityColors[3].color],
+          ['end', routeCoordinates[routeCoordinates.length - 1], 'B', PriorityColors[1].color],
+        ];
+
+        endpointEntries.forEach(([endpoint, coordinate, label, color]) => {
+          const marker = L.marker([coordinate.latitude, coordinate.longitude], {
+            draggable: true,
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="width:32px;height:32px;border-radius:16px;background:${color};color:white;border:3px solid white;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${label}</div>`,
+              iconAnchor: [16, 16],
+              iconSize: [32, 32],
+            }),
+          }).addTo(overlays);
+
+          marker.on('dragend', () => {
+            const position = marker.getLatLng();
+            onRouteEndpointChange?.(endpoint, {
+              latitude: position.lat,
+              longitude: position.lng,
+            });
+          });
+        });
+      }
 
       if (showAreas) {
         requests.forEach((request) => {
@@ -136,7 +183,18 @@ export function LeafletMap({
       overlayRef.current?.remove();
       overlayRef.current = null;
     };
-  }, [centerGeoJson, matchingRequests, requests, showAreas, showRouteBuffer]);
+  }, [
+    centerGeoJson,
+    editableRoute,
+    matchingRequests,
+    onMapPress,
+    onRouteEndpointChange,
+    requests,
+    routeBufferCoordinates,
+    routeCoordinates,
+    showAreas,
+    showRouteBuffer,
+  ]);
 
   useEffect(
     () => () => {
