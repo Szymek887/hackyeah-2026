@@ -15,6 +15,7 @@ import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
+import { LocationPermissionModal } from '@/features/map/location-permission-modal';
 import { useTheme } from '@/hooks/use-theme';
 
 type Filter = 'all' | 'route';
@@ -24,7 +25,9 @@ export function MapScreen() {
   const { savedRoute, toggleRouteActive } = useSavedCommuteRoute();
   const [filter, setFilter] = useState<Filter>('all');
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(true);
   const [locationLabel, setLocationLabel] = useState('Kraków (Centrum)');
+  const [radiusKm, setRadiusKm] = useState<number>(2.5);
   const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
     latitude: KRAKOW_INITIAL_REGION.latitude,
     longitude: KRAKOW_INITIAL_REGION.longitude,
@@ -33,8 +36,14 @@ export function MapScreen() {
   const { data: allRequests = [], error } = useNearbyRequests({
     lat: mapCenter.latitude,
     lng: mapCenter.longitude,
-    radiusKm: 5,
+    radiusKm,
   });
+
+  const handleLocationGranted = (coords: RouteCoordinate) => {
+    setIsPermissionModalOpen(false);
+    setMapCenter(coords);
+    setLocationLabel('Moja lokalizacja (GPS)');
+  };
 
   const activeRoute = savedRoute?.isActive ? savedRoute : null;
 
@@ -60,20 +69,51 @@ export function MapScreen() {
           <ThemedText type="subtitle" accessibilityRole="header">
             Mapa zgłoszeń w Twojej okolicy
           </ThemedText>
-          <Pressable
-            onPress={() => setIsSearchModalOpen(true)}
-            style={({ pressed }) => [
-              styles.locationBtn,
-              { backgroundColor: theme.primarySoft, borderColor: theme.border },
-              pressed && styles.pressed,
-            ]}>
-            <ThemedText type="smallBold" style={{ color: theme.primary }}>
-              📍 {locationLabel} (Zmień)
-            </ThemedText>
-          </Pressable>
+          <View style={styles.headerRightActions}>
+            <View style={styles.radiusChips}>
+              {[1.5, 2.5, 5.0].map((r) => {
+                const isSelected = radiusKm === r;
+                return (
+                  <Pressable
+                    key={r}
+                    onPress={() => setRadiusKm(r)}
+                    style={({ pressed }) => [
+                      styles.radiusChip,
+                      {
+                        backgroundColor: isSelected ? theme.primary : theme.background,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    <ThemedText
+                      type="caption"
+                      style={{
+                        color: isSelected ? theme.onPrimary : theme.text,
+                        fontWeight: '700',
+                      }}>
+                      {r} km
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable
+              onPress={() => setIsSearchModalOpen(true)}
+              style={({ pressed }) => [
+                styles.locationBtn,
+                { backgroundColor: theme.primarySoft, borderColor: theme.border },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="smallBold" style={{ color: theme.primary }}>
+                📍 {locationLabel} (Zmień)
+              </ThemedText>
+            </Pressable>
+          </View>
         </View>
         <ThemedText themeColor="textSecondary">
-          Najedź na punkt, aby zobaczyć, czego dotyczy prośba. Kliknij, aby otworzyć szczegóły.
+          W promieniu {radiusKm} km znaleziono {displayedRequests.length}{' '}
+          {displayedRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'}. Najedź na punkt, aby
+          zobaczyć szczegóły.
         </ThemedText>
       </View>
 
@@ -141,6 +181,16 @@ export function MapScreen() {
         height={600}
       />
 
+      <LocationPermissionModal
+        visible={isPermissionModalOpen}
+        onLocationGranted={handleLocationGranted}
+        onChooseManual={() => {
+          setIsPermissionModalOpen(false);
+          setIsSearchModalOpen(true);
+        }}
+        onDismiss={() => setIsPermissionModalOpen(false)}
+      />
+
       <PlaceSearchModal
         visible={isSearchModalOpen}
         title="Wybierz swoją lokalizację"
@@ -187,5 +237,21 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexWrap: 'wrap',
+  },
+  radiusChips: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  radiusChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
   },
 });

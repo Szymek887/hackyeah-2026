@@ -197,8 +197,13 @@ type Template = [
   building: string,
 ];
 
-const offset = (index: number, scale: number) =>
-  ((index % 5) - 2) * scale + ((Math.floor(index / 5) % 3) - 1) * scale * 0.35;
+const offset = (index: number, scale: number) => {
+  const base = ((index % 5) - 2) * scale + ((Math.floor(index / 5) % 3) - 1) * scale * 0.35;
+  if (Math.abs(base) < scale * 0.45) {
+    return (index % 2 === 0 ? 1.4 : -1.4) * scale;
+  }
+  return base;
+};
 
 function seedCluster(
   district: string,

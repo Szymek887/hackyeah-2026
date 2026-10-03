@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,6 +25,7 @@ import { useUserLocation } from '@/features/map/use-user-location';
 import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
+import { LocationPermissionModal } from '@/features/map/location-permission-modal';
 
 export function MapScreen() {
   const theme = useTheme();
@@ -41,7 +42,8 @@ export function MapScreen() {
   });
   const [locationLabel, setLocationLabel] = useState<string>('Kraków (Centrum)');
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
-  const hasAutoLocatingAttempted = useRef(false);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(true);
+  const [radiusKm, setRadiusKm] = useState<number>(2.5);
 
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
@@ -50,28 +52,6 @@ export function MapScreen() {
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [onlyAlongRoute, setOnlyAlongRoute] = useState(false);
 
-  // Auto-locate on first launch
-  useEffect(() => {
-    if (hasAutoLocatingAttempted.current) return;
-    hasAutoLocatingAttempted.current = true;
-
-    locate().then((loc) => {
-      if (loc) {
-        setMapCenter(loc);
-        setLocationLabel('Moja lokalizacja (GPS)');
-        mapRef.current?.animateToRegion(
-          {
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            latitudeDelta: 0.007,
-            longitudeDelta: 0.007,
-          },
-          500,
-        );
-      }
-    });
-  }, [locate]);
-
   const {
     data: allRequests = [],
     isPending,
@@ -79,8 +59,24 @@ export function MapScreen() {
   } = useNearbyRequests({
     lat: mapCenter.latitude,
     lng: mapCenter.longitude,
-    radiusKm: 5,
+    radiusKm,
   });
+
+  const handleLocationGranted = (coords: RouteCoordinate) => {
+    setIsPermissionModalOpen(false);
+    setMapCenter(coords);
+    setLocationLabel('Moja lokalizacja (GPS)');
+    setSelectedRequestId(null);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: 0.006,
+        longitudeDelta: 0.006,
+      },
+      500,
+    );
+  };
 
   const activeRoute = savedRoute?.isActive ? savedRoute : null;
 
@@ -109,8 +105,8 @@ export function MapScreen() {
       {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
-        latitudeDelta: 0.007,
-        longitudeDelta: 0.007,
+        latitudeDelta: 0.006,
+        longitudeDelta: 0.006,
       },
       400,
     );
@@ -125,8 +121,8 @@ export function MapScreen() {
         {
           latitude: loc.latitude,
           longitude: loc.longitude,
-          latitudeDelta: 0.007,
-          longitudeDelta: 0.007,
+          latitudeDelta: 0.006,
+          longitudeDelta: 0.006,
         },
         300,
       );
@@ -401,13 +397,88 @@ export function MapScreen() {
           </ThemedView>
         ) : (
           <ThemedView type="backgroundElement" style={styles.summary}>
-            <ThemedText type="smallBold">
-              W Twojej okolicy (promień 5 km): {displayRequests.length}{' '}
-              {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Dotknij punktu na mapie, aby zobaczyć szczegóły prośby.
-            </ThemedText>
+            <View style={styles.summaryHeader}>
+              <View style={styles.summaryTitleWrapper}>
+                <ThemedText type="smallBold">
+                  W Twojej okolicy ({displayRequests.length}{' '}
+                  {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'})
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Promień wyszukiwania wokół punktu:
+                </ThemedText>
+              </View>
+              <View style={styles.radiusChips}>
+                {[1.5, 2.5, 5.0].map((r) => {
+                  const isSelected = radiusKm === r;
+                  return (
+                    <Pressable
+                      key={r}
+                      onPress={() => setRadiusKm(r)}
+                      style={({ pressed }) => [
+                        styles.radiusChip,
+                        {
+                          backgroundColor: isSelected ? theme.primary : theme.background,
+                          borderColor: isSelected ? theme.primary : theme.border,
+                        },
+                        pressed && styles.pressed,
+                      ]}>
+                      <ThemedText
+                        type="caption"
+                        style={{
+                          color: isSelected ? theme.onPrimary : theme.text,
+                          fontWeight: '700',
+                        }}>
+                        {r} km
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Quick list of nearby items */}
+            {displayRequests.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.nearbyList}>
+                {displayRequests.slice(0, 6).map((req) => {
+                  const [lng, lat] = req.approximateLocation.coordinates;
+                  return (
+                    <Pressable
+                      key={req.id}
+                      onPress={() => {
+                        setSelectedRequestId(req.id);
+                        mapRef.current?.animateToRegion(
+                          {
+                            latitude: lat,
+                            longitude: lng,
+                            latitudeDelta: 0.005,
+                            longitudeDelta: 0.005,
+                          },
+                          300,
+                        );
+                      }}
+                      style={({ pressed }) => [
+                        styles.nearbyItem,
+                        { backgroundColor: theme.background, borderColor: theme.border },
+                        pressed && styles.pressed,
+                      ]}>
+                      <View style={styles.nearbyItemHeader}>
+                        <PriorityBadge priority={req.priority} />
+                        <CategoryBadge category={req.category} />
+                      </View>
+                      <ThemedText type="smallBold" numberOfLines={1} style={styles.nearbyItemTitle}>
+                        {req.title}
+                      </ThemedText>
+                      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                        📍 Strefa ~300 m · {timeAgo(req.createdAt)}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
 
             {isPending && <ActivityIndicator color={theme.primary} />}
             {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
@@ -429,6 +500,17 @@ export function MapScreen() {
           </ThemedView>
         )}
       </View>
+
+      {/* Initial / Onboarding Location Permission Modal */}
+      <LocationPermissionModal
+        visible={isPermissionModalOpen}
+        onLocationGranted={handleLocationGranted}
+        onChooseManual={() => {
+          setIsPermissionModalOpen(false);
+          setIsSearchModalOpen(true);
+        }}
+        onDismiss={() => setIsPermissionModalOpen(false)}
+      />
 
       {/* Location Picker Search Modal */}
       <PlaceSearchModal
@@ -596,5 +678,43 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.one,
     borderWidth: 1,
     gap: Spacing.one,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.one,
+  },
+  summaryTitleWrapper: {
+    flex: 1,
+    gap: 2,
+  },
+  radiusChips: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  radiusChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  nearbyList: {
+    gap: Spacing.one,
+    paddingVertical: 2,
+  },
+  nearbyItem: {
+    width: 200,
+    padding: Spacing.one + 2,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    gap: 3,
+  },
+  nearbyItemHeader: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  nearbyItemTitle: {
+    fontSize: 13,
   },
 });

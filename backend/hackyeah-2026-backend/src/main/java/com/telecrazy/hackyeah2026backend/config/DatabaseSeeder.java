@@ -279,7 +279,11 @@ public class DatabaseSeeder {
     private double offset(int index, double scale) {
         int row = index / 5;
         int column = index % 5;
-        return (column - 2) * scale + (row % 3 - 1) * scale * 0.35;
+        double base = (column - 2) * scale + (row % 3 - 1) * scale * 0.35;
+        if (Math.abs(base) < scale * 0.45) {
+            base = (index % 2 == 0 ? 1.4 : -1.4) * scale;
+        }
+        return base;
     }
 
     private org.locationtech.jts.geom.Point point(GeometryFactory geometryFactory, double lng, double lat) {
