@@ -15,7 +15,7 @@ import {
   NO_CLUSTER_ZOOM,
   zoomFromLongitudeDelta,
 } from '@/features/map/map-clustering';
-import { useNearbyRequests } from '@/features/requests/hooks';
+import { useNearbyRequests, useOfferHelp } from '@/features/requests/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import { timeAgo } from '@/features/requests/labels';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
@@ -32,6 +32,8 @@ export function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const { savedRoute } = useSavedCommuteRoute();
   const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
+  const offerHelpMutation = useOfferHelp();
+  const [offeredIds, setOfferedIds] = useState<number[]>([]);
 
   const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
     latitude: KRAKOW_INITIAL_REGION.latitude,
@@ -350,12 +352,52 @@ export function MapScreen() {
               Zgłoszono: {timeAgo(selectedRequest.createdAt)} · Strefa przybliżona ~300 m
             </ThemedText>
 
-            <Button
-              title="Zobacz szczegóły i pomóż"
-              onPress={() =>
-                router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
-              }
-            />
+            {offeredIds.includes(selectedRequest.id) ? (
+              <View
+                style={[
+                  styles.offeredBanner,
+                  { backgroundColor: theme.backgroundSelected, borderColor: theme.border },
+                ]}>
+                <ThemedText type="smallBold" style={{ color: theme.primary }}>
+                  ✓ Zgłoszono chęć pomocy!
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Czekasz na akceptację przez osobę potrzebującą.
+                </ThemedText>
+                <Button
+                  variant="secondary"
+                  title="Otwórz szczegóły zlecenia"
+                  onPress={() =>
+                    router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
+                  }
+                />
+              </View>
+            ) : (
+              <View style={styles.actionButtonsCol}>
+                <Button
+                  title={offerHelpMutation.isPending ? 'Wysyłam zgłoszenie...' : '🤝 Chcę pomóc'}
+                  disabled={offerHelpMutation.isPending}
+                  onPress={() => {
+                    offerHelpMutation.mutate(selectedRequest.id, {
+                      onSuccess: () => {
+                        setOfferedIds((prev) => [...prev, selectedRequest.id]);
+                      },
+                    });
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  title="Zobacz pełne szczegóły"
+                  onPress={() =>
+                    router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
+                  }
+                />
+              </View>
+            )}
+
+            {offerHelpMutation.error && (
+              <ThemedText themeColor="danger">{errorMessage(offerHelpMutation.error)}</ThemedText>
+            )}
           </ThemedView>
         ) : (
           <ThemedView type="backgroundElement" style={styles.summary}>
@@ -545,5 +587,14 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  actionButtonsCol: {
+    gap: Spacing.one,
+  },
+  offeredBanner: {
+    padding: Spacing.two,
+    borderRadius: Spacing.one,
+    borderWidth: 1,
+    gap: Spacing.one,
   },
 });
