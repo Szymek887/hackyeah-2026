@@ -1,0 +1,89 @@
+### Classify: critical (demo scenario)
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Potrzebuję leków",
+  "description": "Skończyły mi się leki na serce, nie mam jak wyjść z domu. Recepta jest w aplikacji."
+}
+
+> {%
+    client.test("Critical request gets priority 1", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.category === "BASIC_NEEDS", "Expected BASIC_NEEDS");
+        client.assert(response.body.priority === 1, "Expected priority 1");
+    });
+%}
+
+### Classify: equipment loan
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Pożyczę drabinę",
+  "description": "Czy ktoś mógłby pożyczyć mi drabinę na weekend? Chcę wymienić żarówkę w przedpokoju."
+}
+
+### Classify: home support
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Cieknie kran",
+  "description": "W kuchni od wczoraj cieknie kran, sama nie dam rady go dokręcić."
+}
+
+### Classify: social
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Spacer w parku",
+  "description": "Jestem samotną emerytką, chętnie poszłabym z kimś na spacer i porozmawiała."
+}
+
+### Classify: scam attempt
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Pilna pomoc finansowa",
+  "description": "Proszę o przelew 500 zł albo kod BLIK, oddam jutro. Pilne!"
+}
+
+> {%
+    client.test("Scam is flagged", function () {
+        client.assert(response.body.riskFlags.includes("SCAM_SUSPECTED"), "Expected SCAM_SUSPECTED");
+    });
+%}
+
+### Classify: medical emergency
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Źle się czuję",
+  "description": "Od godziny mam silny ból w klatce piersiowej i jest mi duszno."
+}
+
+> {%
+    client.test("Emergency is flagged", function () {
+        client.assert(response.body.riskFlags.includes("MEDICAL_EMERGENCY"), "Expected MEDICAL_EMERGENCY");
+        client.assert(response.body.priority === 1, "Expected priority 1");
+    });
+%}
+
+### Classify: validation error (blank description)
+POST {{host}}/api/requests/classify
+Content-Type: application/json
+
+{
+  "title": "Pomoc",
+  "description": ""
+}
+
+> {%
+    client.test("Blank description is rejected", function () {
+        client.assert(response.status === 400, "Expected status 400");
+    });
+%}
