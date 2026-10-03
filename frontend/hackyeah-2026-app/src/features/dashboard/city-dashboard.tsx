@@ -197,7 +197,7 @@ export function CityDashboard() {
                 5,
                 Math.min(90, ((pt.lng - minLng) / (maxLng - minLng)) * 100),
               );
-              const dotColor = CategoryColors[pt.category] ?? theme.primary;
+              const dotColor = CategoryColors[pt.category]?.color ?? theme.primary;
               const dotSize = 14 + pt.weight * 16;
 
               return (
@@ -224,21 +224,25 @@ export function CityDashboard() {
           {/* Map Legend */}
           <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors.BASIC_NEEDS }]} />
+              <View
+                style={[styles.legendDot, { backgroundColor: CategoryColors.BASIC_NEEDS.color }]}
+              />
               <ThemedText type="small">Leki / Pilne</ThemedText>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors.HOME_SUPPORT }]} />
+              <View
+                style={[styles.legendDot, { backgroundColor: CategoryColors.HOME_SUPPORT.color }]}
+              />
               <ThemedText type="small">Naprawy</ThemedText>
             </View>
             <View style={styles.legendItem}>
               <View
-                style={[styles.legendDot, { backgroundColor: CategoryColors.EQUIPMENT_LOAN }]}
+                style={[styles.legendDot, { backgroundColor: CategoryColors.EQUIPMENT_LOAN.color }]}
               />
               <ThemedText type="small">Sprzęt</ThemedText>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors.SOCIAL }]} />
+              <View style={[styles.legendDot, { backgroundColor: CategoryColors.SOCIAL.color }]} />
               <ThemedText type="small">Integracja</ThemedText>
             </View>
           </View>

@@ -10,12 +10,15 @@ export type RatingResult = {
   cityPointsAwarded: number;
 };
 
+const mockTokenFor = (requestId: string) =>
+  `PODDRODZE-${requestId.toUpperCase().replace(/[^A-Z0-9]/g, '')}-77A2`;
+
 /** Get or generate a single-use QR handoff token for the requester. */
 export async function getHandoffToken(requestId: string): Promise<HandoffToken> {
   if (USE_MOCKS) {
     const request = mockRequests.find((r) => r.id === requestId);
     if (!request) throw new ApiError(404, 'Nie znaleziono zgłoszenia');
-    const token = `PODDRODZE-${requestId.toUpperCase().replace(/[^A-Z0-9]/g, '')}-77A2`;
+    const token = mockTokenFor(requestId);
     return mockResponse({
       requestId,
       token,
@@ -33,7 +36,11 @@ export async function completeRequest(
   if (USE_MOCKS) {
     const request = mockRequests.find((r) => r.id === requestId);
     if (!request) throw new ApiError(404, 'Nie znaleziono zgłoszenia');
-    if (!token || token.trim().length === 0) {
+    // Mirror backend rules: only an ACCEPTED request can be closed, and only with its own token.
+    if (request.status !== 'ACCEPTED') {
+      throw new ApiError(409, 'Zlecenie nie jest w trakcie realizacji');
+    }
+    if (token.trim().toUpperCase() !== mockTokenFor(requestId)) {
       throw new ApiError(400, 'Nieprawidłowy kod weryfikacyjny');
     }
     request.status = 'COMPLETED';
