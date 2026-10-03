@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
 import { Fragment } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import MapView, { Callout, Marker, Circle, Geojson, Polyline } from 'react-native-maps';
+import MapView, { Callout, Marker, Geojson, Polygon, Polyline } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
+import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -56,13 +57,14 @@ export function MapScreen() {
           const coordinate = toLatLng(request.area.center.coordinates);
           const categoryColor = CategoryColors[request.category];
           const priorityColor = PriorityColors[request.priority];
+          const [outerRing, ...holes] = getAreaPolygonRings(request.area);
 
           return (
             <Fragment key={request.id}>
-              <Circle
-                center={coordinate}
-                radius={request.area.radiusMeters}
-                fillColor={categoryColor.soft}
+              <Polygon
+                coordinates={outerRing}
+                holes={holes}
+                fillColor={`${categoryColor.color}33`}
                 strokeColor={categoryColor.color}
                 strokeWidth={2}
               />
@@ -83,7 +85,7 @@ export function MapScreen() {
         <ThemedView type="backgroundElement" style={styles.summary}>
           <ThemedText type="smallBold">Krakow: {requests.length} zgłoszenia w pobliżu</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Okręgi pokazują przybliżone strefy, a linia testową trasę wolontariusza.
+            Obszary pokazują przybliżone strefy, a linia testową trasę wolontariusza.
           </ThemedText>
           {isPending && <ActivityIndicator color={theme.primary} />}
           {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}

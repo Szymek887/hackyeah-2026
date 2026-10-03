@@ -4,15 +4,33 @@ import { mockRequests } from '@/api/mocks/data';
 import { mockResponse } from '@/api/mocks/delay';
 import type {
   AiClassification,
+  AlongRouteQuery,
   ClassifyRequestDto,
   CreateHelpRequestDto,
+  Category,
+  GeoPoint,
+  GeoPolygon,
   HelpRequestDetails,
   HelpRequestPublic,
   NearbyQuery,
+  Priority,
+  RequestStatus,
 } from '@/api/types';
 import { distanceMeters } from '@/lib/geo';
+import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 
-// TODO(backend): endpoint paths are placeholders until the backend publishes its routes.
+type BackendCategory = 'MEDICINE' | 'GROCERIES' | 'EQUIPMENT_LOAN' | 'HOME_SUPPORT' | 'SOCIAL';
+
+type BackendPublicHelpRequest = {
+  id: number;
+  title: string;
+  category: BackendCategory;
+  priority: number;
+  status: RequestStatus;
+  approximateLocation: GeoPoint;
+  maskedArea?: GeoPolygon;
+  createdAt: string;
+};
 
 /** Privacy rule from plan.md: list payloads never carry exact location or address. */
 function toPublic({
@@ -25,6 +43,46 @@ function toPublic({
   return rest;
 }
 
+function toCategory(category: BackendCategory): Category {
+  if (category === 'MEDICINE' || category === 'GROCERIES') return 'BASIC_NEEDS';
+  return category;
+}
+
+function toPriority(priority: number): Priority {
+  if (priority === 1 || priority === 2 || priority === 3) return priority;
+  return 3;
+}
+
+function toRouteCoordinates(query: AlongRouteQuery): RouteCoordinate[] {
+  return query.route.coordinates.map(([longitude, latitude]) => ({ latitude, longitude }));
+}
+
+function fromBackendPublic(request: BackendPublicHelpRequest): HelpRequestPublic {
+  return {
+    id: String(request.id),
+    title: request.title,
+    category: toCategory(request.category),
+    priority: toPriority(request.priority),
+    status: request.status,
+    tags: [],
+    accessibilitySupport: false,
+    area: {
+      center: request.approximateLocation,
+      radiusMeters: 300,
+      polygon: request.maskedArea,
+    },
+    requester: {
+      id: 'backend-requester',
+      displayName: 'Zgłaszający',
+      verified: true,
+      trustScore: 0,
+      ratingAverage: 0,
+      ratingCount: 0,
+    },
+    createdAt: request.createdAt,
+  };
+}
+
 export async function getNearbyRequests(query: NearbyQuery): Promise<HelpRequestPublic[]> {
   if (USE_MOCKS) {
     const nearby = mockRequests.filter(
@@ -33,7 +91,28 @@ export async function getNearbyRequests(query: NearbyQuery): Promise<HelpRequest
     );
     return mockResponse(nearby.map(toPublic));
   }
-  return apiRequest('/api/requests/nearby', { query });
+  const requests = await apiRequest<BackendPublicHelpRequest[]>('/api/help-requests/nearby', {
+    query,
+  });
+  return requests.map(fromBackendPublic);
+}
+
+export async function getRequestsAlongRoute(query: AlongRouteQuery): Promise<HelpRequestPublic[]> {
+  if (USE_MOCKS) {
+    const publicRequests = mockRequests.map(toPublic);
+    return mockResponse(
+      filterRequestsAlongRoute(publicRequests, toRouteCoordinates(query), query.bufferMeters),
+    );
+  }
+
+  const requests = await apiRequest<BackendPublicHelpRequest[]>('/api/help-requests/along-route', {
+    method: 'POST',
+    body: {
+      points: query.route.coordinates.map(([lng, lat]) => ({ lat, lng })),
+      bufferMeters: query.bufferMeters,
+    },
+  });
+  return requests.map(fromBackendPublic);
 }
 
 export async function getRequest(id: string): Promise<HelpRequestDetails> {

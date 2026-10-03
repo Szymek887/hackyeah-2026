@@ -1,11 +1,9 @@
 import type { FeatureCollection } from 'geojson';
 
-import type { LngLat } from '@/api/types';
+import type { GeoLineString, LngLat } from '@/api/types';
+import type { RouteCoordinate } from '@/lib/route-matching';
 
-export type MapCoordinate = {
-  latitude: number;
-  longitude: number;
-};
+export type MapCoordinate = RouteCoordinate;
 
 export const KRAKOW_INITIAL_REGION = {
   latitude: 50.0614,
@@ -20,6 +18,11 @@ export const KRAKOW_COMMUTE_ROUTE: MapCoordinate[] = [
   { latitude: 50.0647, longitude: 19.945 },
   { latitude: 50.0709, longitude: 19.9561 },
 ];
+
+export const KRAKOW_COMMUTE_LINE: GeoLineString = {
+  type: 'LineString',
+  coordinates: KRAKOW_COMMUTE_ROUTE.map(({ longitude, latitude }) => [longitude, latitude]),
+};
 
 export const KRAKOW_ROUTE_BUFFER: MapCoordinate[] = [
   { latitude: 50.0518, longitude: 19.9242 },

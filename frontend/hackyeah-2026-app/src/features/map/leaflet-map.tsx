@@ -7,6 +7,7 @@ import type { LayerGroup, Map as LeafletMapInstance } from 'leaflet';
 
 import type { HelpRequestPublic } from '@/api/types';
 import { CategoryColors, PriorityColors, Radius } from '@/constants/theme';
+import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import {
   KRAKOW_COMMUTE_ROUTE,
   KRAKOW_INITIAL_REGION,
@@ -94,14 +95,15 @@ export function LeafletMap({
 
       if (showAreas) {
         requests.forEach((request) => {
-          const coordinate = toLatLng(request.area.center.coordinates);
           const categoryColor = CategoryColors[request.category];
+          const polygonRings = getAreaPolygonRings(request.area).map((ring) =>
+            ring.map(({ latitude, longitude }) => [latitude, longitude] as [number, number]),
+          );
 
-          L.circle([coordinate.latitude, coordinate.longitude], {
+          L.polygon(polygonRings, {
             color: categoryColor.color,
             fillColor: categoryColor.soft,
             fillOpacity: 0.35,
-            radius: request.area.radiusMeters,
             weight: 2,
           })
             .bindPopup(`<strong>${request.title}</strong><br />Priorytet ${request.priority}`)

@@ -1,6 +1,10 @@
 import type { HelpRequestPublic, LngLat } from '@/api/types';
 import { distanceMeters } from '@/lib/geo';
-import type { MapCoordinate } from '@/features/map/krakow-map-data';
+
+export type RouteCoordinate = {
+  latitude: number;
+  longitude: number;
+};
 
 const METERS_PER_LAT_DEGREE = 111_320;
 
@@ -10,11 +14,11 @@ function projectToMeters([lng, lat]: LngLat, referenceLat: number) {
   return { x, y };
 }
 
-function coordinateToLngLat(coordinate: MapCoordinate): LngLat {
+function coordinateToLngLat(coordinate: RouteCoordinate): LngLat {
   return [coordinate.longitude, coordinate.latitude];
 }
 
-export function distanceToRouteMeters(point: LngLat, route: MapCoordinate[]) {
+export function distanceToRouteMeters(point: LngLat, route: RouteCoordinate[]) {
   if (route.length === 0) return Number.POSITIVE_INFINITY;
   if (route.length === 1) return distanceMeters(point, coordinateToLngLat(route[0]));
 
@@ -47,7 +51,7 @@ export function distanceToRouteMeters(point: LngLat, route: MapCoordinate[]) {
 
 export function filterRequestsAlongRoute(
   requests: HelpRequestPublic[],
-  route: MapCoordinate[],
+  route: RouteCoordinate[],
   bufferMeters: number,
 ) {
   return requests.filter(
