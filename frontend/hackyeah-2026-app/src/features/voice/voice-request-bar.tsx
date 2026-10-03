@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -14,19 +14,47 @@ type VoiceRequestBarProps = {
   autoNavigate?: boolean;
 };
 
+const SAMPLE_REQUESTS = [
+  {
+    icon: '💊',
+    title: 'Leki z apteki',
+    text: 'Proszę o wykupienie leków na receptę w najbliższej aptece.',
+  },
+  {
+    icon: '🍞',
+    title: 'Zakupy spożywcze',
+    text: 'Potrzebuję zakupu pieczywa, mleka i wody w pobliskiej Biedronce.',
+  },
+  {
+    icon: '📦',
+    title: 'Wniesienie paczki',
+    text: 'Proszę o pomoc z wniesieniem ciężkiej paczki na 3. piętro bez windy.',
+  },
+  {
+    icon: '🐕',
+    title: 'Wyprowadzenie psa',
+    text: 'Szukam kogoś, kto pomoże mi wyprowadzić małego pieska w Parku Jordana.',
+  },
+];
+
 export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: VoiceRequestBarProps) {
   const theme = useTheme();
   const [capturedText, setCapturedText] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [manualText, setManualText] = useState('');
 
   const voice = useVoiceAssistant((result) => {
     setCapturedText(result);
+    setManualText(result);
     if (onTranscriptReady) {
       onTranscriptReady(result);
     }
   });
 
+  const activeText = manualText || capturedText || voice.transcript;
+
   const handleUseText = () => {
-    const textToUse = capturedText || voice.transcript;
+    const textToUse = activeText.trim();
     if (!textToUse) return;
 
     if (onTranscriptReady) {
@@ -42,23 +70,42 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
 
   const handleListenPrompt = () => {
     voice.speak(
-      'Witaj w PoDrodze. Naciśnij pomarańczowy przycisk z mikrofonem i powiedz, jakiej pomocy potrzebujesz. Na przykład: proszę o zakup chleba i leków z apteki.',
+      'Witaj w asystencie głosowym PoDrodze. Naciśnij pomarańczowy mikrofon i powiedz, w czym sąsiad może Ci pomóc. Możesz też wybrać jedną z gotowych prośb poniżej.',
     );
+  };
+
+  const handleSampleClick = (sample: (typeof SAMPLE_REQUESTS)[number]) => {
+    setCapturedText(sample.text);
+    setManualText(sample.text);
+    voice.simulateSpeech(sample.text);
+    if (onTranscriptReady) {
+      onTranscriptReady(sample.text);
+    }
+  };
+
+  const handleClear = () => {
+    setCapturedText('');
+    setManualText('');
+    setIsEditing(false);
+    voice.resetTranscript();
+    voice.stopSpeaking();
   };
 
   return (
     <Card highlighted style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.titleArea}>
-          <ThemedText type="defaultBold">🎙️ Pomoc głosowa dla seniora</ThemedText>
+          <ThemedText type="defaultBold">🎙️ Asystent głosowy</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Nie musisz pisać na klawiaturze – powiedz na głos, czego potrzebujesz.
+            Mów na głos do mikrofonu lub wybierz gotową prośbę.
           </ThemedText>
         </View>
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Odsłuchaj instrukcję na głos"
+          accessibilityLabel={
+            voice.isSpeaking ? 'Zatrzymaj odczytywanie' : 'Odsłuchaj instrukcję głosową'
+          }
           onPress={voice.isSpeaking ? voice.stopSpeaking : handleListenPrompt}
           style={[styles.speakIconBtn, { backgroundColor: theme.backgroundSelected }]}>
           <ThemedText type="smallBold">
@@ -71,7 +118,9 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
       <View style={styles.micContainer}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={voice.isListening ? 'Zatrzymaj słuchanie' : 'Rozpocznij mówienie'}
+          accessibilityLabel={
+            voice.isListening ? 'Zatrzymaj słuchanie' : 'Rozpocznij mówienie do mikrofonu'
+          }
           onPress={voice.isListening ? voice.stopListening : voice.startListening}
           style={[
             styles.micButton,
@@ -87,31 +136,85 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
           type="smallBold"
           style={voice.isListening ? { color: theme.danger } : undefined}>
           {voice.isListening
-            ? 'Słucham… Mów teraz wyraźnie do mikrofonu'
+            ? '🔴 Słucham Cię... Mów teraz do mikrofonu'
             : 'Dotknij mikrofon, aby mówić'}
         </ThemedText>
       </View>
 
-      {/* Error / Warning info if speech is blocked */}
+      {/* Error / Warning Notice */}
       {voice.error && (
-        <ThemedText type="small" themeColor="danger" style={styles.errorText}>
-          {voice.error}
-        </ThemedText>
+        <View style={[styles.noticeBox, { backgroundColor: theme.dangerSoft }]}>
+          <ThemedText type="small" themeColor="danger" style={styles.errorText}>
+            {voice.error}
+          </ThemedText>
+        </View>
       )}
 
-      {/* Live Transcript / Result */}
-      {voice.transcript || capturedText ? (
+      {/* Sample Spoken Requests (quick test / dictation fallback) */}
+      <View style={styles.sampleSection}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          Przykładowe prośby (kliknij, aby przetestować):
+        </ThemedText>
+        <View style={styles.sampleChips}>
+          {SAMPLE_REQUESTS.map((sample) => (
+            <Pressable
+              key={sample.title}
+              accessibilityRole="button"
+              accessibilityLabel={`Wybierz przykładową prośbę: ${sample.title}`}
+              onPress={() => handleSampleClick(sample)}
+              style={[
+                styles.sampleChip,
+                { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+              ]}>
+              <ThemedText type="small">
+                {sample.icon} {sample.title}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Live Transcript / Result / Editing */}
+      {activeText ? (
         <View
           style={[
             styles.transcriptBox,
             { backgroundColor: theme.backgroundElement, borderColor: theme.border },
           ]}>
-          <ThemedText type="caption" themeColor="textSecondary">
-            Rozpoznany tekst:
-          </ThemedText>
-          <ThemedText type="defaultBold" style={styles.transcriptText}>
-            „{voice.transcript || capturedText}”
-          </ThemedText>
+          <View style={styles.transcriptHeader}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Rozpoznany tekst:
+            </ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isEditing ? 'Zapisz tekst' : 'Edytuj tekst'}
+              onPress={() => setIsEditing(!isEditing)}>
+              <ThemedText type="caption" themeColor="primary">
+                {isEditing ? '✓ Zakończ edycję' : '✏️ Edytuj'}
+              </ThemedText>
+            </Pressable>
+          </View>
+
+          {isEditing ? (
+            <TextInput
+              value={manualText}
+              onChangeText={(text) => {
+                setManualText(text);
+                if (onTranscriptReady) onTranscriptReady(text);
+              }}
+              multiline
+              style={[
+                styles.editInput,
+                { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
+              ]}
+              placeholder="Wpisz lub popraw tekst..."
+              placeholderTextColor={theme.textSecondary}
+            />
+          ) : (
+            <ThemedText type="defaultBold" style={styles.transcriptText}>
+              „{activeText}”
+            </ThemedText>
+          )}
 
           <View style={styles.actionRow}>
             <Button
@@ -120,11 +223,18 @@ export function VoiceRequestBar({ onTranscriptReady, autoNavigate = true }: Voic
               onPress={handleUseText}
             />
             <Button
-              title="🔊 Odsłuchaj"
+              title={voice.isSpeaking ? '⏹️ Zatrzymaj' : '🔊 Odsłuchaj'}
               variant="secondary"
               size="medium"
-              onPress={() => voice.speak(voice.transcript || capturedText)}
+              onPress={() => {
+                if (voice.isSpeaking) {
+                  voice.stopSpeaking();
+                } else {
+                  voice.speak(activeText);
+                }
+              }}
             />
+            <Button title="Wyczyść" variant="secondary" size="medium" onPress={handleClear} />
           </View>
         </View>
       ) : null}
@@ -170,8 +280,26 @@ const styles = StyleSheet.create({
   micIconText: {
     fontSize: 30,
   },
+  noticeBox: {
+    padding: Spacing.two,
+    borderRadius: Radius.medium,
+  },
   errorText: {
     textAlign: 'center',
+  },
+  sampleSection: {
+    gap: Spacing.one,
+  },
+  sampleChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  sampleChip: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
   },
   transcriptBox: {
     padding: Spacing.three,
@@ -179,8 +307,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: Spacing.one,
   },
+  transcriptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   transcriptText: {
     marginVertical: Spacing.half,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderRadius: Radius.small,
+    padding: Spacing.two,
+    fontSize: 16,
+    minHeight: 60,
   },
   actionRow: {
     flexDirection: 'row',
