@@ -53,7 +53,7 @@ public class AnalyticsService {
         Set<HelpRequestStatus> statuses = filter.statuses().isEmpty()
                 ? DEFAULT_HEATMAP_STATUSES
                 : filter.statuses().stream()
-                .filter(status -> status != HelpRequestStatus.UNDER_REVIEW)
+                .filter(status -> !status.isHiddenFromPublic())
                 .collect(Collectors.toUnmodifiableSet());
         if (statuses.isEmpty()) {
             return HeatmapResponse.of(cellSizeMeters, List.of());
