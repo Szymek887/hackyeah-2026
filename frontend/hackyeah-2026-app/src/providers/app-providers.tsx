@@ -6,6 +6,7 @@ import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import type { ThemePalette } from '@/constants/theme';
 import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { SessionProvider } from '@/features/auth/session-context';
+import { NotificationsProvider } from '@/features/notifications/notifications-context';
 import { useSchemeName, useTheme } from '@/hooks/use-theme';
 
 /** Stack headers and navigation chrome use the app palette (incl. the high-contrast variant). */
@@ -39,7 +40,9 @@ export function AppProviders({ children }: PropsWithChildren) {
         mode={settings.reduceMotion ? ReduceMotion.Always : ReduceMotion.System}
       />
       <SessionProvider>
-        <ThemeProvider value={navigationTheme(scheme, theme)}>{children}</ThemeProvider>
+        <ThemeProvider value={navigationTheme(scheme, theme)}>
+          <NotificationsProvider>{children}</NotificationsProvider>
+        </ThemeProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 import { ThemedView } from '@/components/themed-view';
 import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { useAuth } from '@/features/auth/session-context';
+import { RequestAlerts } from '@/features/notifications/use-request-alerts';
 import { useTheme } from '@/hooks/use-theme';
 import { AppProviders } from '@/providers/app-providers';
 
@@ -33,39 +34,43 @@ function RootNavigator() {
   const isAdmin = signedIn && user?.role === 'CITY_ADMIN';
 
   return (
-    <Stack
-      screenOptions={{
-        headerBackButtonDisplayMode: 'minimal',
-        headerShadowVisible: false,
-        animation: settings.reduceMotion ? 'none' : 'slide_from_right',
-        animationDuration: 250,
-        contentStyle: { backgroundColor: theme.background },
-      }}>
-      <Stack.Protected guard={isAdmin}>
-        <Stack.Screen name="dashboard" options={{ headerShown: false, animation: 'fade' }} />
-      </Stack.Protected>
+    <>
+      {/* Mock notifications (polling); keyed so a new login starts with a clean slate. */}
+      {signedIn && !isAdmin && user && <RequestAlerts key={user.id} />}
+      <Stack
+        screenOptions={{
+          headerBackButtonDisplayMode: 'minimal',
+          headerShadowVisible: false,
+          animation: settings.reduceMotion ? 'none' : 'slide_from_right',
+          animationDuration: 250,
+          contentStyle: { backgroundColor: theme.background },
+        }}>
+        <Stack.Protected guard={isAdmin}>
+          <Stack.Screen name="dashboard" options={{ headerShown: false, animation: 'fade' }} />
+        </Stack.Protected>
 
-      <Stack.Protected guard={signedIn && !isAdmin}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="start" options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="request/[id]" options={{ title: 'Zgłoszenie' }} />
-        <Stack.Screen name="route-planner" options={{ title: 'Moja trasa' }} />
-        <Stack.Screen name="task/[id]" options={{ title: 'Aktywne zadanie' }} />
-        <Stack.Screen
-          name="scan"
-          options={{
-            title: 'Skanuj kod QR',
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen name="rate/[id]" options={{ title: 'Oceń pomoc' }} />
-      </Stack.Protected>
+        <Stack.Protected guard={signedIn && !isAdmin}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="start" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="request/[id]" options={{ title: 'Zgłoszenie' }} />
+          <Stack.Screen name="route-planner" options={{ title: 'Moja trasa' }} />
+          <Stack.Screen name="task/[id]" options={{ title: 'Aktywne zadanie' }} />
+          <Stack.Screen
+            name="scan"
+            options={{
+              title: 'Skanuj kod QR',
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen name="rate/[id]" options={{ title: 'Oceń pomoc' }} />
+        </Stack.Protected>
 
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
-      </Stack.Protected>
-    </Stack>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
 
