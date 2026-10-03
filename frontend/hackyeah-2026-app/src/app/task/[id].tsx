@@ -1,11 +1,9 @@
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { useLocalSearchParams } from 'expo-router';
+
+import { ActiveTaskView } from '@/features/handoff/active-task-view';
 
 export default function ActiveTaskScreen() {
-  return (
-    <ScreenPlaceholder
-      title="Aktywne zadanie"
-      owner="FE3"
-      tasks={['F3.1 kod QR u potrzebującego', 'widok handoffu']}
-    />
-  );
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  return <ActiveTaskView requestId={id ?? 'r-1'} />;
 }
