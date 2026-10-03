@@ -33,6 +33,8 @@ type LeafletMapProps = {
   showRouteBuffer?: boolean;
   /** No route is drawn by default; pass the user's route to show it. */
   routeCoordinates?: RouteCoordinate[];
+  /** Route planner wants to frame the route; the main map should usually stay near the user. */
+  fitRouteOnChange?: boolean;
   editableRoute?: boolean;
   /** Map height in px. */
   height?: number;
@@ -235,6 +237,7 @@ export function LeafletMap({
   showAreas = true,
   showRouteBuffer = false,
   routeCoordinates = NO_ROUTE,
+  fitRouteOnChange = true,
   editableRoute = false,
   height = 520,
   onMapPress,
@@ -358,9 +361,11 @@ export function LeafletMap({
 
         // Bring a new or changed route into view.
         const signature = `${routePositions.length}:${routePositions[0].join(',')}:${routePositions.at(-1)?.join(',')}`;
-        if (fittedRouteRef.current !== signature) {
+        if (fitRouteOnChange && fittedRouteRef.current !== signature) {
           fittedRouteRef.current = signature;
           map.fitBounds(routePositions, { padding: [40, 40] });
+        } else if (!fitRouteOnChange) {
+          fittedRouteRef.current = signature;
         }
 
         const endpoints: [RouteEndpoint, RouteCoordinate, string, string, string][] = [
@@ -517,6 +522,7 @@ export function LeafletMap({
   }, [
     centerGeoJson,
     editableRoute,
+    fitRouteOnChange,
     mapReady,
     markerSize,
     matchingIds,

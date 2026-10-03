@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 
 import { errorMessage } from '@/api/errors';
+import type { Category, HelpRequestListItem, Priority } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,9 +19,10 @@ import {
 } from '@/features/map/map-clustering';
 import { useNearbyRequests, useOfferHelp } from '@/features/requests/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
-import { timeAgo } from '@/features/requests/labels';
+import { CategoryLabels, PriorityLabels, timeAgo } from '@/features/requests/labels';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
+import { distanceMeters } from '@/lib/geo';
 import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 import { useUserLocation } from '@/features/map/use-user-location';
 import { PERSON_SVG, USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
@@ -28,6 +30,32 @@ import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 import { LocationPermissionModal } from '@/features/map/location-permission-modal';
+
+type CategoryFilter = 'ALL' | Category;
+type PriorityFilter = 'ALL' | Priority;
+
+const TAURON_ARENA = { latitude: 50.0681, longitude: 19.9942 };
+const CATEGORY_FILTERS: CategoryFilter[] = ['ALL', 'MEDICINE', 'GROCERIES', 'HOME_SUPPORT'];
+const PRIORITY_FILTERS: PriorityFilter[] = ['ALL', 1, 2, 3];
+
+function requestDistance(request: HelpRequestListItem, center: RouteCoordinate) {
+  const [lng, lat] = request.approximateLocation.coordinates;
+  return distanceMeters([center.longitude, center.latitude], [lng, lat]);
+}
+
+function formatDistance(meters: number) {
+  if (meters < 950) return `${Math.round(meters / 50) * 50} m`;
+  return `${(meters / 1000).toFixed(meters < 9500 ? 1 : 0).replace('.', ',')} km`;
+}
+
+function sortByNearest(requests: HelpRequestListItem[], center: RouteCoordinate) {
+  return [...requests].sort((a, b) => {
+    const distanceDiff = requestDistance(a, center) - requestDistance(b, center);
+    if (Math.abs(distanceDiff) > 1) return distanceDiff;
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
 
 export function MapScreen() {
   const theme = useTheme();
@@ -39,10 +67,10 @@ export function MapScreen() {
   const [offeredIds, setOfferedIds] = useState<number[]>([]);
 
   const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
-    latitude: KRAKOW_INITIAL_REGION.latitude,
-    longitude: KRAKOW_INITIAL_REGION.longitude,
+    latitude: TAURON_ARENA.latitude,
+    longitude: TAURON_ARENA.longitude,
   });
-  const [locationLabel, setLocationLabel] = useState<string>('Kraków (Centrum)');
+  const [locationLabel, setLocationLabel] = useState<string>('Tauron Arena Kraków');
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(true);
   const [radiusKm, setRadiusKm] = useState<number>(2.5);
@@ -53,6 +81,8 @@ export function MapScreen() {
   const [mapRegion, setMapRegion] = useState<Region>(KRAKOW_INITIAL_REGION);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [onlyAlongRoute, setOnlyAlongRoute] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('ALL');
 
   const {
     data: allRequests = [],
@@ -82,12 +112,31 @@ export function MapScreen() {
 
   const activeRoute = savedRoute?.isActive ? savedRoute : null;
 
+  const routeRequests = useMemo(
+    () =>
+      activeRoute
+        ? filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS)
+        : [],
+    [activeRoute, allRequests],
+  );
+
   const displayRequests = useMemo(() => {
-    if (activeRoute && onlyAlongRoute) {
-      return filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS);
-    }
-    return allRequests;
-  }, [activeRoute, allRequests, onlyAlongRoute]);
+    const base = activeRoute && onlyAlongRoute ? routeRequests : allRequests;
+    const filtered = base.filter((request) => {
+      if (categoryFilter !== 'ALL' && request.category !== categoryFilter) return false;
+      if (priorityFilter !== 'ALL' && request.priority !== priorityFilter) return false;
+      return true;
+    });
+    return sortByNearest(filtered, mapCenter);
+  }, [
+    activeRoute,
+    allRequests,
+    categoryFilter,
+    mapCenter,
+    onlyAlongRoute,
+    priorityFilter,
+    routeRequests,
+  ]);
 
   const requestClusters = useMemo(
     () => clusterRequests(displayRequests, mapZoom),
@@ -175,12 +224,7 @@ export function MapScreen() {
               { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             ]}>
             <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-              Trasa aktywna (
-              {
-                filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS)
-                  .length
-              }{' '}
-              po drodze)
+              Trasa aktywna ({routeRequests.length} po drodze)
             </ThemedText>
             <Pressable onPress={() => setOnlyAlongRoute(!onlyAlongRoute)}>
               <ThemedText
@@ -421,11 +465,11 @@ export function MapScreen() {
             <View style={styles.summaryHeader}>
               <View style={styles.summaryTitleWrapper}>
                 <ThemedText type="smallBold">
-                  W Twojej okolicy ({displayRequests.length}{' '}
+                  Najbliżej Ciebie ({displayRequests.length}{' '}
                   {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'})
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Promień wyszukiwania wokół punktu:
+                  Promień wyszukiwania i filtry:
                 </ThemedText>
               </View>
               <View style={styles.radiusChips}>
@@ -456,6 +500,90 @@ export function MapScreen() {
                 })}
               </View>
             </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterList}>
+              {CATEGORY_FILTERS.map((category) => {
+                const selected = categoryFilter === category;
+                const label = category === 'ALL' ? 'Wszystkie' : CategoryLabels[category];
+                return (
+                  <Pressable
+                    key={category}
+                    onPress={() => setCategoryFilter(category)}
+                    style={({ pressed }) => [
+                      styles.filterChip,
+                      {
+                        backgroundColor:
+                          selected && category !== 'ALL'
+                            ? CategoryColors[category].soft
+                            : selected
+                              ? theme.primarySoft
+                              : theme.background,
+                        borderColor:
+                          selected && category !== 'ALL'
+                            ? CategoryColors[category].color
+                            : theme.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    <ThemedText
+                      type="caption"
+                      style={{
+                        color:
+                          selected && category !== 'ALL'
+                            ? CategoryColors[category].color
+                            : selected
+                              ? theme.primary
+                              : theme.textSecondary,
+                        fontWeight: '700',
+                      }}>
+                      {label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+              {PRIORITY_FILTERS.map((priority) => {
+                const selected = priorityFilter === priority;
+                const label = priority === 'ALL' ? 'Każda pilność' : PriorityLabels[priority];
+                return (
+                  <Pressable
+                    key={priority}
+                    onPress={() => setPriorityFilter(priority)}
+                    style={({ pressed }) => [
+                      styles.filterChip,
+                      {
+                        backgroundColor:
+                          selected && priority !== 'ALL'
+                            ? PriorityColors[priority].soft
+                            : selected
+                              ? theme.primarySoft
+                              : theme.background,
+                        borderColor:
+                          selected && priority !== 'ALL'
+                            ? PriorityColors[priority].color
+                            : theme.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    <ThemedText
+                      type="caption"
+                      style={{
+                        color:
+                          selected && priority !== 'ALL'
+                            ? PriorityColors[priority].color
+                            : selected
+                              ? theme.primary
+                              : theme.textSecondary,
+                        fontWeight: '700',
+                      }}>
+                      {label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
             {/* Quick list of nearby items */}
             {displayRequests.length > 0 && (
@@ -493,7 +621,7 @@ export function MapScreen() {
                         {req.title}
                       </ThemedText>
                       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                        Strefa ~300 m · {timeAgo(req.createdAt)}
+                        {formatDistance(requestDistance(req, mapCenter))} · {timeAgo(req.createdAt)}
                       </ThemedText>
                     </Pressable>
                   );
@@ -733,6 +861,16 @@ const styles = StyleSheet.create({
   radiusChip: {
     paddingVertical: 4,
     paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  filterList: {
+    gap: Spacing.one,
+    paddingRight: Spacing.two,
+  },
+  filterChip: {
+    paddingVertical: 5,
+    paddingHorizontal: Spacing.two,
     borderRadius: 999,
     borderWidth: 1,
   },

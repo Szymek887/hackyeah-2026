@@ -210,8 +210,11 @@ export function RoutePlannerScreen() {
         height={480}
         showAreas={false}
         showRouteBuffer
+        fitRouteOnChange={false}
         editableRoute={false}
         routeCoordinates={route}
+        userLocation={start}
+        userLocationLabel={startLabel}
       />
 
       <Card highlighted>

@@ -116,11 +116,16 @@ export function RoutePlannerScreen() {
 
   useEffect(() => {
     if (!drivingRoute || route.length === 0) return;
-    mapRef.current?.fitToCoordinates(route, {
-      animated: true,
-      edgePadding: { top: insets.top + 140, right: 36, bottom: 200, left: 36 },
-    });
-  }, [drivingRoute, insets.top, route]);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: start.latitude,
+        longitude: start.longitude,
+        latitudeDelta: 0.018,
+        longitudeDelta: 0.018,
+      },
+      350,
+    );
+  }, [drivingRoute, route.length, start.latitude, start.longitude]);
 
   const handleSwapEndpoints = () => {
     const oldStart = start;
