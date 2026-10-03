@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
+import MapView, { Circle, Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
-import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import {
   clusterRequests,
   NO_CLUSTER_ZOOM,
@@ -27,7 +26,7 @@ import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matc
 import { useUserLocation } from '@/features/map/use-user-location';
 import { PERSON_SVG, USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
 import { useTheme } from '@/hooks/use-theme';
-import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
+import { KRAKOW_INITIAL_REGION, toLatLng } from '@/features/map/krakow-map-data';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 import { LocationPermissionModal } from '@/features/map/location-permission-modal';
 import { setSharedLocation, useSharedLocation } from '@/features/map/location-store';
@@ -37,6 +36,7 @@ type PriorityFilter = 'ALL' | Priority;
 
 const CATEGORY_FILTERS: CategoryFilter[] = ['ALL', 'MEDICINE', 'GROCERIES', 'HOME_SUPPORT'];
 const PRIORITY_FILTERS: PriorityFilter[] = ['ALL', 1, 2, 3];
+const MASKED_AREA_RADIUS_METERS = 180;
 
 function requestDistance(request: HelpRequestListItem, center: RouteCoordinate) {
   const [lng, lat] = request.approximateLocation.coordinates;
@@ -144,8 +144,9 @@ export function MapScreen() {
 
   const showLabels = mapZoom >= NO_CLUSTER_ZOOM;
   const selectedRequest = displayRequests.find((request) => request.id === selectedRequestId);
-  const selectedAreaRings = selectedRequest ? getAreaPolygonRings(selectedRequest.maskedArea) : [];
-  const [selectedOuterRing, ...selectedHoles] = selectedAreaRings;
+  const selectedRequestCenter = selectedRequest
+    ? toLatLng(selectedRequest.approximateLocation.coordinates)
+    : null;
 
   const handleSelectLocation = (name: string, coordinate: RouteCoordinate) => {
     setMapCenter(coordinate);
@@ -297,13 +298,13 @@ export function MapScreen() {
           </>
         )}
 
-        {selectedRequest && selectedOuterRing && (
-          <Polygon
-            coordinates={selectedOuterRing}
-            holes={selectedHoles}
-            fillColor={`${CategoryColors[selectedRequest.category].color}29`}
-            strokeColor={CategoryColors[selectedRequest.category].color}
-            strokeWidth={1}
+        {selectedRequest && selectedRequestCenter && (
+          <Circle
+            center={selectedRequestCenter}
+            radius={MASKED_AREA_RADIUS_METERS}
+            fillColor={`${CategoryColors[selectedRequest.category].color}1F`}
+            strokeColor={PriorityColors[selectedRequest.priority].color}
+            strokeWidth={3}
           />
         )}
 
@@ -317,9 +318,12 @@ export function MapScreen() {
                 <View
                   style={[
                     styles.clusterMarker,
-                    { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
+                    {
+                      backgroundColor: theme.primaryStrong,
+                      borderColor: theme.backgroundElement,
+                    },
                   ]}>
-                  <ThemedText type="caption" style={{ color: theme.onPrimary }}>
+                  <ThemedText type="smallBold" style={{ color: theme.onPrimary }}>
                     {cluster.requests.length}
                   </ThemedText>
                 </View>
@@ -348,14 +352,17 @@ export function MapScreen() {
                   </View>
                 )}
                 <View
-                  style={[
-                    styles.requestMarker,
-                    {
-                      backgroundColor: CategoryColors[request.category].color,
-                      borderColor: PriorityColors[request.priority].color,
-                    },
-                  ]}
-                />
+                  style={[styles.requestMarkerHalo, { backgroundColor: theme.backgroundElement }]}>
+                  <View
+                    style={[
+                      styles.requestMarker,
+                      {
+                        backgroundColor: CategoryColors[request.category].color,
+                        borderColor: PriorityColors[request.priority].color,
+                      },
+                    ]}
+                  />
+                </View>
               </View>
             </Marker>
           );
@@ -793,12 +800,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.one,
   },
   clusterMarker: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   meHalo: {
     width: USER_LOCATION_SIZE + 16,
@@ -816,11 +828,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  requestMarkerHalo: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.24,
+    shadowRadius: 4,
+    elevation: 5,
+  },
   requestMarker: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 3,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 5,
   },
   markerColumn: {
     alignItems: 'center',

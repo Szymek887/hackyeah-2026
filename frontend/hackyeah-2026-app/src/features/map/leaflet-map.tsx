@@ -9,7 +9,6 @@ import type { LayerGroup, Map as LeafletMapInstance, Marker } from 'leaflet';
 import type { HelpRequestListItem } from '@/api/types';
 import { CategoryColors, PriorityColors, Radius, type ThemePalette } from '@/constants/theme';
 import { useAccessibility } from '@/features/accessibility/accessibility-store';
-import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import { KRAKOW_INITIAL_REGION, toLatLng } from '@/features/map/krakow-map-data';
 import { clusterRequests, MAX_MAP_ZOOM, NO_CLUSTER_ZOOM } from '@/features/map/map-clustering';
 import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
@@ -53,6 +52,7 @@ const leafletElementStyle: CSSProperties = {
 
 const NO_ROUTE: RouteCoordinate[] = [];
 const NO_REQUESTS: HelpRequestListItem[] = [];
+const MASKED_AREA_RADIUS_METERS = 180;
 
 function leafletCss(theme: ThemePalette, textScale: number) {
   const px = (size: number) => `${Math.round(size * textScale)}px`;
@@ -277,7 +277,7 @@ export function LeafletMap({
   const selectedRequest = requests.find((request) => request.id === selectedRequestId);
   const hasMapPress = Boolean(onMapPress);
   const showLabels = zoom >= NO_CLUSTER_ZOOM;
-  const markerSize = settings.largeTouchTargets ? 26 : 18;
+  const markerSize = settings.largeTouchTargets ? 32 : 24;
 
   // Base map + click handler.
   useEffect(() => {
@@ -403,13 +403,13 @@ export function LeafletMap({
       requestClusters.forEach((cluster) => {
         if (cluster.requests.length > 1) {
           const count = cluster.requests.length;
-          const size = markerSize + 16;
+          const size = markerSize + 20;
           const marker = L.marker([cluster.coordinate.latitude, cluster.coordinate.longitude], {
             bubblingMouseEvents: false,
             title: `${count} zgłoszeń w okolicy – kliknij, aby przybliżyć`,
             icon: L.divIcon({
               className: 'podrodze-marker',
-              html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${theme.primary};color:${theme.onPrimary};border:2px solid ${theme.backgroundElement};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(13 * textScale)}px;box-shadow:0 1px 4px rgba(0,0,0,.3)">${count}</div>`,
+              html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${theme.primaryStrong};color:${theme.onPrimary};border:4px solid ${theme.backgroundElement};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${Math.round(15 * textScale)}px;box-shadow:0 2px 8px rgba(0,0,0,.35)">${count}</div>`,
               iconAnchor: [size / 2, size / 2],
               iconSize: [size, size],
             }),
@@ -444,7 +444,7 @@ export function LeafletMap({
           riseOnHover: true,
           icon: L.divIcon({
             className: 'podrodze-marker',
-            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${fill};border:${alongRoute ? 4 : 3}px solid ${ring};box-shadow:0 0 0 2px #fff,0 1px 4px rgba(0,0,0,.35)"></div>`,
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${fill};border:${alongRoute ? 5 : 4}px solid ${ring};box-shadow:0 0 0 4px #fff,0 2px 8px rgba(0,0,0,.35)"></div>`,
             iconAnchor: [size / 2, size / 2],
             iconSize: [size, size],
           }),
@@ -592,15 +592,15 @@ export function LeafletMap({
       areaRef.current = null;
       if (disposed || !map || !showAreas || !selectedRequest) return;
       const categoryColor = CategoryColors[selectedRequest.category];
-      const rings = getAreaPolygonRings(selectedRequest.maskedArea).map((ring) =>
-        ring.map(({ latitude, longitude }) => [latitude, longitude] as [number, number]),
-      );
+      const priorityColor = PriorityColors[selectedRequest.priority];
+      const center = toLatLng(selectedRequest.approximateLocation.coordinates);
       const layer = L.layerGroup().addTo(map);
-      L.polygon(rings, {
-        color: categoryColor.color,
+      L.circle([center.latitude, center.longitude], {
+        radius: MASKED_AREA_RADIUS_METERS,
+        color: priorityColor.color,
         fillColor: categoryColor.soft,
-        fillOpacity: 0.3,
-        weight: 2,
+        fillOpacity: 0.22,
+        weight: 3,
         interactive: false,
       }).addTo(layer);
       areaRef.current = layer;
