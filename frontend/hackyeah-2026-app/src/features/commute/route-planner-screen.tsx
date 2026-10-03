@@ -8,10 +8,8 @@ import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
 import {
-  formatRouteCoordinate,
   formatRouteDistance,
   formatRouteDuration,
   ROUTE_BUFFER_METERS,
@@ -30,23 +28,41 @@ import {
 } from '@/features/map/krakow-map-data';
 import { clusterRequests, zoomFromLongitudeDelta } from '@/features/map/map-clustering';
 import type { RouteCoordinate } from '@/lib/route-matching';
+import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
+import { KRAKOW_PRESET_PLACES } from '@/features/commute/krakow-places';
 
-type EditedEndpoint = 'start' | 'end';
-
-const DEFAULT_START = KRAKOW_COMMUTE_ROUTE[0];
-const DEFAULT_END = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
+const DEFAULT_START_COORDS = KRAKOW_COMMUTE_ROUTE[0];
+const DEFAULT_END_COORDS = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
 
 export function RoutePlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
-  const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
+  const { locate, isLoading: isLocating } = useUserLocation();
 
-  const [editedEndpoint, setEditedEndpoint] = useState<EditedEndpoint>('start');
-  const [start, setStart] = useState<RouteCoordinate>(savedRoute?.start ?? DEFAULT_START);
-  const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END);
-  const [isRouteConfirmed, setIsRouteConfirmed] = useState(Boolean(savedRoute?.isActive));
+  const [start, setStart] = useState<RouteCoordinate>(savedRoute?.start ?? DEFAULT_START_COORDS);
+  const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END_COORDS);
+  const [startLabel, setStartLabel] = useState<string>(() => {
+    const matched = KRAKOW_PRESET_PLACES.find(
+      (p) =>
+        Math.abs(p.coordinate.latitude - (savedRoute?.start ?? DEFAULT_START_COORDS).latitude) <
+        0.002,
+    );
+    return matched?.name ?? 'AGH / Krowodrza';
+  });
+  const [endLabel, setEndLabel] = useState<string>(() => {
+    const matched = KRAKOW_PRESET_PLACES.find(
+      (p) =>
+        Math.abs(p.coordinate.latitude - (savedRoute?.end ?? DEFAULT_END_COORDS).latitude) < 0.002,
+    );
+    return matched?.name ?? 'Kazimierz / Podgórze';
+  });
+
+  const [searchTarget, setSearchTarget] = useState<'start' | 'end' | null>(null);
+  const [isListExpanded, setIsListExpanded] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
   );
@@ -60,6 +76,7 @@ export function RoutePlannerScreen() {
   const route = drivingRoute?.coordinates ?? directRoute;
   const apiRoute = useMemo(() => simplifyRoute(route), [route]);
   const routeLine = useMemo(() => toRouteLineString(apiRoute), [apiRoute]);
+
   const {
     data: matchingRequests = [],
     isPending,
@@ -68,38 +85,36 @@ export function RoutePlannerScreen() {
     route: routeLine,
     bufferMeters: ROUTE_BUFFER_METERS,
   });
+
   const requestClusters = useMemo(
     () => clusterRequests(matchingRequests, mapZoom),
     [mapZoom, matchingRequests],
   );
 
   useEffect(() => {
-    if (!drivingRoute) return;
+    if (!drivingRoute || route.length === 0) return;
     mapRef.current?.fitToCoordinates(route, {
       animated: true,
-      edgePadding: { top: 56, right: 48, bottom: 320, left: 48 },
+      edgePadding: { top: insets.top + 140, right: 36, bottom: 200, left: 36 },
     });
-  }, [drivingRoute, route]);
+  }, [drivingRoute, insets.top, route]);
 
-  const updateEndpoint = (endpoint: EditedEndpoint, coordinate: RouteCoordinate) => {
-    setIsRouteConfirmed(false);
-    if (endpoint === 'start') setStart(coordinate);
-    else setEnd(coordinate);
+  const handleSwapEndpoints = () => {
+    const oldStart = start;
+    const oldStartLabel = startLabel;
+    setStart(end);
+    setStartLabel(endLabel);
+    setEnd(oldStart);
+    setEndLabel(oldStartLabel);
   };
 
-  const setStartToUserLocation = async () => {
-    const loc = await locate();
-    if (loc) {
-      updateEndpoint('start', loc);
-      mapRef.current?.animateToRegion(
-        {
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          latitudeDelta: 0.015,
-          longitudeDelta: 0.015,
-        },
-        300,
-      );
+  const handleSelectPlace = (name: string, coordinate: RouteCoordinate) => {
+    if (searchTarget === 'start') {
+      setStart(coordinate);
+      setStartLabel(name);
+    } else if (searchTarget === 'end') {
+      setEnd(coordinate);
+      setEndLabel(name);
     }
   };
 
@@ -118,15 +133,16 @@ export function RoutePlannerScreen() {
     }
   };
 
-  const resetRoute = () => {
-    setStart(DEFAULT_START);
-    setEnd(DEFAULT_END);
-    setEditedEndpoint('start');
-    setIsRouteConfirmed(false);
+  const fitFullRoute = () => {
+    if (route.length > 0) {
+      mapRef.current?.fitToCoordinates(route, {
+        animated: true,
+        edgePadding: { top: insets.top + 140, right: 36, bottom: 200, left: 36 },
+      });
+    }
   };
 
   const handleConfirmRoute = () => {
-    setIsRouteConfirmed(true);
     setSavedRoute({
       start,
       end,
@@ -135,9 +151,8 @@ export function RoutePlannerScreen() {
       durationSeconds: drivingRoute?.durationSeconds ?? 0,
       isActive: true,
     });
-    // The map tab reads the same store, so the new route is already drawn there.
     if (router.canGoBack()) router.back();
-    else router.replace('/');
+    else router.replace('/(tabs)');
   };
 
   const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
@@ -154,33 +169,84 @@ export function RoutePlannerScreen() {
 
   return (
     <ThemedView style={styles.root}>
+      {/* Top Search & Destination Card */}
+      <View style={[styles.topCardContainer, { top: insets.top + Spacing.one }]}>
+        <ThemedView type="backgroundElement" style={styles.topCard}>
+          <View style={styles.inputsRow}>
+            <View style={styles.indicatorsColumn}>
+              <View style={[styles.dot, { backgroundColor: theme.success }]} />
+              <View style={[styles.connectingLine, { backgroundColor: theme.border }]} />
+              <View style={[styles.dot, { backgroundColor: theme.danger }]} />
+            </View>
+
+            <View style={styles.fieldsColumn}>
+              <Pressable
+                onPress={() => setSearchTarget('start')}
+                style={({ pressed }) => [
+                  styles.addressButton,
+                  { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                  pressed && styles.pressed,
+                ]}>
+                <ThemedText type="smallBold" numberOfLines={1} style={{ flex: 1 }}>
+                  {startLabel}
+                </ThemedText>
+                <ThemedText type="caption" style={{ color: theme.primary }}>
+                  Zmień ✎
+                </ThemedText>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setSearchTarget('end')}
+                style={({ pressed }) => [
+                  styles.addressButton,
+                  { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                  pressed && styles.pressed,
+                ]}>
+                <ThemedText type="smallBold" numberOfLines={1} style={{ flex: 1 }}>
+                  {endLabel}
+                </ThemedText>
+                <ThemedText type="caption" style={{ color: theme.primary }}>
+                  Zmień ✎
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={handleSwapEndpoints}
+              style={({ pressed }) => [
+                styles.swapButton,
+                { backgroundColor: theme.primarySoft, borderColor: theme.border },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="default">⇅</ThemedText>
+            </Pressable>
+          </View>
+        </ThemedView>
+      </View>
+
+      {/* Interactive Map */}
       <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={KRAKOW_INITIAL_REGION}
         showsUserLocation
-        onPress={(event) => updateEndpoint(editedEndpoint, event.nativeEvent.coordinate)}
+        showsCompass
         onRegionChangeComplete={(region) => {
           setMapRegion(region);
           setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
         }}
-        mapPadding={{ top: insets.top + 8, right: 12, bottom: 280, left: 12 }}>
-        <Polyline coordinates={route} strokeColor={`${theme.primary}24`} strokeWidth={22} />
+        mapPadding={{
+          top: insets.top + 130,
+          right: 12,
+          bottom: isListExpanded ? 320 : 150,
+          left: 12,
+        }}>
+        <Polyline coordinates={route} strokeColor={`${theme.primary}28`} strokeWidth={24} />
         <Polyline coordinates={route} strokeColor={theme.primary} strokeWidth={5} />
-        <Marker
-          coordinate={start}
-          draggable
-          pinColor={theme.success}
-          title="Start"
-          onDragEnd={(event) => updateEndpoint('start', event.nativeEvent.coordinate)}
-        />
-        <Marker
-          coordinate={end}
-          draggable
-          pinColor={theme.danger}
-          title="Cel"
-          onDragEnd={(event) => updateEndpoint('end', event.nativeEvent.coordinate)}
-        />
+
+        <Marker coordinate={start} pinColor={theme.success} title={`Start: ${startLabel}`} />
+        <Marker coordinate={end} pinColor={theme.danger} title={`Cel: ${endLabel}`} />
+
         {requestClusters.map((cluster) => {
           if (cluster.requests.length > 1) {
             return (
@@ -206,7 +272,10 @@ export function RoutePlannerScreen() {
             <Marker
               key={request.id}
               coordinate={toLatLng(request.approximateLocation.coordinates)}
-              onPress={() => {}}>
+              onPress={() => {
+                setSelectedRequestId(request.id);
+                setIsListExpanded(true);
+              }}>
               <View
                 style={[
                   styles.requestMarker,
@@ -221,10 +290,23 @@ export function RoutePlannerScreen() {
         })}
       </MapView>
 
-      <View style={[styles.floatingControls, { top: insets.top + Spacing.two }]}>
+      {/* Floating Action Buttons */}
+      <View style={[styles.floatingControls, { top: insets.top + 134 }]}>
         <Pressable
           style={({ pressed }) => [
-            styles.locateFab,
+            styles.fab,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            pressed && styles.pressed,
+          ]}
+          onPress={fitFullRoute}>
+          <ThemedText type="smallBold" style={{ color: theme.primary }}>
+            🗺️ Cała trasa
+          </ThemedText>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.fab,
             { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             pressed && styles.pressed,
           ]}
@@ -233,132 +315,140 @@ export function RoutePlannerScreen() {
             <ActivityIndicator size="small" color={theme.primary} />
           ) : (
             <ThemedText type="smallBold" style={{ color: theme.primary }}>
-              📍 Wycentruj
+              📍 GPS
             </ThemedText>
           )}
         </Pressable>
       </View>
 
-      <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
-        <ThemedView type="backgroundElement" style={styles.summary}>
-          <ThemedText type="smallBold">Ustaw trasę na mapie</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Wybierz punkt, a potem stuknij mapę albo przeciągnij jego pinezkę.
-          </ThemedText>
-
-          <SegmentedControl
-            value={editedEndpoint}
-            onChange={setEditedEndpoint}
-            options={[
-              { value: 'start', label: 'Start (A)' },
-              { value: 'end', label: 'Cel (B)' },
-            ]}
-          />
-
-          <View style={styles.coordinateRow}>
-            <View style={styles.endpointInfo}>
-              <ThemedText type="caption" themeColor="textSecondary">
-                A: {formatRouteCoordinate(start)}
-              </ThemedText>
-              <Pressable
-                onPress={setStartToUserLocation}
-                disabled={isLocating}
-                style={({ pressed }) => [styles.myLocationBtn, pressed && styles.pressed]}>
-                <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '600' }}>
-                  {isLocating ? 'Pobieram...' : '🎯 Użyj mojej pozycji jako Start'}
+      {/* Compact Bottom Summary Sheet */}
+      <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + Spacing.two }]}>
+        <ThemedView type="backgroundElement" style={styles.bottomSheet}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryInfo}>
+              {isRouting ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={theme.primary} />
+                  <ThemedText type="small">Przeliczam trasę...</ThemedText>
+                </View>
+              ) : drivingRoute ? (
+                <ThemedText type="smallBold">
+                  {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
+                  {formatRouteDuration(drivingRoute.durationSeconds)}
                 </ThemedText>
-              </Pressable>
-            </View>
-            <ThemedText type="caption" themeColor="textSecondary">
-              B: {formatRouteCoordinate(end)}
-            </ThemedText>
-            {locationError && (
-              <ThemedText type="caption" themeColor="warning">
-                {locationError}
+              ) : (
+                <ThemedText type="smallBold">Trasa orientacyjna</ThemedText>
+              )}
+
+              <ThemedText type="caption" themeColor="textSecondary">
+                Zgłoszeń w korytarzu {ROUTE_BUFFER_METERS} m:{' '}
+                <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+                  {matchingRequests.length}
+                </ThemedText>
               </ThemedText>
-            )}
-          </View>
-
-          <View style={styles.resultRow}>
-            <ThemedText type="smallBold">
-              W korytarzu {ROUTE_BUFFER_METERS} m: {matchingRequests.length}
-            </ThemedText>
-            <Button title="Resetuj" variant="ghost" inline onPress={resetRoute} />
-          </View>
-
-          <Button
-            title="Zapisz trasę i pokaż na mapie"
-            disabled={isRouting}
-            onPress={handleConfirmRoute}
-          />
-
-          {drivingRoute && (
-            <ThemedText type="small" themeColor="textSecondary">
-              Trasa drogami: {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
-              {formatRouteDuration(drivingRoute.durationSeconds)}
-            </ThemedText>
-          )}
-
-          {isRouting && (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={theme.primary} />
-              <ThemedText type="small">Wyznaczam trasę po drogach...</ThemedText>
             </View>
-          )}
+
+            <Pressable
+              onPress={() => setIsListExpanded(!isListExpanded)}
+              style={({ pressed }) => [
+                styles.expandToggle,
+                { backgroundColor: theme.primarySoft },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+                {isListExpanded ? 'Zwiń listę ▼' : `Pokaż prośby (${matchingRequests.length}) ▲`}
+              </ThemedText>
+            </Pressable>
+          </View>
+
           {routingError && !isRouting && (
-            <ThemedText type="small" themeColor="warning">
-              Nie udało się wyznaczyć trasy drogowej. Tymczasowo pokazuję linię prostą.
+            <ThemedText type="caption" themeColor="warning">
+              Nie udało się pobrać trasy drogowej (pokazuję prostą).
             </ThemedText>
           )}
-          {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
+
           {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
 
-          {isRouteConfirmed && (
-            <View style={styles.results}>
-              <ThemedText type="smallBold">Komu możesz pomóc na trasie</ThemedText>
+          {/* Collapsible Requests List */}
+          {isListExpanded && (
+            <View style={styles.expandedContent}>
+              <ThemedText type="caption" themeColor="textSecondary" style={{ fontWeight: '700' }}>
+                PROŚBY O POMOC NA TWOJEJ DRODZE
+              </ThemedText>
+
               {matchingRequests.length > 0 ? (
                 <ScrollView
                   style={styles.requestList}
-                  contentContainerStyle={styles.requestListContent}>
-                  {matchingRequests.map((request) => (
-                    <Pressable
-                      key={request.id}
-                      onPress={() =>
-                        router.push({ pathname: '/request/[id]', params: { id: request.id } })
-                      }
-                      style={({ pressed }) => [styles.requestRow, pressed && styles.pressed]}>
-                      <View
-                        style={[
-                          styles.requestDot,
+                  contentContainerStyle={styles.requestListContent}
+                  nestedScrollEnabled>
+                  {matchingRequests.map((request) => {
+                    const isSelected = request.id === selectedRequestId;
+                    return (
+                      <Pressable
+                        key={request.id}
+                        onPress={() =>
+                          router.push({ pathname: '/request/[id]', params: { id: request.id } })
+                        }
+                        style={({ pressed }) => [
+                          styles.requestRow,
                           {
-                            backgroundColor: CategoryColors[request.category].color,
-                            borderColor: PriorityColors[request.priority].color,
+                            backgroundColor: isSelected
+                              ? theme.backgroundSelected
+                              : theme.backgroundMuted,
+                            borderColor: isSelected ? theme.primary : theme.border,
                           },
-                        ]}
-                      />
-                      <View style={styles.requestText}>
-                        <ThemedText type="smallBold">{request.title}</ThemedText>
-                        <ThemedText type="caption" themeColor="textSecondary">
-                          Priorytet {request.priority}
+                          pressed && styles.pressed,
+                        ]}>
+                        <View
+                          style={[
+                            styles.requestDot,
+                            {
+                              backgroundColor: CategoryColors[request.category].color,
+                              borderColor: PriorityColors[request.priority].color,
+                            },
+                          ]}
+                        />
+                        <View style={styles.requestText}>
+                          <ThemedText type="smallBold" numberOfLines={1}>
+                            {request.title}
+                          </ThemedText>
+                          <ThemedText type="caption" themeColor="textSecondary">
+                            Priorytet {request.priority} · Strefa ~300 m
+                          </ThemedText>
+                        </View>
+                        <ThemedText
+                          type="caption"
+                          style={{ color: theme.primary, fontWeight: '700' }}>
+                          Pomóż →
                         </ThemedText>
-                      </View>
-                      <ThemedText
-                        type="caption"
-                        style={{ color: theme.primary, fontWeight: '600' }}>
-                        Zobacz →
-                      </ThemedText>
-                    </Pressable>
-                  ))}
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               ) : (
-                <ThemedText type="small" themeColor="textSecondary">
-                  Brak zgłoszeń przy tej trasie. Przesuń start albo cel i spróbuj ponownie.
+                <ThemedText type="small" themeColor="textSecondary" style={{ paddingVertical: 8 }}>
+                  Brak zgłoszeń w korytarzu tej trasy.
                 </ThemedText>
               )}
             </View>
           )}
+
+          {/* Action Button */}
+          <Button
+            title="Zapisz trasę i pokaż na mapie"
+            disabled={isRouting || isPending}
+            onPress={handleConfirmRoute}
+          />
         </ThemedView>
       </View>
+
+      {/* Search Modal */}
+      <PlaceSearchModal
+        visible={Boolean(searchTarget)}
+        title={searchTarget === 'start' ? 'Wybierz punkt startowy (A)' : 'Wybierz cel podróży (B)'}
+        onClose={() => setSearchTarget(null)}
+        onSelect={handleSelectPlace}
+      />
     </ThemedView>
   );
 }
@@ -370,90 +460,148 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  floatingControls: {
+  topCardContainer: {
     position: 'absolute',
-    right: Spacing.three,
+    left: Spacing.two,
+    right: Spacing.two,
     zIndex: 10,
   },
-  locateFab: {
-    paddingVertical: Spacing.one,
+  topCard: {
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#D5E5F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  inputsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  indicatorsColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 16,
+    paddingVertical: 4,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  connectingLine: {
+    width: 2,
+    height: 24,
+    marginVertical: 2,
+  },
+  fieldsColumn: {
+    flex: 1,
+    gap: Spacing.one,
+  },
+  addressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.one,
+    borderWidth: 1,
+  },
+  swapButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  floatingControls: {
+    position: 'absolute',
+    right: Spacing.two,
+    zIndex: 10,
+    gap: Spacing.one,
+  },
+  fab: {
+    paddingVertical: 6,
     paddingHorizontal: Spacing.two,
     borderRadius: Spacing.two,
     borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 3,
     elevation: 3,
   },
-  panel: {
+  bottomContainer: {
     position: 'absolute',
-    left: Spacing.three,
-    right: Spacing.three,
+    left: Spacing.two,
+    right: Spacing.two,
     bottom: 0,
+    zIndex: 10,
   },
-  summary: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+  bottomSheet: {
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#D5E5F6',
     gap: Spacing.two,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 5,
   },
-  coordinateRow: {
-    gap: Spacing.half,
-  },
-  endpointInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing.one,
-  },
-  myLocationBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: Spacing.one,
-  },
-  resultRow: {
+  summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Spacing.two,
+  },
+  summaryInfo: {
+    flex: 1,
+    gap: 2,
   },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.one,
   },
-  results: {
-    gap: Spacing.two,
+  expandToggle: {
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.one,
   },
-  requestList: {
+  expandedContent: {
+    gap: Spacing.one,
     maxHeight: 180,
   },
+  requestList: {
+    maxHeight: 150,
+  },
   requestListContent: {
-    gap: Spacing.two,
+    gap: Spacing.one,
   },
   requestRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingVertical: Spacing.two,
+    paddingVertical: 8,
     paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.two,
-  },
-  pressed: {
-    opacity: 0.7,
+    borderRadius: Spacing.one,
+    borderWidth: 1,
   },
   requestDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 3,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
   },
   requestText: {
     flex: 1,
-    gap: Spacing.half,
+    gap: 1,
   },
   clusterMarker: {
     width: 30,
@@ -468,5 +616,8 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 3,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

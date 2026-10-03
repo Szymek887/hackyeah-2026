@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import { useCallback, useState } from 'react';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
@@ -6,48 +7,39 @@ export function useUserLocation() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const locate = useCallback((): Promise<RouteCoordinate | null> => {
-    return new Promise((resolve) => {
-      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        const msg = 'Geolokalizacja nie jest dostępna na tym urządzeniu.';
+  const locate = useCallback(async (): Promise<RouteCoordinate | null> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const msg =
+          'Brak uprawnień do lokalizacji. Zezwól aplikacji na dostęp do GPS w ustawieniach telefonu.';
         setError(msg);
-        resolve(null);
-        return;
+        setIsLoading(false);
+        return null;
       }
 
-      setIsLoading(true);
-      setError(null);
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setIsLoading(false);
-          const coords: RouteCoordinate = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          };
-          setUserLocation(coords);
-          resolve(coords);
-        },
-        (err) => {
-          setIsLoading(false);
-          let msg = 'Nie udało się pobrać lokalizacji.';
-          if (err.code === 1) {
-            msg = 'Brak uprawnień do lokalizacji. Zezwól na dostęp w ustawieniach.';
-          } else if (err.code === 2) {
-            msg = 'Pozycja niedostępna.';
-          } else if (err.code === 3) {
-            msg = 'Przekroczono czas oczekiwania na pozycję GPS.';
-          }
-          setError(msg);
-          resolve(null);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
-        },
-      );
-    });
+      const coords: RouteCoordinate = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+
+      setUserLocation(coords);
+      setIsLoading(false);
+      return coords;
+    } catch {
+      const msg =
+        'Nie udało się pobrać pozycji GPS. Sprawdź, czy masz włączoną lokalizację w telefonie.';
+      setError(msg);
+      setIsLoading(false);
+      return null;
+    }
   }, []);
 
   return {

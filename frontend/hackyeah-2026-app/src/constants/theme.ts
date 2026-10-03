@@ -81,8 +81,9 @@ export const HighContrastColors = {
     primaryStrong: '#06366D',
     primarySoft: '#D2E4FA',
     onPrimary: '#FFFFFF',
-    accent: '#9A2F00',
-    accentStrong: '#772400',
+    // Still clearly orange; white text on it is 5.4:1 (AA, AAA for large text).
+    accent: '#B83C0B',
+    accentStrong: '#8F2E07',
     accentSoft: '#FFE3D2',
     onAccent: '#FFFFFF',
     border: '#3A4757',

@@ -41,8 +41,7 @@ export function NeedsPicker({
           Niepełnosprawność i szczególne potrzeby (opcjonalnie)
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Zaznacz, jeśli coś utrudnia Ci codzienne sprawy. Twoje prośby dostaną wyższy priorytet, a
-          aplikacja dopasuje wygląd.
+          Zaznacz, jeśli coś utrudnia Ci codzienne sprawy. Twoje prośby dostaną wyższy priorytet.
         </ThemedText>
       </View>
 

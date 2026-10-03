@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
-import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { AccessibilityPanel } from '@/features/accessibility/components/accessibility-panel';
 import { useSession } from '@/features/auth/session-context';
 import { ProfileAbout } from '@/features/profile/components/profile-about';
@@ -26,7 +25,6 @@ const sameLanguages = (a: LanguageCode[], b: LanguageCode[]) =>
 
 export function ProfileScreen() {
   const { user, profileDetails, updateProfileDetails, signOut, refreshUser } = useSession();
-  const { applyDisabilities } = useAccessibility();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -46,9 +44,6 @@ export function ProfileScreen() {
       setSaving(false);
     }
     updateProfileDetails(details);
-    // Newly declared needs (e.g. vision) make the display more accessible straight away.
-    const added = details.disabilities.filter((d) => !profileDetails.disabilities.includes(d));
-    if (added.length > 0) applyDisabilities(added);
     setEditing(false);
   };
 
@@ -96,9 +91,12 @@ export function ProfileScreen() {
 
       <Card style={styles.section}>
         <ThemedText type="subtitle" accessibilityRole="header">
-          Wygląd i dostępność
+          Twój wiek
         </ThemedText>
-        <AccessibilityPanel expanded />
+        <ThemedText type="small" themeColor="textSecondary">
+          Na jego podstawie dobieramy wielkość tekstu, kontrast i przyciski.
+        </ThemedText>
+        <AccessibilityPanel />
       </Card>
 
       <View style={styles.actions}>
