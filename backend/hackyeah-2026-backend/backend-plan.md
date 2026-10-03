@@ -62,7 +62,7 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`.
 
 | Metoda i ścieżka | Opis | Zadanie |
 |---|---|---|
-| `GET /users/me` | Profil, reputacja, flagi | B1 |
+| `GET /users/me` | Profil, reputacja, flagi – ✅ zrobione | B1 |
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
 | `POST /requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI | B2 |
 | `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
@@ -107,6 +107,9 @@ Brak numeru lokalu, nazwiska i dokładnych współrzędnych. Pełne dane wyłąc
 
 ### 6.3 Maszyna stanów (Dev 2)
 `RequestStateService` z jawną tabelą dozwolonych przejść i sprawdzaniem aktora (kto może wykonać przejście). Zmiany pod `@Transactional` z blokadą optymistyczną (`@Version`) – dwa równoczesne `offer` → drugi dostaje **409**.
+- ✅ Pola w encjach: `HelpRequest.volunteer`, `updatedAt`, `@Version`; `AppUser.ratingCount` (`trustScore` zostaje `int` 0–100, jak w seederze).
+- ✅ Wyjątki domenowe (`exception/`) i mapowanie konfliktu wersji / naruszenia unikalności na **409**.
+- ⏳ `RequestStateService` z tabelą przejść i endpointy `offer` / `accept` / `cancel`.
 
 ### 6.4 QR (Dev 2)
 Token generowany przy `ACCEPTED`, ważny np. 24 h, jednorazowy. `complete` weryfikuje: stan `ACCEPTED`, wywołujący = przypisany wolontariusz, token zgodny, nieużyty, niewygasły. Po sukcesie `usedAt = now`, status `COMPLETED`.
@@ -144,7 +147,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 
 ### Etap 1 (0–6 h)
 - **Dev 1:** dodać `hibernate-spatial`; encje `User`, `HelpRequest`, `Rating`; `GeometryFactory` SRID 4326; init `postgis`; DTO GeoJSON (**B1.2, B1.4**).
-- **Dev 2:** mock autentykacji (`X-User-Id`), `GET /users/me`, `@RestControllerAdvice` z `ProblemDetail`; szkielet enumów i maszyny stanów.
+- **Dev 2:** ✅ mock autentykacji (`X-User-Id` → `@CurrentUser AppUser`, brak/nieznany użytkownik → 401), ✅ `GET /users/me`, ✅ `@RestControllerAdvice` z `ProblemDetail`, ✅ pola encji pod maszynę stanów; ⏳ `RequestStateService` (przeniesione do etapu 3).
 - **Dev 3:** ✅ prototyp promptu, ✅ `OllamaClient`; ⏳ konfiguracja Ollamy lokalnie + test ręczny na prawdziwym modelu.
 - **Dev 1 (po encjach):** seeder (**B1.3**).
 
@@ -166,7 +169,7 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 - [ ] Cały scenariusz demo przechodzi przez API bez ręcznych zmian w bazie.
 - [ ] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny).
 - [ ] Wszystkie geometrie w SRID 4326; zapytania odległościowe w metrach (`geography`).
-- [ ] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
+- [x] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
 - [ ] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
 - [ ] Testy: zapytania geo (Testcontainers), maszyna stanów, token QR (użycie wtórne, wygaśnięcie), maskowanie.
 - [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu.
