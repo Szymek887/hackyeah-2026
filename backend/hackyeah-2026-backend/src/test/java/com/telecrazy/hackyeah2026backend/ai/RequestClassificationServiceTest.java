@@ -13,7 +13,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.ResourceAccessException;
 
-import com.telecrazy.hackyeah2026backend.request.RequestCategory;
+import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 
 class RequestClassificationServiceTest {
 
@@ -26,7 +26,7 @@ class RequestClassificationServiceTest {
     @Test
     void usesLlmWhenItSucceeds() {
         RequestClassification llmResult = new RequestClassification(
-                RequestCategory.BASIC_NEEDS, 1, List.of("leki"), Set.of(), ClassificationSource.LLM);
+                HelpCategory.MEDICINE, 1, List.of("leki"), Set.of(), ClassificationSource.LLM);
         when(llm.classify(any())).thenReturn(llmResult);
 
         assertThat(service(true).classify(INPUT)).isEqualTo(llmResult);

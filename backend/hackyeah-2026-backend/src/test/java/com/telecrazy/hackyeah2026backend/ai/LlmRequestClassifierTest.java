@@ -8,16 +8,16 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.telecrazy.hackyeah2026backend.ai.LlmRequestClassifier.LlmOutput;
-import com.telecrazy.hackyeah2026backend.request.RequestCategory;
+import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 
 class LlmRequestClassifierTest {
 
     @Test
     void normalizesValidOutput() {
         RequestClassification result = LlmRequestClassifier.normalize(
-                new LlmOutput("basic_needs", 1, List.of(" Leki ", "apteka", "leki", ""), List.of("scam_suspected")));
+                new LlmOutput("medicine", 1, List.of(" Leki ", "apteka", "leki", ""), List.of("scam_suspected")));
 
-        assertThat(result.category()).isEqualTo(RequestCategory.BASIC_NEEDS);
+        assertThat(result.category()).isEqualTo(HelpCategory.MEDICINE);
         assertThat(result.priority()).isEqualTo(1);
         assertThat(result.tags()).containsExactly("leki", "apteka");
         assertThat(result.riskFlags()).containsExactly(RiskFlag.SCAM_SUSPECTED);
@@ -35,9 +35,18 @@ class LlmRequestClassifierTest {
     }
 
     @Test
+    void dropsTagsThatAreNotPolishWords() {
+        RequestClassification result = LlmRequestClassifier.normalize(new LlmOutput("HOME_SUPPORT", 2, List.of(
+                "naprawa  kranu", "tel. 600123456", "45010112345", "help!", "pomoc w domu teraz już", "кран",
+                "a".repeat(31), "wniosek"), List.of()));
+
+        assertThat(result.tags()).containsExactly("naprawa kranu", "wniosek");
+    }
+
+    @Test
     void medicalEmergencyIsAlwaysMostUrgent() {
         RequestClassification result = LlmRequestClassifier.normalize(
-                new LlmOutput("BASIC_NEEDS", 3, List.of(), List.of("MEDICAL_EMERGENCY")));
+                new LlmOutput("MEDICINE", 3, List.of(), List.of("MEDICAL_EMERGENCY")));
 
         assertThat(result.priority()).isEqualTo(1);
     }

@@ -3,7 +3,7 @@ package com.telecrazy.hackyeah2026backend.ai;
 import java.util.List;
 import java.util.Set;
 
-import com.telecrazy.hackyeah2026backend.request.RequestCategory;
+import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 
 /**
  * Result of classifying a help request.
@@ -11,7 +11,7 @@ import com.telecrazy.hackyeah2026backend.request.RequestCategory;
  * @param priority 1 = critical, 2 = high, 3 = normal
  */
 public record RequestClassification(
-        RequestCategory category,
+        HelpCategory category,
         int priority,
         List<String> tags,
         Set<RiskFlag> riskFlags,

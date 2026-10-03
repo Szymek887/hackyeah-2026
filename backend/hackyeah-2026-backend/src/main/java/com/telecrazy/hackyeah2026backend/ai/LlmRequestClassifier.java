@@ -10,9 +10,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.telecrazy.hackyeah2026backend.request.RequestCategory;
+import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -28,11 +29,18 @@ import tools.jackson.databind.json.JsonMapper;
 public class LlmRequestClassifier {
 
     static final int MAX_TAGS = 5;
+    static final int MAX_TAG_LENGTH = 30;
+
+    /**
+     * Up to three lowercase words of Polish letters. Rejects digits (which could leak phone or PESEL numbers),
+     * punctuation and letters from other alphabets.
+     */
+    private static final Pattern VALID_TAG = Pattern.compile("[a-ząćęłńóśźż]+(?:[ -][a-ząćęłńóśźż]+){0,2}");
 
     private static final Map<String, Object> RESPONSE_SCHEMA = Map.of(
             "type", "object",
             "properties", Map.of(
-                    "category", Map.of("type", "string", "enum", names(RequestCategory.values())),
+                    "category", Map.of("type", "string", "enum", names(HelpCategory.values())),
                     "priority", Map.of("type", "integer", "enum", List.of(1, 2, 3)),
                     "tags", Map.of("type", "array", "items", Map.of("type", "string")),
                     "riskFlags", Map.of("type", "array", "items",
@@ -62,7 +70,7 @@ public class LlmRequestClassifier {
     }
 
     static RequestClassification normalize(LlmOutput output) {
-        RequestCategory category = RequestCategory.valueOf(
+        HelpCategory category = HelpCategory.valueOf(
                 Objects.requireNonNull(output.category(), "category").trim().toUpperCase(Locale.ROOT));
 
         int priority = Math.clamp(
@@ -72,8 +80,8 @@ public class LlmRequestClassifier {
 
         List<String> tags = output.tags() == null ? List.of() : output.tags().stream()
                 .filter(Objects::nonNull)
-                .map(tag -> tag.trim().toLowerCase(Locale.forLanguageTag("pl")))
-                .filter(tag -> !tag.isEmpty())
+                .map(tag -> tag.trim().replaceAll("\\s+", " ").toLowerCase(Locale.forLanguageTag("pl")))
+                .filter(tag -> tag.length() <= MAX_TAG_LENGTH && VALID_TAG.matcher(tag).matches())
                 .distinct()
                 .limit(MAX_TAGS)
                 .toList();
