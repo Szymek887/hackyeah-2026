@@ -6,11 +6,9 @@ import { errorMessage } from '@/api/errors';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import {
-  formatRouteCoordinate,
   formatRouteDistance,
   formatRouteDuration,
   ROUTE_BUFFER_METERS,
@@ -20,13 +18,14 @@ import {
 import { useDrivingRoute } from '@/features/commute/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
-import { useUserLocation } from '@/features/map/use-user-location';
 import { KRAKOW_COMMUTE_ROUTE } from '@/features/map/krakow-map-data';
 import { RequestCard } from '@/features/requests/components/request-card';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
 import type { RouteCoordinate } from '@/lib/route-matching';
+import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
+import { KRAKOW_PRESET_PLACES } from '@/features/commute/krakow-places';
 
-import { LeafletMap, type RouteEndpoint } from '../map/leaflet-map';
+import { LeafletMap } from '../map/leaflet-map';
 
 const DEFAULT_START = KRAKOW_COMMUTE_ROUTE[0];
 const DEFAULT_END = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
@@ -34,11 +33,24 @@ const DEFAULT_END = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
 export function RoutePlannerScreen() {
   const theme = useTheme();
   const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
-  const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
 
-  const [editedEndpoint, setEditedEndpoint] = useState<RouteEndpoint>('start');
   const [start, setStart] = useState<RouteCoordinate>(savedRoute?.start ?? DEFAULT_START);
   const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END);
+  const [startLabel, setStartLabel] = useState<string>(() => {
+    const matched = KRAKOW_PRESET_PLACES.find(
+      (p) =>
+        Math.abs(p.coordinate.latitude - (savedRoute?.start ?? DEFAULT_START).latitude) < 0.002,
+    );
+    return matched?.name ?? 'AGH / Krowodrza';
+  });
+  const [endLabel, setEndLabel] = useState<string>(() => {
+    const matched = KRAKOW_PRESET_PLACES.find(
+      (p) => Math.abs(p.coordinate.latitude - (savedRoute?.end ?? DEFAULT_END).latitude) < 0.002,
+    );
+    return matched?.name ?? 'Kazimierz / Podgórze';
+  });
+
+  const [searchTarget, setSearchTarget] = useState<'start' | 'end' | null>(null);
   const [isRouteConfirmed, setIsRouteConfirmed] = useState(Boolean(savedRoute?.isActive));
   const directRoute = useMemo(() => [start, end], [end, start]);
   const {
@@ -58,23 +70,30 @@ export function RoutePlannerScreen() {
     bufferMeters: ROUTE_BUFFER_METERS,
   });
 
-  const updateEndpoint = (endpoint: RouteEndpoint, coordinate: RouteCoordinate) => {
-    setIsRouteConfirmed(false);
-    if (endpoint === 'start') setStart(coordinate);
-    else setEnd(coordinate);
+  const handleSwapEndpoints = () => {
+    const oldStart = start;
+    const oldStartLabel = startLabel;
+    setStart(end);
+    setStartLabel(endLabel);
+    setEnd(oldStart);
+    setEndLabel(oldStartLabel);
   };
 
-  const setStartToUserLocation = async () => {
-    const loc = await locate();
-    if (loc) {
-      updateEndpoint('start', loc);
+  const handleSelectPlace = (name: string, coordinate: RouteCoordinate) => {
+    if (searchTarget === 'start') {
+      setStart(coordinate);
+      setStartLabel(name);
+    } else if (searchTarget === 'end') {
+      setEnd(coordinate);
+      setEndLabel(name);
     }
   };
 
   const resetRoute = () => {
     setStart(DEFAULT_START);
     setEnd(DEFAULT_END);
-    setEditedEndpoint('start');
+    setStartLabel('AGH / Krowodrza');
+    setEndLabel('Kazimierz / Podgórze');
     setIsRouteConfirmed(false);
   };
 
@@ -88,7 +107,6 @@ export function RoutePlannerScreen() {
       durationSeconds: drivingRoute?.durationSeconds ?? 0,
       isActive: true,
     });
-    // The map tab reads the same store, so the new route is already drawn there.
     if (router.canGoBack()) router.back();
     else router.replace('/');
   };
@@ -98,42 +116,69 @@ export function RoutePlannerScreen() {
       <View style={styles.header}>
         <ThemedText type="subtitle">Moja trasa</ThemedText>
         <ThemedText themeColor="textSecondary">
-          Ustaw początek i cel, aby znaleźć zgłoszenia możliwe do obsłużenia po drodze.
+          Wyszukaj punkt startowy i cel podróży w Krakowie, aby zobaczyć prośby po drodze.
         </ThemedText>
       </View>
 
       <Card style={styles.editor}>
-        <SegmentedControl
-          value={editedEndpoint}
-          onChange={setEditedEndpoint}
-          options={[
-            { value: 'start', label: 'Ustaw start (A)' },
-            { value: 'end', label: 'Ustaw cel (B)' },
-          ]}
-        />
-        <ThemedText type="small" themeColor="textSecondary">
-          Kliknij mapę, aby przesunąć wybrany punkt, albo przeciągnij znacznik A/B.
-        </ThemedText>
+        <View style={styles.inputsRow}>
+          <View style={styles.indicatorsColumn}>
+            <View style={[styles.dot, { backgroundColor: theme.success }]} />
+            <View style={[styles.connectingLine, { backgroundColor: theme.border }]} />
+            <View style={[styles.dot, { backgroundColor: theme.danger }]} />
+          </View>
 
-        <View style={styles.coordinates}>
-          <View style={styles.endpointRow}>
-            <ThemedText type="small">A: {formatRouteCoordinate(start)}</ThemedText>
+          <View style={styles.fieldsColumn}>
             <Pressable
-              accessibilityRole="button"
-              onPress={setStartToUserLocation}
-              disabled={isLocating}
-              style={({ pressed }) => [styles.myLocationBtn, pressed && styles.pressed]}>
-              <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                {isLocating ? 'Pobieram...' : '🎯 Użyj mojej pozycji jako start'}
+              onPress={() => setSearchTarget('start')}
+              style={({ pressed }) => [
+                styles.addressButton,
+                { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                pressed && styles.pressed,
+              ]}>
+              <View style={styles.addressTextWrapper}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  START (A)
+                </ThemedText>
+                <ThemedText type="smallBold" numberOfLines={1}>
+                  {startLabel}
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+                Zmień ✎
+              </ThemedText>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setSearchTarget('end')}
+              style={({ pressed }) => [
+                styles.addressButton,
+                { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                pressed && styles.pressed,
+              ]}>
+              <View style={styles.addressTextWrapper}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  CEL (B)
+                </ThemedText>
+                <ThemedText type="smallBold" numberOfLines={1}>
+                  {endLabel}
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+                Zmień ✎
               </ThemedText>
             </Pressable>
           </View>
-          <ThemedText type="small">B: {formatRouteCoordinate(end)}</ThemedText>
-          {locationError && (
-            <ThemedText type="caption" themeColor="warning">
-              {locationError}
-            </ThemedText>
-          )}
+
+          <Pressable
+            onPress={handleSwapEndpoints}
+            style={({ pressed }) => [
+              styles.swapButton,
+              { backgroundColor: theme.primarySoft, borderColor: theme.border },
+              pressed && styles.pressed,
+            ]}>
+            <ThemedText type="default">⇅</ThemedText>
+          </Pressable>
         </View>
 
         <View style={styles.actions}>
@@ -165,10 +210,8 @@ export function RoutePlannerScreen() {
         height={480}
         showAreas={false}
         showRouteBuffer
-        editableRoute
+        editableRoute={false}
         routeCoordinates={route}
-        onMapPress={(coordinate) => updateEndpoint(editedEndpoint, coordinate)}
-        onRouteEndpointChange={updateEndpoint}
       />
 
       <Card highlighted>
@@ -184,29 +227,26 @@ export function RoutePlannerScreen() {
         {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
       </Card>
 
-      {isRouteConfirmed && (
+      {matchingRequests.length > 0 && (
         <View style={styles.results}>
           <ThemedText type="subtitle">Komu możesz pomóc</ThemedText>
-          {matchingRequests.length > 0 ? (
-            matchingRequests.map((request) => (
-              <RequestCard
-                key={request.id}
-                request={request}
-                onPress={() =>
-                  router.push({ pathname: '/request/[id]', params: { id: request.id } })
-                }
-              />
-            ))
-          ) : (
-            <Card>
-              <ThemedText type="smallBold">Brak zgłoszeń przy tej trasie</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Przesuń start lub cel i spróbuj zatwierdzić trasę jeszcze raz.
-              </ThemedText>
-            </Card>
-          )}
+          {matchingRequests.map((request) => (
+            <RequestCard
+              key={request.id}
+              request={request}
+              onPress={() => router.push({ pathname: '/request/[id]', params: { id: request.id } })}
+            />
+          ))}
         </View>
       )}
+
+      {/* Search Modal */}
+      <PlaceSearchModal
+        visible={Boolean(searchTarget)}
+        title={searchTarget === 'start' ? 'Wybierz punkt startowy (A)' : 'Wybierz cel podróży (B)'}
+        onClose={() => setSearchTarget(null)}
+        onSelect={handleSelectPlace}
+      />
     </Screen>
   );
 }
@@ -218,23 +258,51 @@ const styles = StyleSheet.create({
   editor: {
     gap: Spacing.two,
   },
-  coordinates: {
+  inputsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.one,
   },
-  endpointRow: {
+  indicatorsColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 16,
+    paddingVertical: 4,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  connectingLine: {
+    width: 2,
+    height: 36,
+    marginVertical: 2,
+  },
+  fieldsColumn: {
+    flex: 1,
+    gap: Spacing.one,
+  },
+  addressButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: Spacing.one,
+    paddingVertical: 8,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.one,
+    borderWidth: 1,
   },
-  myLocationBtn: {
-    minHeight: 44,
+  addressTextWrapper: {
+    flex: 1,
+    gap: 1,
+  },
+  swapButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.one,
-  },
-  pressed: {
-    opacity: 0.7,
+    borderWidth: 1,
   },
   actions: {
     flexDirection: 'row',
@@ -244,5 +312,8 @@ const styles = StyleSheet.create({
   },
   results: {
     gap: Spacing.two,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });
