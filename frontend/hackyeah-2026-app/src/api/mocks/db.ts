@@ -424,3 +424,44 @@ seedCluster(
   ],
   10,
 );
+
+seedCluster(
+  'Tauron Arena',
+  19.9942,
+  50.0681,
+  [
+    [
+      'Pozyczenie wiertarki udarowej',
+      'Potrzebuje pozyczyc wiertarke udarowa do wywiercenia dwoch otworow w scianie.',
+      'EQUIPMENT_LOAN',
+      3,
+      'Stanislawa Lema',
+      '7',
+    ],
+    [
+      'Pilne wydrukowanie dokumentow',
+      'Zepsula mi sie drukarka, a musze pilnie wydrukowac 3 strony umowy i bilet.',
+      'HOME_SUPPORT',
+      2,
+      'Dabska',
+      '12',
+    ],
+    [
+      'Pozyczenie soli i cukru',
+      'Zabraklo mi soli i szklanki cukru do ciasta, a sklepy w okolicy sa juz zamkniete.',
+      'GROCERIES',
+      3,
+      'Aleja Pokoju',
+      '44',
+    ],
+    [
+      'Pomoc w odbiorze przesylki',
+      'Potrzebuje pomocy w odebraniu ciezkiej paczki z punktu przy Tauron Arenie.',
+      'HOME_SUPPORT',
+      2,
+      'Mogilska',
+      '86',
+    ],
+  ],
+  8,
+);
