@@ -10,7 +10,7 @@
 - Połączenie z bazą w `application.properties`, `ddl-auto=update`.
 - `GET /api/health` + żądania IntelliJ w `backend/hackyeah-2026-backend/http/`.
 - Encje `AppUser`, `HelpRequest`, `Rating`, repozytoria JPA, geometria `Point` SRID 4326 oraz indeks GiST na `help_requests.location` – **B1.2 zrobione**.
-- Podstawowy `DatabaseSeeder` dodaje przykładowych użytkowników i zgłoszenia z lokalizacjami – **B1.3 zrobione w wersji bazowej**.
+- `DatabaseSeeder` dodaje krakowskie dane demo: użytkownicy, wolontariusze, admin miasta, zgłoszenia przy trasie demo oraz klastry pod mapę/heatmapę – **B1.3 zrobione w zakresie MVP**.
 - GeoJSON DTO dla punktu i zamaskowanego obszaru oraz serializacja JTS `Point` – **B1.4 zrobione w zakresie MVP**.
 - Publiczne wyszukiwanie zgłoszeń w promieniu `GET /api/help-requests/nearby` z PostGIS `ST_DWithin` – **B2.1 zrobione**.
 - Publiczne wyszukiwanie zgłoszeń wzdłuż trasy `POST /api/help-requests/along-route` z `LINESTRING` i PostGIS `ST_DWithin` – **B2.2 zrobione**.
@@ -153,17 +153,19 @@ Po ocenie: `trustScore` = średnia ważona ocen (np. wygładzona średnia bayeso
 - ✅ Błędy: zły rozmiar komórki, nieznana kategoria/status, zły format daty, `from` ≥ `to` → **400** (`ProblemDetail`).
 - ✅ `AnalyticsRepository` na `NamedParameterJdbcTemplate` (dynamiczne filtry, SQL PostGIS), testy: jednostkowe (agregacja, walidacja), `@WebMvcTest` (bindowanie parametrów), integracyjne na PostGIS z dockera (rollback), żądania `http/analytics.http`.
 - ⏳ Liczba zrealizowanych pomocy **per dzielnica** – brak danych o dzielnicach w modelu; heatmapa pokrywa wymiar przestrzenny. Do dodania, jeśli będą granice dzielnic (np. GeoJSON + `ST_Contains`).
-- ⏳ Seeder ma tylko 3 zgłoszenia (Warszawa) – heatmapa na demo potrzebuje więcej danych w klastrach (B1.3, Dev 1).
+- ✅ Seeder ma krakowskie dane demo w klastrach (Stare Miasto, Kazimierz, Krowodrza, Podgórze) oraz zgłoszenia przy trasie demonstracyjnej – **B1.3 MVP zrobione przez Dev 1**.
 - ⏳ Ewentualny próg anonimowości (ukrywanie heksagonów z 1 zgłoszeniem) – do decyzji; obecnie heksagon 500 m jest grubszy niż maskowanie publiczne (300 m).
 - ⏳ Dashboard na froncie (F3.4).
 
 ## 7. Seeder (B1.3)
 
-`DataSeeder` (profil `dev`, `CommandLineRunner`), wybrane miasto/dzielnica (np. Kraków – Krowodrza/Stare Miasto). Generuje:
-- ~10 użytkowników (zgłaszający, wolontariusze, część zweryfikowana, jeden z `hasSpecialNeeds`),
-- ~60–100 zgłoszeń w różnych kategoriach i priorytetach w realistycznych lokalizacjach (klastry pod heatmapę),
-- kilka zadań w stanach `ACCEPTED`/`COMPLETED` oraz oceny,
-- zgłoszenie z scenariusza demo („Skończyły mi się leki na serce…”) w miejscu leżącym na trasie demonstracyjnej.
+`DataSeeder` (profil `dev`, `CommandLineRunner`) generuje dane demo dla Krakowa:
+- ✅ użytkowników: zgłaszający, wolontariusze, część zweryfikowana, część z `hasSpecialNeeds`, admin miasta,
+- ✅ 54 zgłoszenia w różnych kategoriach i priorytetach w realistycznych lokalizacjach,
+- ✅ klastry pod mapę/heatmapę: Stare Miasto, Kazimierz, Krowodrza, Podgórze,
+- ✅ kilka zadań w stanach `OFFERED`/`ACCEPTED`/`COMPLETED`,
+- ✅ zgłoszenie z scenariusza demo („Skończyły mi się leki na serce…”) w miejscu leżącym na trasie demonstracyjnej.
+- ⏳ oceny (`Rating`) w seederze – do dodania po ustaleniu flow ocen/reputacji.
 
 Idempotentny (uruchamia się tylko przy pustej tabeli).
 
@@ -173,17 +175,24 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 - **Dev 1:** ✅ dodać `hibernate-spatial`; ✅ encje `AppUser`, `HelpRequest`, `Rating`; ✅ geometrie SRID 4326; ✅ DTO/serializer GeoJSON (**B1.2, B1.4**).
 - **Dev 2:** ✅ mock autentykacji (`X-User-Id` → `@CurrentUser AppUser`, brak/nieznany użytkownik → 401), ✅ `GET /users/me`, ✅ `@RestControllerAdvice` z `ProblemDetail`, ✅ pola encji pod maszynę stanów; ⏳ `RequestStateService` (przeniesione do etapu 3).
 - **Dev 3:** ✅ prototyp promptu, ✅ `OllamaClient`, ✅ konfiguracja Ollamy lokalnie + test ręczny na prawdziwym modelu.
-- **Dev 1 (po encjach):** ✅ podstawowy seeder (**B1.3**); ⏳ rozbudowa seedera pod demo.
+- **Dev 1 (po encjach):** ✅ podstawowy seeder (**B1.3**); ✅ rozbudowa seedera pod demo Krakowa.
 
 ### Etap 2 (6–18 h)
-- **Dev 1:** ✅ `nearby` i ✅ `along-route` (**B2.1, B2.2**), ✅ maskowanie i odpowiedzi publiczne (**B2.4** częściowo); ⏳ testy integracyjne/Testcontainers.
+- **Dev 1:** ✅ `nearby` i ✅ `along-route` (**B2.1, B2.2**), ✅ maskowanie i odpowiedzi publiczne (**B2.4** częściowo); ✅ testy integracyjne geo/prywatności na PostGIS.
 - **Dev 2:** `POST /requests`, `GET /requests/{id}` z widocznością zależną od stanu i roli (**B2.4**).
 - **Dev 3:** ✅ `RequestClassifier`, ✅ `POST /requests/classify`, ✅ fallback regułowy; ⏳ podpięcie do tworzenia zgłoszenia (**B2.3**).
 
 ### Etap 3 (18–30 h)
 - **Dev 2:** przejścia stanów, QR, `complete`, oceny i reputacja (**B3.1–B3.3**), mock weryfikacji.
-- **Dev 3:** ✅ endpointy analityczne i heatmapa (**B3.4**, API); ⏳ dane demo pod heatmapę, widok na froncie.
-- **Dev 1:** wydajność (indeksy GiST, `EXPLAIN`), uzupełnienie seedera o stany/oceny, wsparcie integracji.
+- **Dev 3:** ✅ endpointy analityczne i heatmapa (**B3.4**, API); ✅ dane demo pod heatmapę dostarczone przez Dev 1; ⏳ widok na froncie.
+- **Dev 1:** ✅ testy integracyjne geo/prywatności; ⏳ wydajność (indeksy GiST, `EXPLAIN`), ewentualne uzupełnienie seedera o oceny po flow reputacji, wsparcie integracji.
+
+### Najbliższe kroki Dev 1 po seedzie Krakowa
+1. ✅ Dodać testy integracyjne dla `GET /api/help-requests/nearby` na PostGIS: wynik w promieniu, brak wyniku poza promieniem, sortowanie po priorytecie/czasie.
+2. ✅ Dodać testy integracyjne dla `POST /api/help-requests/along-route`: minimum 2 punkty, walidacja bufora, trafienia w korytarzu trasy i brak trafień poza nim.
+3. ✅ Dodać test prywatności publicznych odpowiedzi: brak ulicy, numeru mieszkania i dokładnej lokalizacji; obecne tylko `approximateLocation` i `maskedArea`.
+4. ⏳ Sprawdzić wydajność zapytań geo na seedzie Krakowa: indeks GiST, `EXPLAIN`, czas odpowiedzi dla promienia i trasy.
+5. ⏳ Uzupełnić kolekcję `.http` o pełny scenariusz demo po merge endpointów `POST /requests`, `offer`, `accept`, `complete`.
 
 ### Etap 4 (30–36 h)
 - Przejście pełnego scenariusza demo na API (kolekcja `.http` obejmująca cały flow), poprawki błędów, reset danych demo (endpoint/profil `dev`), przygotowanie awaryjnego trybu bez LLM.
@@ -191,11 +200,11 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 ## 9. Definicja ukończenia (backend)
 
 - [ ] Cały scenariusz demo przechodzi przez API bez ręcznych zmian w bazie.
-- [ ] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny).
+- [x] Listy publiczne **nigdy** nie zawierają dokładnych współrzędnych, numeru lokalu ani nazwiska (test automatyczny dla geo API).
 - [ ] Wszystkie geometrie w SRID 4326; zapytania odległościowe w metrach (`geography`).
 - [x] Błędy zwracają `ProblemDetail` z kodami 400/403/404/409.
 - [x] Klasyfikacja AI zwraca poprawny JSON lub włącza fallback w < 10 s.
-- [ ] Testy: zapytania geo (Testcontainers), maszyna stanów, token QR (użycie wtórne, wygaśnięcie), maskowanie.
+- [ ] Testy: ✅ zapytania geo i maskowanie publiczne na PostGIS; ⏳ maszyna stanów, token QR (użycie wtórne, wygaśnięcie).
 - [ ] Kolekcja żądań `.http` w `backend/hackyeah-2026-backend/http/` dla każdego endpointu.
 
 ## 10. Ryzyka
