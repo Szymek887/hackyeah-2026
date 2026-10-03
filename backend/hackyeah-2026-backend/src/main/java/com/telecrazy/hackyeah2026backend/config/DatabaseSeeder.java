@@ -117,6 +117,22 @@ public class DatabaseSeeder {
                     },
                     10
             );
+            seedCluster(
+                    helpRequestRepository,
+                    geometryFactory,
+                    requesters,
+                    volunteers,
+                    "Tauron Arena",
+                    19.9942,
+                    50.0681,
+                    new RequestTemplate[]{
+                            new RequestTemplate("Pozyczenie wiertarki udarowej", "Potrzebuje pozyczyc wiertarke udarowa do wywiercenia dwoch otworow w scianie.", HelpCategory.EQUIPMENT_LOAN, 3, "Stanislawa Lema", "7"),
+                            new RequestTemplate("Pilne wydrukowanie dokumentow", "Zepsula mi sie drukarka, a musze pilnie wydrukowac 3 strony umowy i bilet.", HelpCategory.HOME_SUPPORT, 2, "Dabska", "12"),
+                            new RequestTemplate("Pozyczenie soli i cukru", "Zabraklo mi soli i szklanki cukru do ciasta, a sklepy w okolicy sa juz zamkniete.", HelpCategory.GROCERIES, 3, "Aleja Pokoju", "44"),
+                            new RequestTemplate("Pomoc w odbiorze przesylki", "Potrzebuje pomocy w odebraniu ciezkiej paczki z punktu przy Tauron Arenie.", HelpCategory.HOME_SUPPORT, 2, "Mogilska", "86")
+                    },
+                    8
+            );
         };
     }
 

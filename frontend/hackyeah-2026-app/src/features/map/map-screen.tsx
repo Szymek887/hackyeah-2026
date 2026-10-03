@@ -61,8 +61,8 @@ export function MapScreen() {
           {
             latitude: loc.latitude,
             longitude: loc.longitude,
-            latitudeDelta: 0.018,
-            longitudeDelta: 0.018,
+            latitudeDelta: 0.007,
+            longitudeDelta: 0.007,
           },
           500,
         );
@@ -107,8 +107,8 @@ export function MapScreen() {
       {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
-        latitudeDelta: 0.018,
-        longitudeDelta: 0.018,
+        latitudeDelta: 0.007,
+        longitudeDelta: 0.007,
       },
       400,
     );
@@ -123,8 +123,8 @@ export function MapScreen() {
         {
           latitude: loc.latitude,
           longitude: loc.longitude,
-          latitudeDelta: 0.018,
-          longitudeDelta: 0.018,
+          latitudeDelta: 0.007,
+          longitudeDelta: 0.007,
         },
         300,
       );
@@ -373,7 +373,16 @@ export function MapScreen() {
             <Button
               variant="secondary"
               title="🚗 Zaplanuj trasę (pomagaj po drodze)"
-              onPress={() => router.push('/route-planner')}
+              onPress={() =>
+                router.push({
+                  pathname: '/route-planner',
+                  params: {
+                    startLat: String(mapCenter.latitude),
+                    startLng: String(mapCenter.longitude),
+                    startLabel: locationLabel,
+                  },
+                })
+              }
             />
           </ThemedView>
         )}

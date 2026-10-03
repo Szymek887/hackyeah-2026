@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -38,18 +38,28 @@ export function RoutePlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const params = useLocalSearchParams<{
+    startLat?: string;
+    startLng?: string;
+    startLabel?: string;
+  }>();
   const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
   const { locate, isLoading: isLocating } = useUserLocation();
 
-  const [start, setStart] = useState<RouteCoordinate>(savedRoute?.start ?? DEFAULT_START_COORDS);
+  const [start, setStart] = useState<RouteCoordinate>(() => {
+    if (params.startLat && params.startLng) {
+      return { latitude: Number(params.startLat), longitude: Number(params.startLng) };
+    }
+    return savedRoute?.start ?? DEFAULT_START_COORDS;
+  });
   const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END_COORDS);
   const [startLabel, setStartLabel] = useState<string>(() => {
+    if (params.startLabel) return params.startLabel;
+    const initialCoords = savedRoute?.start ?? DEFAULT_START_COORDS;
     const matched = KRAKOW_PRESET_PLACES.find(
-      (p) =>
-        Math.abs(p.coordinate.latitude - (savedRoute?.start ?? DEFAULT_START_COORDS).latitude) <
-        0.002,
+      (p) => Math.abs(p.coordinate.latitude - initialCoords.latitude) < 0.002,
     );
-    return matched?.name ?? 'AGH / Krowodrza';
+    return matched?.name ?? 'Moja lokalizacja';
   });
   const [endLabel, setEndLabel] = useState<string>(() => {
     const matched = KRAKOW_PRESET_PLACES.find(
@@ -58,6 +68,18 @@ export function RoutePlannerScreen() {
     );
     return matched?.name ?? 'Kazimierz / Podgórze';
   });
+
+  const hasAutoLocatedRef = useRef(false);
+  useEffect(() => {
+    if (params.startLat || savedRoute || hasAutoLocatedRef.current) return;
+    hasAutoLocatedRef.current = true;
+    locate().then((loc) => {
+      if (loc) {
+        setStart(loc);
+        setStartLabel('Moja lokalizacja (GPS)');
+      }
+    });
+  }, [locate, params.startLat, savedRoute]);
 
   const [searchTarget, setSearchTarget] = useState<'start' | 'end' | null>(null);
   const [isListExpanded, setIsListExpanded] = useState(false);
