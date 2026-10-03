@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 @Service
 public class AnalyticsService {
@@ -49,9 +50,15 @@ public class AnalyticsService {
             throw new IllegalArgumentException("cellSizeMeters must be between %d and %d"
                     .formatted(MIN_CELL_SIZE_METERS, MAX_CELL_SIZE_METERS));
         }
-        if (filter.statuses().isEmpty()) {
-            filter = new AnalyticsFilter(filter.category(), DEFAULT_HEATMAP_STATUSES, filter.from(), filter.to());
+        Set<HelpRequestStatus> statuses = filter.statuses().isEmpty()
+                ? DEFAULT_HEATMAP_STATUSES
+                : filter.statuses().stream()
+                .filter(status -> !status.isHiddenFromPublic())
+                .collect(Collectors.toUnmodifiableSet());
+        if (statuses.isEmpty()) {
+            return HeatmapResponse.of(cellSizeMeters, List.of());
         }
+        filter = new AnalyticsFilter(filter.category(), statuses, filter.from(), filter.to());
         return HeatmapResponse.of(cellSizeMeters, toFeatures(repository.heatmap(filter, cellSizeMeters)));
     }
 
@@ -91,11 +98,15 @@ public class AnalyticsService {
 
     static SummaryResponse toSummary(List<SummaryRow> rows) {
         Map<HelpRequestStatus, Long> byStatus = zeroCounts(HelpRequestStatus.class);
+        byStatus.keySet().removeAll(HelpRequestStatus.HIDDEN_FROM_PUBLIC);
         Map<HelpCategory, Long> byCategory = zeroCounts(HelpCategory.class);
         Map<Integer, Long> byPriority = new TreeMap<>(Map.of(1, 0L, 2, 0L, 3, 0L));
         long total = 0;
 
         for (SummaryRow row : rows) {
+            if (row.status().isHiddenFromPublic()) {
+                continue;
+            }
             byStatus.merge(row.status(), row.count(), Long::sum);
             byCategory.merge(row.category(), row.count(), Long::sum);
             byPriority.merge(row.priority(), row.count(), Long::sum);
