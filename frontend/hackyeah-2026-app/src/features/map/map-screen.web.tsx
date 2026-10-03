@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { errorMessage } from '@/api/errors';
 import { Button } from '@/components/ui/button';
@@ -13,21 +13,26 @@ import { formatRouteDistance, ROUTE_BUFFER_METERS } from '@/features/commute/rou
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
-import { filterRequestsAlongRoute } from '@/lib/route-matching';
+import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
+import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
+import { useTheme } from '@/hooks/use-theme';
 
 type Filter = 'all' | 'route';
 
-/**
- * Web map: only the map itself. Request details appear on hover (tooltip) and on click (popup);
- * no list below the map. The route is shown only once the user has set and confirmed their own.
- */
 export function MapScreen() {
+  const theme = useTheme();
   const { savedRoute, toggleRouteActive } = useSavedCommuteRoute();
   const [filter, setFilter] = useState<Filter>('all');
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [locationLabel, setLocationLabel] = useState('Kraków (Centrum)');
+  const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
+    latitude: KRAKOW_INITIAL_REGION.latitude,
+    longitude: KRAKOW_INITIAL_REGION.longitude,
+  });
 
   const { data: allRequests = [], error } = useNearbyRequests({
-    lat: KRAKOW_INITIAL_REGION.latitude,
-    lng: KRAKOW_INITIAL_REGION.longitude,
+    lat: mapCenter.latitude,
+    lng: mapCenter.longitude,
     radiusKm: 5,
   });
 
@@ -43,14 +48,32 @@ export function MapScreen() {
 
   const displayedRequests = activeRoute && filter === 'route' ? matchingRequests : allRequests;
 
+  const handleSelectLocation = (name: string, coordinate: RouteCoordinate) => {
+    setLocationLabel(name);
+    setMapCenter(coordinate);
+  };
+
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <ThemedText type="subtitle" accessibilityRole="header">
-          Mapa zgłoszeń
-        </ThemedText>
+        <View style={styles.titleRow}>
+          <ThemedText type="subtitle" accessibilityRole="header">
+            Mapa zgłoszeń w Twojej okolicy
+          </ThemedText>
+          <Pressable
+            onPress={() => setIsSearchModalOpen(true)}
+            style={({ pressed }) => [
+              styles.locationBtn,
+              { backgroundColor: theme.primarySoft, borderColor: theme.border },
+              pressed && styles.pressed,
+            ]}>
+            <ThemedText type="smallBold" style={{ color: theme.primary }}>
+              📍 {locationLabel} (Zmień)
+            </ThemedText>
+          </Pressable>
+        </View>
         <ThemedText themeColor="textSecondary">
-          Najedź na punkt, aby zobaczyć, czego dotyczy. Kliknij, aby otworzyć szczegóły.
+          Najedź na punkt, aby zobaczyć, czego dotyczy prośba. Kliknij, aby otworzyć szczegóły.
         </ThemedText>
       </View>
 
@@ -58,7 +81,7 @@ export function MapScreen() {
         {activeRoute ? (
           <>
             <ThemedText type="smallBold" style={styles.routeLabel}>
-              Twoja trasa
+              Trasa dojazdowa
               {activeRoute.distanceMeters > 0
                 ? ` · ${formatRouteDistance(activeRoute.distanceMeters)}`
                 : ''}
@@ -68,8 +91,8 @@ export function MapScreen() {
                 value={filter}
                 onChange={setFilter}
                 options={[
-                  { value: 'all', label: 'Wszystkie', count: allRequests.length },
-                  { value: 'route', label: 'Przy trasie', count: matchingRequests.length },
+                  { value: 'all', label: 'Wszystkie w okolicy', count: allRequests.length },
+                  { value: 'route', label: 'Tylko przy trasie', count: matchingRequests.length },
                 ]}
               />
             </View>
@@ -92,10 +115,10 @@ export function MapScreen() {
         ) : (
           <>
             <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-              Wyznacz trasę do pracy lub na uczelnię, aby zobaczyć prośby po drodze.
+              Możesz też opcjonalnie zaplanować trasę, aby pomagać po drodze do pracy lub uczelni.
             </ThemedText>
             <Button
-              title={savedRoute ? 'Pokaż moją trasę' : 'Wyznacz trasę'}
+              title={savedRoute ? 'Pokaż zapisaną trasę' : '🚗 Zaplanuj trasę (po drodze)'}
               variant="secondary"
               inline
               onPress={() => (savedRoute ? toggleRouteActive(true) : router.push('/route-planner'))}
@@ -117,6 +140,13 @@ export function MapScreen() {
         routeCoordinates={activeRoute?.coordinates}
         height={600}
       />
+
+      <PlaceSearchModal
+        visible={isSearchModalOpen}
+        title="Wybierz swoją lokalizację"
+        onClose={() => setIsSearchModalOpen(false)}
+        onSelect={handleSelectLocation}
+      />
     </Screen>
   );
 }
@@ -124,6 +154,19 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   header: {
     gap: Spacing.one,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  locationBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.one,
+    borderWidth: 1,
   },
   toolbar: {
     flexDirection: 'row',
@@ -141,5 +184,8 @@ const styles = StyleSheet.create({
   },
   filter: {
     minWidth: 240,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

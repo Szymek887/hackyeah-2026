@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,10 +20,11 @@ import { CategoryBadge, PriorityBadge } from '@/features/requests/components/req
 import { timeAgo } from '@/features/requests/labels';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
-import { filterRequestsAlongRoute } from '@/lib/route-matching';
+import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 import { useUserLocation } from '@/features/map/use-user-location';
 import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
+import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 
 export function MapScreen() {
   const theme = useTheme();
@@ -32,6 +33,14 @@ export function MapScreen() {
   const { savedRoute } = useSavedCommuteRoute();
   const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
 
+  const [mapCenter, setMapCenter] = useState<RouteCoordinate>({
+    latitude: KRAKOW_INITIAL_REGION.latitude,
+    longitude: KRAKOW_INITIAL_REGION.longitude,
+  });
+  const [locationLabel, setLocationLabel] = useState<string>('Kraków (Centrum)');
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const hasAutoLocatingAttempted = useRef(false);
+
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
   );
@@ -39,13 +48,35 @@ export function MapScreen() {
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [onlyAlongRoute, setOnlyAlongRoute] = useState(false);
 
+  // Auto-locate on first launch
+  useEffect(() => {
+    if (hasAutoLocatingAttempted.current) return;
+    hasAutoLocatingAttempted.current = true;
+
+    locate().then((loc) => {
+      if (loc) {
+        setMapCenter(loc);
+        setLocationLabel('Moja lokalizacja (GPS)');
+        mapRef.current?.animateToRegion(
+          {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            latitudeDelta: 0.018,
+            longitudeDelta: 0.018,
+          },
+          500,
+        );
+      }
+    });
+  }, [locate]);
+
   const {
     data: allRequests = [],
     isPending,
     error,
   } = useNearbyRequests({
-    lat: KRAKOW_INITIAL_REGION.latitude,
-    lng: KRAKOW_INITIAL_REGION.longitude,
+    lat: mapCenter.latitude,
+    lng: mapCenter.longitude,
     radiusKm: 5,
   });
 
@@ -63,11 +94,42 @@ export function MapScreen() {
     [displayRequests, mapZoom],
   );
 
-  // Close up every request is its own point with a rectangular label above it.
   const showLabels = mapZoom >= NO_CLUSTER_ZOOM;
   const selectedRequest = displayRequests.find((request) => request.id === selectedRequestId);
   const selectedAreaRings = selectedRequest ? getAreaPolygonRings(selectedRequest.maskedArea) : [];
   const [selectedOuterRing, ...selectedHoles] = selectedAreaRings;
+
+  const handleSelectLocation = (name: string, coordinate: RouteCoordinate) => {
+    setMapCenter(coordinate);
+    setLocationLabel(name);
+    setSelectedRequestId(null);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        latitudeDelta: 0.018,
+        longitudeDelta: 0.018,
+      },
+      400,
+    );
+  };
+
+  const centerOnMyLocation = async () => {
+    const loc = await locate();
+    if (loc) {
+      setMapCenter(loc);
+      setLocationLabel('Moja lokalizacja (GPS)');
+      mapRef.current?.animateToRegion(
+        {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          latitudeDelta: 0.018,
+          longitudeDelta: 0.018,
+        },
+        300,
+      );
+    }
+  };
 
   const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
     setSelectedRequestId(null);
@@ -82,23 +144,61 @@ export function MapScreen() {
     );
   };
 
-  const centerOnMyLocation = async () => {
-    const loc = await locate();
-    if (loc) {
-      mapRef.current?.animateToRegion(
-        {
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          latitudeDelta: 0.015,
-          longitudeDelta: 0.015,
-        },
-        300,
-      );
-    }
-  };
-
   return (
     <ThemedView style={styles.root}>
+      {/* Top Location Search & Picker Bar */}
+      <View style={[styles.topBarContainer, { top: insets.top + Spacing.one }]}>
+        <Pressable
+          onPress={() => setIsSearchModalOpen(true)}
+          style={({ pressed }) => [
+            styles.locationCard,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText type="default">📍</ThemedText>
+          <View style={styles.locationTextWrapper}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              TWOJA LOKALIZACJA
+            </ThemedText>
+            <ThemedText type="smallBold" numberOfLines={1}>
+              {locationLabel}
+            </ThemedText>
+          </View>
+          <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+            Zmień 🔍
+          </ThemedText>
+        </Pressable>
+
+        {activeRoute && (
+          <View
+            style={[
+              styles.activeRouteBadge,
+              { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            ]}>
+            <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+              🚗 Trasa aktywna (
+              {
+                filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS)
+                  .length
+              }{' '}
+              po drodze)
+            </ThemedText>
+            <Pressable onPress={() => setOnlyAlongRoute(!onlyAlongRoute)}>
+              <ThemedText
+                type="caption"
+                style={{
+                  color: theme.primary,
+                  textDecorationLine: 'underline',
+                  fontWeight: '600',
+                }}>
+                {onlyAlongRoute ? 'Pokaż wszystkie' : 'Tylko na trasie'}
+              </ThemedText>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
+      {/* Main Interactive Map */}
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -111,7 +211,7 @@ export function MapScreen() {
           setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
         }}
         mapPadding={{
-          top: insets.top + (activeRoute ? 64 : 12),
+          top: insets.top + (activeRoute ? 110 : 70),
           right: 12,
           bottom: selectedRequest ? 260 : 160,
           left: 12,
@@ -168,7 +268,6 @@ export function MapScreen() {
             <Marker
               key={request.id}
               coordinate={cluster.coordinate}
-              // Close up the label sits above the dot, so the dot's bottom marks the spot.
               anchor={showLabels ? { x: 0.5, y: 1 } : { x: 0.5, y: 0.5 }}
               accessibilityLabel={request.title}
               onPress={() => setSelectedRequestId(request.id)}>
@@ -199,62 +298,8 @@ export function MapScreen() {
         })}
       </MapView>
 
-      {/* Floating Top Bar (Active Commute Route) */}
-      {activeRoute ? (
-        <View style={[styles.topRouteBar, { top: insets.top + Spacing.one }]}>
-          <ThemedView type="backgroundElement" style={styles.topRouteCard}>
-            <View style={styles.topRouteRow}>
-              <ThemedText type="smallBold">🚗 Aktywna trasa dojazdowa</ThemedText>
-              <Pressable
-                onPress={() => router.push('/route-planner')}
-                style={({ pressed }) => [styles.smallActionBtn, pressed && styles.pressed]}>
-                <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-                  Edytuj
-                </ThemedText>
-              </Pressable>
-            </View>
-
-            <View style={styles.routeFilterRow}>
-              <Pressable
-                onPress={() => setOnlyAlongRoute(false)}
-                style={[styles.filterChip, !onlyAlongRoute && { backgroundColor: theme.primary }]}>
-                <ThemedText
-                  type="caption"
-                  style={{
-                    color: !onlyAlongRoute ? theme.onPrimary : theme.textSecondary,
-                    fontWeight: '600',
-                  }}>
-                  Wszystkie ({allRequests.length})
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={() => setOnlyAlongRoute(true)}
-                style={[styles.filterChip, onlyAlongRoute && { backgroundColor: theme.primary }]}>
-                <ThemedText
-                  type="caption"
-                  style={{
-                    color: onlyAlongRoute ? theme.onPrimary : theme.textSecondary,
-                    fontWeight: '600',
-                  }}>
-                  Tylko przy trasie (
-                  {
-                    filterRequestsAlongRoute(
-                      allRequests,
-                      activeRoute.coordinates,
-                      ROUTE_BUFFER_METERS,
-                    ).length
-                  }
-                  )
-                </ThemedText>
-              </Pressable>
-            </View>
-          </ThemedView>
-        </View>
-      ) : null}
-
-      {/* Floating Right FABs (Locate Me) */}
-      <View
-        style={[styles.floatingActions, { top: insets.top + (activeRoute ? 96 : Spacing.two) }]}>
+      {/* Floating GPS Button */}
+      <View style={[styles.floatingActions, { top: insets.top + (activeRoute ? 120 : 80) }]}>
         <Pressable
           style={({ pressed }) => [
             styles.fab,
@@ -315,23 +360,32 @@ export function MapScreen() {
         ) : (
           <ThemedView type="backgroundElement" style={styles.summary}>
             <ThemedText type="smallBold">
-              Kraków: {displayRequests.length}{' '}
-              {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'} w pobliżu
+              W Twojej okolicy (promień 5 km): {displayRequests.length}{' '}
+              {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Wybierz punkt na mapie, aby zobaczyć szczegóły prośby i rozmyty obszar.
+              Dotknij punktu na mapie, aby zobaczyć szczegóły prośby.
             </ThemedText>
 
             {isPending && <ActivityIndicator color={theme.primary} />}
             {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
 
             <Button
-              title={activeRoute ? 'Zarządzaj trasą' : 'Zaplanuj trasę'}
+              variant="secondary"
+              title="🚗 Zaplanuj trasę (pomagaj po drodze)"
               onPress={() => router.push('/route-planner')}
             />
           </ThemedView>
         )}
       </View>
+
+      {/* Location Picker Search Modal */}
+      <PlaceSearchModal
+        visible={isSearchModalOpen}
+        title="Wybierz swoją lokalizację"
+        onClose={() => setIsSearchModalOpen(false)}
+        onSelect={handleSelectLocation}
+      />
     </ThemedView>
   );
 }
@@ -343,46 +397,48 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  topRouteBar: {
+  topBarContainer: {
     position: 'absolute',
-    left: Spacing.three,
-    right: Spacing.three,
+    left: Spacing.two,
+    right: Spacing.two,
     zIndex: 10,
+    gap: Spacing.one,
   },
-  topRouteCard: {
-    padding: Spacing.two,
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
     borderRadius: Spacing.two,
     borderWidth: 1,
-    borderColor: '#D5E5F6',
-    gap: Spacing.one,
+    gap: Spacing.two,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  topRouteRow: {
+  locationTextWrapper: {
+    flex: 1,
+    gap: 1,
+  },
+  activeRouteBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  smallActionBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: Spacing.one,
-  },
-  routeFilterRow: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-  },
-  filterChip: {
-    paddingVertical: 3,
+    paddingVertical: 6,
     paddingHorizontal: Spacing.two,
     borderRadius: Spacing.one,
-    backgroundColor: '#F3F8FE',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   floatingActions: {
     position: 'absolute',
-    right: Spacing.three,
+    right: Spacing.two,
     zIndex: 10,
     alignItems: 'flex-end',
     gap: Spacing.one,
@@ -410,8 +466,8 @@ const styles = StyleSheet.create({
   },
   panel: {
     position: 'absolute',
-    left: Spacing.three,
-    right: Spacing.three,
+    left: Spacing.two,
+    right: Spacing.two,
     bottom: 0,
     gap: Spacing.two,
   },
@@ -419,6 +475,13 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.three,
     gap: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#D5E5F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectedCard: {
     padding: Spacing.three,
