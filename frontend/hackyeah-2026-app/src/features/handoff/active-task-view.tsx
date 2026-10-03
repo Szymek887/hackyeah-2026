@@ -14,10 +14,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Screen } from '@/components/ui/screen';
-import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useSession } from '@/features/auth/session-context';
 import { useCompleteRequest, useHandoffToken } from '@/features/handoff/hooks';
 import { QrCodeCard } from '@/features/handoff/qr-code-card';
+import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import { useRequest } from '@/features/requests/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -125,26 +126,8 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
       {/* Main Request Header Card */}
       <ThemedView type="backgroundElement" style={styles.card}>
         <View style={styles.badgeRow}>
-          <View
-            style={[
-              styles.categoryBadge,
-              { backgroundColor: CategoryColors[request.category]?.color ?? theme.primary },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
-              {request.category}
-            </ThemedText>
-          </View>
-
-          <View
-            style={[
-              styles.priorityBadge,
-              { backgroundColor: PriorityColors[request.priority]?.color ?? theme.danger },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
-              Pilność:{' '}
-              {request.priority === 1 ? 'Wysoka' : request.priority === 2 ? 'Średnia' : 'Niska'}
-            </ThemedText>
-          </View>
+          <CategoryBadge category={request.category} />
+          <PriorityBadge priority={request.priority} />
         </View>
 
         <ThemedText type="title" style={styles.requestTitle}>
@@ -332,16 +315,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  categoryBadge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Spacing.two,
-  },
-  priorityBadge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Spacing.two,
   },
   requestTitle: {
     fontSize: 20,

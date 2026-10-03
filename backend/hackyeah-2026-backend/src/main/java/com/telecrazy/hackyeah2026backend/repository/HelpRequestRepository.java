@@ -25,4 +25,20 @@ public interface HelpRequestRepository extends JpaRepository<HelpRequest, Long> 
             @Param("lng") double lng,
             @Param("radiusMeters") double radiusMeters
     );
+
+    @Query(value = """
+            SELECT *
+            FROM help_requests
+            WHERE status = 'OPEN'
+              AND ST_DWithin(
+                    location::geography,
+                    ST_SetSRID(ST_GeomFromText(:lineStringWkt), 4326)::geography,
+                    :bufferMeters
+                  )
+            ORDER BY priority ASC, created_at DESC
+            """, nativeQuery = true)
+    List<HelpRequest> findOpenAlongRoute(
+            @Param("lineStringWkt") String lineStringWkt,
+            @Param("bufferMeters") double bufferMeters
+    );
 }

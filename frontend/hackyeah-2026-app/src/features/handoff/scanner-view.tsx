@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -20,13 +20,16 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  // Camera fires several events per second; a ref blocks duplicates before React re-renders.
+  const verifyingRef = useRef(false);
   const [manualCode, setManualCode] = useState('');
   const [showManual, setShowManual] = useState(Platform.OS === 'web');
 
   const completeMutation = useCompleteRequest();
 
   const handleVerify = async (token: string) => {
-    if (!token.trim()) return;
+    if (!token.trim() || verifyingRef.current) return;
+    verifyingRef.current = true;
     setScanned(true);
 
     try {
@@ -47,6 +50,7 @@ export function ScannerView({ requestId = 'r-1' }: ScannerViewProps) {
         params: { id: requestId },
       });
     } catch (err: unknown) {
+      verifyingRef.current = false;
       setScanned(false);
       const msg = err instanceof Error ? err.message : 'Błąd weryfikacji kodu QR';
       if (Platform.OS === 'web') {

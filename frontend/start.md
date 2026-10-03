@@ -81,6 +81,9 @@ Zainstaluj rozszerzenia polecane przez VS Code (Prettier, ESLint, Expo Tools). F
 
 ## Znane problemy
 
+- **`Unable to resolve module <pakiet>` po `git pull`** – ktoś dodał bibliotekę. Po każdym pullu, który zmienia `package.json`, uruchom `npm install`, potem `npx expo start -c`.
+- **Konflikt w `package.json` przy merge/rebase** – zachowaj zależności z OBU stron (nie wybieraj „ours”/„theirs” dla całego pliku), potem `npm install` i commit nowego `package-lock.json`. Po merge sprawdź, czy `npm run check` przechodzi.
+
 - **`package.json does not exist`** – `npx expo start` trzeba uruchamiać w `frontend/hackyeah-2026-app`, nie w katalogu głównym repo.
 - **`Unable to resolve module ...` po instalacji pakietu** – zatrzymaj serwer i uruchom z czyszczeniem cache: `npx expo start -c`.
 - **`Type '"/"' is not assignable ...` w `npm run check`** – na Windowsie Expo psuje `.expo/types/router.d.ts`, gdy przy działającym serwerze dodajesz nowe pliki. Aplikacji to nie psuje. Naprawa: zatrzymaj serwer, usuń `.expo/types`, uruchom `npx expo start` ponownie.
