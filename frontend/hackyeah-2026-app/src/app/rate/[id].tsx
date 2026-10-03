@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { useLocalSearchParams } from 'expo-router';
+
+import { RateView } from '@/features/handoff/rate-view';
 
 export default function RateScreen() {
-  return <ScreenPlaceholder title="Oceń pomoc" owner="FE3" tasks={['F3.3 ocena i punkty']} />;
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  return <RateView requestId={id ?? 'r-1'} />;
 }

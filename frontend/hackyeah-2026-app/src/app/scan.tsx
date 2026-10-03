@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { useLocalSearchParams } from 'expo-router';
+
+import { ScannerView } from '@/features/handoff/scanner-view';
 
 export default function ScanScreen() {
-  return <ScreenPlaceholder title="Skanuj kod QR" owner="FE3" tasks={['F3.2 skaner QR']} />;
+  const { requestId } = useLocalSearchParams<{ requestId: string }>();
+
+  return <ScannerView requestId={requestId ?? 'r-1'} />;
 }
