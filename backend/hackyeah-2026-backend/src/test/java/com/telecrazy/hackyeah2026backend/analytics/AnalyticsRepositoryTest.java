@@ -100,8 +100,19 @@ class AnalyticsRepositoryTest {
     }
 
     @Test
-    void largerCellsMergeDistantRequests() {
-        assertThat(analyticsService.heatmap(IN_WINDOW, 5_000).features()).hasSize(1);
+    void largerCellsMergeNearbyRequests() {
+        // Kazimierz, about 1.3 km south of the Old Town cluster. The grid is fixed (see
+        // AnalyticsRepository.REFERENCE_LATITUDE), so cell membership of these points is stable.
+        save(HelpCategory.HOME_SUPPORT, 3, HelpRequestStatus.OPEN, 19.9446, 50.0511);
+
+        HeatmapResponse small = analyticsService.heatmap(IN_WINDOW, 500);
+        assertThat(small.features()).hasSize(3);
+
+        HeatmapResponse large = analyticsService.heatmap(IN_WINDOW, 5_000);
+        assertThat(large.totalRequests()).isEqualTo(5);
+        assertThat(large.features())
+                .extracting(feature -> feature.properties().count())
+                .containsExactlyInAnyOrder(4L, 1L); // Old Town + Kazimierz, Nowa Huta
     }
 
     @Test
