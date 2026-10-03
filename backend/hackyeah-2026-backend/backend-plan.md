@@ -9,6 +9,12 @@
 - `docker-compose.yml` z PostgreSQL 17 + PostGIS 3.5 (obraz `imresamu/postgis`, multi-arch dla Apple Silicon) – **B1.1 zrobione**.
 - Połączenie z bazą w `application.properties`, `ddl-auto=update`.
 - `GET /api/health` + żądania IntelliJ w `backend/hackyeah-2026-backend/http/`.
+- Encje `AppUser`, `HelpRequest`, `Rating`, repozytoria JPA, geometria `Point` SRID 4326 oraz indeks GiST na `help_requests.location` – **B1.2 zrobione**.
+- Podstawowy `DatabaseSeeder` dodaje przykładowych użytkowników i zgłoszenia z lokalizacjami – **B1.3 zrobione w wersji bazowej**.
+- GeoJSON DTO dla punktu i zamaskowanego obszaru oraz serializacja JTS `Point` – **B1.4 zrobione w zakresie MVP**.
+- Publiczne wyszukiwanie zgłoszeń w promieniu `GET /api/help-requests/nearby` z PostGIS `ST_DWithin` – **B2.1 zrobione**.
+- Publiczne wyszukiwanie zgłoszeń wzdłuż trasy `POST /api/help-requests/along-route` z `LINESTRING` i PostGIS `ST_DWithin` – **B2.2 zrobione**.
+- Maskowanie lokalizacji dla odpowiedzi publicznych: przybliżony punkt i polygon komórki ok. 300 m, bez dokładnego adresu – **B2.4 częściowo zrobione**.
 - Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (bez podpięcia do `POST /requests`, które jeszcze nie istnieje). Model: `qwen2.5:7b` w Ollamie.
 
 ## 2. Decyzje techniczne
@@ -66,8 +72,8 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`.
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
 | `POST /requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI | B2 |
 | `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
-| `GET /requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON | B2.1 |
-| `POST /requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu | B2.2 |
+| `GET /help-requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON – ✅ zrobione | B2.1 |
+| `POST /help-requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu – ✅ zrobione | B2.2 |
 | `GET /requests/{id}` | Szczegóły publiczne (zamaskowane); pełne dane dla zaangażowanych stron po `ACCEPTED` | B2.4 |
 | `POST /requests/{id}/offer` | Wolontariusz deklaruje pomoc (`OPEN→OFFERED`) | B3.1 |
 | `POST /requests/{id}/accept` | Zgłaszający akceptuje (`OFFERED→ACCEPTED`), generowany token QR | B3.1/B3.2 |
@@ -98,12 +104,12 @@ Brak numeru lokalu, nazwiska i dokładnych współrzędnych. Pełne dane wyłąc
 ## 6. Logika kluczowa
 
 ### 6.1 Zapytania przestrzenne (Dev 1)
-- **Promień:** `WHERE ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint(:lng,:lat),4326)::geography, :meters) AND status = 'OPEN'`, sortowanie po priorytecie i odległości.
-- **Trasa:** z polilinii zbudować `LineString` (4326), a następnie `ST_DWithin(location::geography, line::geography, :bufferMeters)`. Walidacja: min. 2 punkty, limit liczby punktów i szerokości bufora.
-- Maskowanie wykonywane **po** zapytaniu na dokładnych współrzędnych (filtrowanie po prawdziwej lokalizacji, publikacja zamaskowanej).
+- ✅ **Promień:** `WHERE ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint(:lng,:lat),4326)::geography, :meters) AND status = 'OPEN'`, sortowanie po priorytecie i czasie utworzenia.
+- ✅ **Trasa:** endpoint buduje WKT `LINESTRING(lng lat, ...)`, a następnie wykonuje `ST_DWithin(location::geography, line::geography, :bufferMeters)`. Walidacja: min. 2 punkty, max 100 punktów, bufor 50–2000 m, zakres lat/lng.
+- ✅ Maskowanie wykonywane **po** zapytaniu na dokładnych współrzędnych (filtrowanie po prawdziwej lokalizacji, publikacja zamaskowanej).
 
 ### 6.2 Maskowanie (Dev 1/2)
-`LocationMasker.mask(Point exact, long requestId)` → środek komórki siatki ~300 m z niewielkim, deterministycznym przesunięciem zależnym od `requestId`. Ten sam wynik przy każdym wywołaniu (brak „triangulacji” przez wielokrotne zapytania). Testy: odległość zamaskowanego punktu od oryginału w zakresie 0–400 m.
+✅ `LocationObfuscationService` zwraca środek komórki siatki ~300 m (`approximateLocation`) i polygon komórki (`maskedArea`). Kolejne ulepszenie: niewielki, deterministyczny jitter zależny od `requestId` oraz test odległości zamaskowanego punktu od oryginału w zakresie 0–400 m.
 
 ### 6.3 Maszyna stanów (Dev 2)
 `RequestStateService` z jawną tabelą dozwolonych przejść i sprawdzaniem aktora (kto może wykonać przejście). Zmiany pod `@Transactional` z blokadą optymistyczną (`@Version`) – dwa równoczesne `offer` → drugi dostaje **409**.
@@ -153,13 +159,13 @@ Idempotentny (uruchamia się tylko przy pustej tabeli).
 ## 8. Harmonogram i podział
 
 ### Etap 1 (0–6 h)
-- **Dev 1:** dodać `hibernate-spatial`; encje `User`, `HelpRequest`, `Rating`; `GeometryFactory` SRID 4326; init `postgis`; DTO GeoJSON (**B1.2, B1.4**).
+- **Dev 1:** ✅ dodać `hibernate-spatial`; ✅ encje `AppUser`, `HelpRequest`, `Rating`; ✅ geometrie SRID 4326; ✅ DTO/serializer GeoJSON (**B1.2, B1.4**).
 - **Dev 2:** ✅ mock autentykacji (`X-User-Id` → `@CurrentUser AppUser`, brak/nieznany użytkownik → 401), ✅ `GET /users/me`, ✅ `@RestControllerAdvice` z `ProblemDetail`, ✅ pola encji pod maszynę stanów; ⏳ `RequestStateService` (przeniesione do etapu 3).
 - **Dev 3:** ✅ prototyp promptu, ✅ `OllamaClient`, ✅ konfiguracja Ollamy lokalnie + test ręczny na prawdziwym modelu.
-- **Dev 1 (po encjach):** seeder (**B1.3**).
+- **Dev 1 (po encjach):** ✅ podstawowy seeder (**B1.3**); ⏳ rozbudowa seedera pod demo.
 
 ### Etap 2 (6–18 h)
-- **Dev 1:** `nearby` i `along-route` + testy Testcontainers (**B2.1, B2.2**), `LocationMasker` i odpowiedzi publiczne (**B2.4** wspólnie z Dev 2).
+- **Dev 1:** ✅ `nearby` i ✅ `along-route` (**B2.1, B2.2**), ✅ maskowanie i odpowiedzi publiczne (**B2.4** częściowo); ⏳ testy integracyjne/Testcontainers.
 - **Dev 2:** `POST /requests`, `GET /requests/{id}` z widocznością zależną od stanu i roli (**B2.4**).
 - **Dev 3:** ✅ `RequestClassifier`, ✅ `POST /requests/classify`, ✅ fallback regułowy; ⏳ podpięcie do tworzenia zgłoszenia (**B2.3**).
 
