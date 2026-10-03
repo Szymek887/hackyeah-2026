@@ -7,62 +7,201 @@ import type {
   RiskFlag,
 } from '@/api/types';
 
-const CATEGORY_KEYWORDS: [Category, string[]][] = [
-  ['MEDICINE', ['lek', 'apte', 'recept', 'tablet', 'insulin', 'opatrun', 'ciśnieni']],
-  [
-    'GROCERIES',
-    ['zakup', 'jedzeni', 'żywnoś', 'chleb', 'mlek', 'sklep', 'obiad', 'warzyw', 'owoc'],
+const CATEGORY_KEYWORDS: Record<Category, string[]> = {
+  MEDICINE: [
+    'lek',
+    'apte',
+    'recept',
+    'tablet',
+    'insulin',
+    'opatrun',
+    'ciśnieni',
+    'zdrow',
+    'chor',
+    'ból',
+    'boli',
+    'bolą',
+    'gorącz',
+    'temperatur',
+    'przezięb',
+    'kaszel',
+    'kaszl',
+    'gryp',
+    'zawrot',
+    'słabo',
+    'źle się czuję',
+    'upad',
+    'przewróci',
+    'nie mogę wstać',
+    'serc',
+    'cukrzyc',
+    'przychodni',
+    'szpital',
+    'pielęgniar',
+    'zastrzyk',
+    'syrop',
+    'maść',
+    'maści',
+    'witamin',
+    'termometr',
+    'inhalator',
+    'plaster',
+    'bandaż',
+    'okular',
   ],
-  [
-    'EQUIPMENT_LOAN',
-    ['pożycz', 'drabin', 'wiertar', 'narzęd', 'młot', 'wózek', 'wózk', 'kule ', 'sprzęt'],
+  GROCERIES: [
+    'zakup',
+    'kup',
+    'jedzeni',
+    'jedzeniem',
+    'głodn',
+    'żywnoś',
+    'chleb',
+    'bułk',
+    'mlek',
+    'mleko',
+    'masł',
+    'jaj',
+    'mięs',
+    'wędlin',
+    'ser ',
+    'sera',
+    'kasz',
+    'makaron',
+    'ryż',
+    'cukru',
+    'cukier',
+    'herbat',
+    'wod',
+    'napoj',
+    'picia',
+    'karm',
+    'sklep',
+    'market',
+    'biedronk',
+    'lidl',
+    'obiad',
+    'kolacj',
+    'śniadani',
+    'warzyw',
+    'owoc',
+    'ziemniak',
+    'papier toaletow',
+    'proszek do prania',
   ],
-  [
-    'HOME_SUPPORT',
-    [
-      'napraw',
-      'awari',
-      'kran',
-      'cieknie',
-      'przecie',
-      'zalan',
-      'prąd',
-      'żarówk',
-      'zamek',
-      'drzwi',
-      'okno',
-      'ogrzewani',
-      'kaloryfer',
-      'wniosek',
-      'formularz',
-      'pismo',
-    ],
+  EQUIPMENT_LOAN: [
+    'pożycz',
+    'drabin',
+    'wiertar',
+    'wkrętar',
+    'narzęd',
+    'młot',
+    'wózek',
+    'wózk',
+    'balkonik',
+    'chodzik',
+    'kule ',
+    'sprzęt',
+    'odkurzacz',
+    'przedłużacz',
   ],
-  [
-    'SOCIAL',
-    [
-      'spacer',
-      'rozmow',
-      'samotn',
-      'towarzyst',
-      'porozmawia',
-      'kawę',
-      'kawy',
-      'planszów',
-      'w karty',
-    ],
+  HOME_SUPPORT: [
+    'napraw',
+    'awari',
+    'zepsu',
+    'nie działa',
+    'kran',
+    'cieknie',
+    'przecie',
+    'zalan',
+    'prąd',
+    'żarówk',
+    'zamek',
+    'drzwi',
+    'okno',
+    'ogrzewani',
+    'kaloryfer',
+    'wniosek',
+    'formularz',
+    'pismo',
+    'dokument',
+    'urząd',
+    'urzęd',
+    'poczt',
+    'rachun',
+    'opłat',
+    'wnieś',
+    'wynieś',
+    'śmieci',
+    'sprząt',
+    'posprząt',
+    'pranie',
+    'węgl',
+    'drew',
+    'odśnież',
+    'mebl',
+    'przesun',
+    'pies',
+    'psa',
+    'kot ',
+    'kota',
+    'telewizor',
+    'telefon',
+    'komputer',
+    'internet',
   ],
+  SOCIAL: [
+    'spacer',
+    'rozmow',
+    'samotn',
+    'towarzyst',
+    'porozmawia',
+    'pogada',
+    'odwiedzi',
+    'odwiedz',
+    'smutn',
+    'kawę',
+    'kawy',
+    'planszów',
+    'w karty',
+    'kościoł',
+    'kościel',
+    'msz',
+    'cmentarz',
+    'poczyta',
+    'książk',
+  ],
+};
+/** Tie-break order: health first, social last. */
+const CATEGORY_ORDER: Category[] = [
+  'MEDICINE',
+  'GROCERIES',
+  'EQUIPMENT_LOAN',
+  'HOME_SUPPORT',
+  'SOCIAL',
 ];
 
 const CRITICAL = [
   'serc',
   'insulin',
   'pilne',
+  'pilnie',
   'natychmiast',
+  'jak najszybciej',
   'nie mam jak wyjść',
   'nie mogę wyjść',
   'nie wychodzę',
   'brak leków',
+  'nie mam leków',
+  'skończyły mi się leki',
+  'nie mam jedzenia',
+  'nic do jedzenia',
+  'głodn',
+  'upad',
+  'przewróci',
+  'nie mogę wstać',
+  'źle się czuję',
+  'cukrzyc',
 ];
 const HIGH = [
   'dziś',
@@ -74,6 +213,12 @@ const HIGH = [
   'cieknie',
   'brak prądu',
   'ogrzewani',
+  'ból',
+  'boli',
+  'gorącz',
+  'chor',
+  'zepsu',
+  'nie działa',
 ];
 const EMERGENCY = [
   'nie mogę oddychać',
@@ -99,6 +244,37 @@ const SCAM = [
 ];
 const MAX_TAGS = 5;
 
+const TAGS: [string, string[]][] = [
+  ['leki', ['lek', 'recept', 'tablet']],
+  ['apteka', ['apte']],
+  [
+    'zdrowie',
+    [
+      'chor',
+      'ból',
+      'boli',
+      'gorącz',
+      'zawrot',
+      'źle się czuję',
+      'upad',
+      'przewróci',
+      'serc',
+      'cukrzyc',
+    ],
+  ],
+  ['wizyta lekarska', ['przychodni', 'szpital', 'pielęgniar']],
+  ['zakupy', ['zakup', 'kup', 'sklep', 'jedzeni', 'żywnoś']],
+  ['posiłek', ['obiad', 'kolacj', 'śniadani', 'głodn']],
+  ['drabina', ['drabin']],
+  ['narzędzia', ['narzęd', 'wiertar', 'wkrętar', 'młot']],
+  ['sprzęt rehabilitacyjny', ['wózek', 'wózk', 'balkonik', 'chodzik', 'kule ']],
+  ['naprawa', ['napraw', 'awari', 'zepsu', 'nie działa']],
+  ['sprzątanie', ['sprząt', 'posprząt', 'śmieci', 'pranie']],
+  ['dokumenty', ['wniosek', 'formularz', 'pismo', 'dokument', 'urząd', 'urzęd']],
+  ['zwierzęta', ['pies', 'psa', 'kot ', 'kota']],
+  ['towarzystwo', ['spacer', 'rozmow', 'towarzyst', 'samotn', 'odwiedz', 'odwiedzi']],
+];
+
 const isLetter = (char: string) => char.toLowerCase() !== char.toUpperCase();
 
 /** Stems match only at the start of a word, so "lek" matches "leki" but not "mleka". */
@@ -112,29 +288,33 @@ function atWordStart(text: string, keyword: string) {
 const containsAny = (text: string, keywords: string[]) =>
   keywords.some((k) => atWordStart(text, k));
 
-function tags(text: string) {
-  const result = new Set<string>();
-  if (containsAny(text, ['lek', 'recept'])) result.add('leki');
-  if (atWordStart(text, 'apte')) result.add('apteka');
-  if (containsAny(text, ['zakup', 'sklep', 'jedzeni', 'żywnoś'])) result.add('zakupy');
-  if (atWordStart(text, 'drabin')) result.add('drabina');
-  if (containsAny(text, ['narzęd', 'wiertar', 'młot'])) result.add('narzędzia');
-  if (containsAny(text, ['napraw', 'awari'])) result.add('naprawa');
-  if (containsAny(text, ['wniosek', 'formularz', 'pismo'])) result.add('dokumenty');
-  if (containsAny(text, ['spacer', 'rozmow', 'towarzyst', 'samotn'])) result.add('towarzystwo');
-  return [...result].slice(0, MAX_TAGS);
+const score = (text: string, category: Category) =>
+  CATEGORY_KEYWORDS[category].filter((k) => atWordStart(text, k)).length;
+
+/**
+ * Highest score wins (ties: earlier in CATEGORY_ORDER). Emergencies and critical requests that
+ * mention health are MEDICINE; nothing matched = general help at home.
+ */
+function category(text: string, riskFlags: RiskFlag[], priority: Priority): Category {
+  if (riskFlags.includes('MEDICAL_EMERGENCY') || (priority === 1 && score(text, 'MEDICINE') > 0)) {
+    return 'MEDICINE';
+  }
+  let best: Category = 'HOME_SUPPORT';
+  let bestScore = 0;
+  for (const candidate of CATEGORY_ORDER) {
+    const value = score(text, candidate);
+    if (value > bestScore) {
+      best = candidate;
+      bestScore = value;
+    }
+  }
+  return best;
 }
 
 export function classifyByKeywords({ title, description }: ClassifyRequestDto): AiClassification {
   const text = `${title} ${description}`.toLocaleLowerCase('pl');
   const riskFlags: RiskFlag[] = [];
   if (containsAny(text, EMERGENCY)) riskFlags.push('MEDICAL_EMERGENCY');
-
-  // Unmatched requests default to groceries, the most common basic need.
-  const category: Category = riskFlags.includes('MEDICAL_EMERGENCY')
-    ? 'MEDICINE'
-    : (CATEGORY_KEYWORDS.find(([, keywords]) => containsAny(text, keywords))?.[0] ?? 'GROCERIES');
-
   if (containsAny(text, SCAM)) riskFlags.push('SCAM_SUSPECTED');
 
   const priority: Priority =
@@ -144,5 +324,15 @@ export function classifyByKeywords({ title, description }: ClassifyRequestDto): 
         ? 2
         : 3;
 
-  return { category, priority, tags: tags(text), riskFlags, source: 'FALLBACK' };
+  const tags = TAGS.filter(([, stems]) => containsAny(text, stems))
+    .map(([tag]) => tag)
+    .slice(0, MAX_TAGS);
+
+  return {
+    category: category(text, riskFlags, priority),
+    priority,
+    tags,
+    riskFlags,
+    source: 'FALLBACK',
+  };
 }

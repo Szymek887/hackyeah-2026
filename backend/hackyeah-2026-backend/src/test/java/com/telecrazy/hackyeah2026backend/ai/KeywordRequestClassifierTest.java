@@ -79,6 +79,49 @@ class KeywordRequestClassifierTest {
                 .contains(RiskFlag.MEDICAL_EMERGENCY);
     }
 
+    @Test
+    void spokenHealthProblemIsCriticalMedicine() {
+        RequestClassification result = classify("Upadłam w łazience",
+                "Upadłam w łazience i nie mogę wstać, bardzo boli mnie noga.");
+
+        assertThat(result.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(result.priority()).isEqualTo(1);
+        assertThat(result.tags()).contains("zdrowie");
+    }
+
+    @Test
+    void criticalHealthWinsOverShoppingWords() {
+        RequestClassification result = classify("Proszę kupić lekarstwa",
+                "Pilnie proszę kupić lekarstwa i chleb, mam gorączkę.");
+
+        assertThat(result.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(result.priority()).isEqualTo(1);
+    }
+
+    @Test
+    void mostMatchingCategoryWins() {
+        assertThat(classify("Zakupy", "Proszę kupić chleb, masło, jajka i jedną tabletkę.").category())
+                .isEqualTo(HelpCategory.GROCERIES);
+    }
+
+    @Test
+    void spokenChoresAreHomeSupport() {
+        assertThat(classify("Śmieci", "Czy ktoś może wynieść śmieci i wyprowadzić psa?").category())
+                .isEqualTo(HelpCategory.HOME_SUPPORT);
+    }
+
+    @Test
+    void unmatchedRequestIsGeneralHomeSupportNotGroceries() {
+        assertThat(classify("Pomocy", "Potrzebuję pomocy sąsiada.").category())
+                .isEqualTo(HelpCategory.HOME_SUPPORT);
+    }
+
+    @Test
+    void visitIsSocial() {
+        assertThat(classify("Odwiedziny", "Jestem samotna, ktoś mógłby mnie odwiedzić?").category())
+                .isEqualTo(HelpCategory.SOCIAL);
+    }
+
     private RequestClassification classify(String title, String description) {
         return classifier.classify(new ClassificationInput(title, description));
     }

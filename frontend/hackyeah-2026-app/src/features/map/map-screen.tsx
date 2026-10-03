@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SvgXml } from 'react-native-svg';
 
 import { errorMessage } from '@/api/errors';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
 import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 import { useUserLocation } from '@/features/map/use-user-location';
+import { PERSON_SVG, USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
 import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
@@ -153,7 +155,6 @@ export function MapScreen() {
             { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             pressed && styles.pressed,
           ]}>
-          <ThemedText type="default">📍</ThemedText>
           <View style={styles.locationTextWrapper}>
             <ThemedText type="caption" themeColor="textSecondary">
               TWOJA LOKALIZACJA
@@ -163,7 +164,7 @@ export function MapScreen() {
             </ThemedText>
           </View>
           <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-            Zmień 🔍
+            Zmień
           </ThemedText>
         </Pressable>
 
@@ -174,7 +175,7 @@ export function MapScreen() {
               { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             ]}>
             <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-              🚗 Trasa aktywna (
+              Trasa aktywna (
               {
                 filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS)
                   .length
@@ -201,7 +202,8 @@ export function MapScreen() {
         ref={mapRef}
         style={styles.map}
         initialRegion={KRAKOW_INITIAL_REGION}
-        showsUserLocation
+        // Our own "you are here" marker below covers GPS and manually picked places alike.
+        showsUserLocation={false}
         showsCompass
         showsScale
         onRegionChangeComplete={(region) => {
@@ -214,6 +216,25 @@ export function MapScreen() {
           bottom: selectedRequest ? 260 : 160,
           left: 12,
         }}>
+        <Marker
+          coordinate={mapCenter}
+          anchor={{ x: 0.5, y: 0.5 }}
+          zIndex={1000}
+          tracksViewChanges={false}
+          title="Tu jesteś"
+          description={locationLabel}
+          accessibilityLabel={`Tu jesteś: ${locationLabel}`}>
+          <View style={styles.meHalo}>
+            <View
+              style={[
+                styles.meDot,
+                { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
+              ]}>
+              <SvgXml xml={PERSON_SVG} width={20} height={20} />
+            </View>
+          </View>
+        </Marker>
+
         {activeRoute && activeRoute.coordinates.length >= 2 && (
           <>
             <Polyline
@@ -309,7 +330,7 @@ export function MapScreen() {
             <ActivityIndicator size="small" color={theme.primary} />
           ) : (
             <ThemedText type="smallBold" style={{ color: theme.primary }}>
-              📍 Wycentruj
+              Wycentruj
             </ThemedText>
           )}
         </Pressable>
@@ -335,7 +356,7 @@ export function MapScreen() {
                 onPress={() => setSelectedRequestId(null)}
                 style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}>
                 <ThemedText type="small" themeColor="textSecondary">
-                  ✕ Zamknij
+                  Zamknij
                 </ThemedText>
               </Pressable>
             </View>
@@ -355,7 +376,7 @@ export function MapScreen() {
                   { backgroundColor: theme.backgroundSelected, borderColor: theme.border },
                 ]}>
                 <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                  ✓ Zgłoszono chęć pomocy!
+                  Zgłoszono chęć pomocy
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
                   Czekasz na akceptację przez osobę potrzebującą.
@@ -371,7 +392,7 @@ export function MapScreen() {
             ) : (
               <View style={styles.actionButtonsCol}>
                 <Button
-                  title={offerHelpMutation.isPending ? 'Wysyłam zgłoszenie...' : '🤝 Chcę pomóc'}
+                  title={offerHelpMutation.isPending ? 'Wysyłam zgłoszenie...' : 'Chcę pomóc'}
                   disabled={offerHelpMutation.isPending}
                   onPress={() => {
                     offerHelpMutation.mutate(selectedRequest.id, {
@@ -472,7 +493,7 @@ export function MapScreen() {
                         {req.title}
                       </ThemedText>
                       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                        📍 Strefa ~300 m · {timeAgo(req.createdAt)}
+                        Strefa ~300 m · {timeAgo(req.createdAt)}
                       </ThemedText>
                     </Pressable>
                   );
@@ -485,7 +506,7 @@ export function MapScreen() {
 
             <Button
               variant="secondary"
-              title="🚗 Zaplanuj trasę (pomagaj po drodze)"
+              title="Zaplanuj trasę (pomagaj po drodze)"
               onPress={() =>
                 router.push({
                   pathname: '/route-planner',
@@ -647,6 +668,22 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meHalo: {
+    width: USER_LOCATION_SIZE + 16,
+    height: USER_LOCATION_SIZE + 16,
+    borderRadius: (USER_LOCATION_SIZE + 16) / 2,
+    backgroundColor: 'rgba(28, 126, 214, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meDot: {
+    width: USER_LOCATION_SIZE,
+    height: USER_LOCATION_SIZE,
+    borderRadius: USER_LOCATION_SIZE / 2,
+    borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },

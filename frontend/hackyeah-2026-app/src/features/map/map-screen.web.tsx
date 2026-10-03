@@ -105,7 +105,7 @@ export function MapScreen() {
                 pressed && styles.pressed,
               ]}>
               <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                📍 {locationLabel} (Zmień)
+                {locationLabel} (Zmień)
               </ThemedText>
             </Pressable>
           </View>
@@ -158,7 +158,7 @@ export function MapScreen() {
               Możesz też opcjonalnie zaplanować trasę, aby pomagać po drodze do pracy lub uczelni.
             </ThemedText>
             <Button
-              title={savedRoute ? 'Pokaż zapisaną trasę' : '🚗 Zaplanuj trasę (po drodze)'}
+              title={savedRoute ? 'Pokaż zapisaną trasę' : 'Zaplanuj trasę (po drodze)'}
               variant="secondary"
               inline
               onPress={() => (savedRoute ? toggleRouteActive(true) : router.push('/route-planner'))}
@@ -178,6 +178,8 @@ export function MapScreen() {
         matchingRequests={matchingRequests}
         showRouteBuffer={Boolean(activeRoute)}
         routeCoordinates={activeRoute?.coordinates}
+        userLocation={mapCenter}
+        userLocationLabel={locationLabel}
         height={600}
       />
 

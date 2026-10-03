@@ -13,6 +13,11 @@ import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import { KRAKOW_INITIAL_REGION, toLatLng } from '@/features/map/krakow-map-data';
 import { clusterRequests, MAX_MAP_ZOOM, NO_CLUSTER_ZOOM } from '@/features/map/map-clustering';
 import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
+import {
+  USER_LOCATION_CSS,
+  USER_LOCATION_SIZE,
+  userLocationHtml,
+} from '@/features/map/user-location-icon';
 import { useTheme } from '@/hooks/use-theme';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
@@ -33,6 +38,10 @@ type LeafletMapProps = {
   height?: number;
   onMapPress?: (coordinate: RouteCoordinate) => void;
   onRouteEndpointChange?: (endpoint: RouteEndpoint, coordinate: RouteCoordinate) => void;
+  /** "You are here" – GPS position or the place the user picked; the map moves there. */
+  userLocation?: RouteCoordinate;
+  /** Name of that place, for the tooltip and screen readers. */
+  userLocationLabel?: string;
 };
 
 const leafletElementStyle: CSSProperties = {
@@ -131,6 +140,7 @@ function leafletCss(theme: ThemePalette, textScale: number) {
     font-size: ${px(11)};
     color: ${theme.textSecondary};
   }
+  ${USER_LOCATION_CSS}
   .podrodze-tooltip {
     font: 600 ${px(13)}/${px(18)} var(--font-display);
     color: ${theme.text};
@@ -229,6 +239,8 @@ export function LeafletMap({
   height = 520,
   onMapPress,
   onRouteEndpointChange,
+  userLocation,
+  userLocationLabel = 'Twoja lokalizacja',
 }: LeafletMapProps) {
   const theme = useTheme();
   const { textScale, settings } = useAccessibility();
@@ -236,6 +248,8 @@ export function LeafletMap({
   const mapRef = useRef<LeafletMapInstance | null>(null);
   const overlayRef = useRef<LayerGroup | null>(null);
   const areaRef = useRef<LayerGroup | null>(null);
+  const meRef = useRef<LayerGroup | null>(null);
+  const shownLocationRef = useRef('');
   const fittedRouteRef = useRef('');
   /** Request whose popup is open; reopened after the markers are redrawn (zoom, new data). */
   const openRequestIdRef = useRef<number | null>(null);
@@ -516,6 +530,52 @@ export function LeafletMap({
     theme,
   ]);
 
+  // "You are here" marker, above the request points; the map pans when the location changes.
+  const meLatitude = userLocation?.latitude;
+  const meLongitude = userLocation?.longitude;
+  useEffect(() => {
+    let disposed = false;
+    (async () => {
+      const L = await import('leaflet');
+      const map = mapRef.current;
+      meRef.current?.remove();
+      meRef.current = null;
+      if (disposed || !map || meLatitude === undefined || meLongitude === undefined) return;
+
+      const layer = L.layerGroup().addTo(map);
+      const half = USER_LOCATION_SIZE / 2;
+      const marker = L.marker([meLatitude, meLongitude], {
+        zIndexOffset: 1000,
+        keyboard: true,
+        icon: L.divIcon({
+          className: 'podrodze-marker',
+          html: userLocationHtml(theme.primary, !settings.reduceMotion),
+          iconAnchor: [half, half],
+          iconSize: [USER_LOCATION_SIZE, USER_LOCATION_SIZE],
+        }),
+      })
+        .bindTooltip(`Tu jesteś: ${escapeHtml(userLocationLabel)}`, {
+          className: 'podrodze-tooltip',
+          direction: 'top',
+          offset: [0, -half],
+        })
+        .addTo(layer);
+      marker.getElement()?.setAttribute('aria-label', `Tu jesteś: ${userLocationLabel}`);
+      meRef.current = layer;
+
+      const key = `${meLatitude},${meLongitude}`;
+      if (shownLocationRef.current !== key) {
+        shownLocationRef.current = key;
+        map.setView([meLatitude, meLongitude], Math.max(map.getZoom(), 15), {
+          animate: !settings.reduceMotion,
+        });
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [mapReady, meLatitude, meLongitude, settings.reduceMotion, theme.primary, userLocationLabel]);
+
   // Masked ~300 m area of the selected request (never the exact address).
   useEffect(() => {
     let disposed = false;
@@ -548,6 +608,7 @@ export function LeafletMap({
     () => () => {
       overlayRef.current?.remove();
       areaRef.current?.remove();
+      meRef.current?.remove();
       mapRef.current?.remove();
       mapRef.current = null;
     },

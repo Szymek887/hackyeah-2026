@@ -1,5 +1,6 @@
 package com.telecrazy.hackyeah2026backend.ai;
 
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,36 +14,61 @@ import org.springframework.stereotype.Component;
 
 /**
  * Rule-based classifier used when the LLM is disabled, unavailable or returns invalid output,
- * so the demo never depends on the model. Matches Polish word stems.
+ * so the demo never depends on the model. Matches Polish word stems, including everyday spoken
+ * phrases (requests are often dictated by voice).
+ *
+ * <p>Every category is scored by the number of matching stems and the best one wins (ties go to
+ * the more important category). Critical requests that mention health go to {@code MEDICINE}.
+ * A request matching nothing is {@code HOME_SUPPORT} – general help at home.
+ *
+ * <p>Ported 1:1 to the frontend mocks ({@code src/api/mocks/classifier.ts}); keep both in sync.
  */
 @Component
 public class KeywordRequestClassifier {
 
     private static final Locale POLISH = Locale.forLanguageTag("pl");
 
-    // Checked in order; the first category with a match wins.
     private static final Map<HelpCategory, List<String>> CATEGORY_KEYWORDS = Map.of(
             HelpCategory.MEDICINE, List.of(
-                    "lek", "apte", "recept", "tablet", "insulin", "opatrun", "ciśnieni"),
+                    "lek", "apte", "recept", "tablet", "insulin", "opatrun", "ciśnieni", "zdrow",
+                    "chor", "ból", "boli", "bolą", "gorącz", "temperatur", "przezięb", "kaszel", "kaszl",
+                    "gryp", "zawrot", "słabo", "źle się czuję", "upad", "przewróci", "nie mogę wstać",
+                    "serc", "cukrzyc", "przychodni", "szpital", "pielęgniar", "zastrzyk", "syrop",
+                    "maść", "maści", "witamin", "termometr", "inhalator", "plaster", "bandaż", "okular"),
             HelpCategory.GROCERIES, List.of(
-                    "zakup", "jedzeni", "żywnoś", "chleb", "mlek", "sklep", "obiad", "warzyw", "owoc"),
+                    "zakup", "kup", "jedzeni", "jedzeniem", "głodn", "żywnoś", "chleb", "bułk", "mlek",
+                    "mleko", "masł", "jaj", "mięs", "wędlin", "ser ", "sera", "kasz", "makaron", "ryż",
+                    "cukru", "cukier", "herbat", "wod", "napoj", "picia", "karm", "sklep", "market",
+                    "biedronk", "lidl", "obiad", "kolacj", "śniadani", "warzyw", "owoc", "ziemniak",
+                    "papier toaletow", "proszek do prania"),
             HelpCategory.EQUIPMENT_LOAN, List.of(
-                    "pożycz", "drabin", "wiertar", "narzęd", "młot", "wózek", "wózk", "kule ", "sprzęt"),
+                    "pożycz", "drabin", "wiertar", "wkrętar", "narzęd", "młot", "wózek", "wózk",
+                    "balkonik", "chodzik", "kule ", "sprzęt", "odkurzacz", "przedłużacz"),
             HelpCategory.HOME_SUPPORT, List.of(
-                    "napraw", "awari", "kran", "cieknie", "przecie", "zalan", "prąd", "żarówk", "zamek",
-                    "drzwi", "okno", "ogrzewani", "kaloryfer", "wniosek", "formularz", "pismo"),
+                    "napraw", "awari", "zepsu", "nie działa", "kran", "cieknie", "przecie", "zalan",
+                    "prąd", "żarówk", "zamek", "drzwi", "okno", "ogrzewani", "kaloryfer", "wniosek",
+                    "formularz", "pismo", "dokument", "urząd", "urzęd", "poczt", "rachun", "opłat",
+                    "wnieś", "wynieś", "śmieci", "sprząt", "posprząt", "pranie", "węgl", "drew",
+                    "odśnież", "mebl", "przesun", "pies", "psa", "kot ", "kota", "telewizor", "telefon",
+                    "komputer", "internet"),
             HelpCategory.SOCIAL, List.of(
-                    "spacer", "rozmow", "samotn", "towarzyst", "porozmawia", "kawę", "kawy", "planszów", "w karty")
+                    "spacer", "rozmow", "samotn", "towarzyst", "porozmawia", "pogada", "odwiedzi",
+                    "odwiedz", "smutn", "kawę", "kawy", "planszów", "w karty", "kościoł", "kościel", "msz",
+                    "cmentarz", "poczyta", "książk")
     );
+    /** Tie-break order: health first, social last. */
     private static final List<HelpCategory> CATEGORY_ORDER = List.of(
             HelpCategory.MEDICINE, HelpCategory.GROCERIES, HelpCategory.EQUIPMENT_LOAN,
             HelpCategory.HOME_SUPPORT, HelpCategory.SOCIAL);
 
     private static final List<String> CRITICAL_KEYWORDS = List.of(
-            "serc", "insulin", "pilne", "natychmiast", "nie mam jak wyjść", "nie mogę wyjść",
-            "nie wychodzę", "brak leków");
+            "serc", "insulin", "pilne", "pilnie", "natychmiast", "jak najszybciej", "nie mam jak wyjść",
+            "nie mogę wyjść", "nie wychodzę", "brak leków", "nie mam leków", "skończyły mi się leki",
+            "nie mam jedzenia", "nic do jedzenia", "głodn", "upad", "przewróci", "nie mogę wstać",
+            "źle się czuję", "cukrzyc");
     private static final List<String> HIGH_KEYWORDS = List.of(
-            "dziś", "dzisiaj", "jutro", "szybko", "awari", "zalan", "cieknie", "brak prądu", "ogrzewani");
+            "dziś", "dzisiaj", "jutro", "szybko", "awari", "zalan", "cieknie", "brak prądu",
+            "ogrzewani", "ból", "boli", "gorącz", "chor", "zepsu", "nie działa");
     private static final List<String> EMERGENCY_KEYWORDS = List.of(
             "nie mogę oddychać", "duszno", "duszę się", "ból w klatce", "zawał", "udar", "omdla",
             "stracił przytomność", "krwotok");
@@ -57,14 +83,6 @@ public class KeywordRequestClassifier {
         if (containsAny(text, EMERGENCY_KEYWORDS)) {
             riskFlags.add(RiskFlag.MEDICAL_EMERGENCY);
         }
-
-        // Unmatched requests default to groceries, the most common basic need.
-        HelpCategory category = riskFlags.contains(RiskFlag.MEDICAL_EMERGENCY)
-                ? HelpCategory.MEDICINE
-                : CATEGORY_ORDER.stream()
-                        .filter(c -> containsAny(text, CATEGORY_KEYWORDS.get(c)))
-                        .findFirst()
-                        .orElse(HelpCategory.GROCERIES);
         if (containsAny(text, SCAM_KEYWORDS)) {
             riskFlags.add(RiskFlag.SCAM_SUSPECTED);
         }
@@ -78,19 +96,48 @@ public class KeywordRequestClassifier {
             priority = 3;
         }
 
-        return new RequestClassification(category, priority, tags(text), riskFlags, ClassificationSource.FALLBACK);
+        return new RequestClassification(
+                category(text, riskFlags, priority), priority, tags(text), riskFlags,
+                ClassificationSource.FALLBACK);
+    }
+
+    private static HelpCategory category(String text, Set<RiskFlag> riskFlags, int priority) {
+        int medicine = score(text, HelpCategory.MEDICINE);
+        // A health emergency, or a critical request that mentions health, is about health first.
+        if (riskFlags.contains(RiskFlag.MEDICAL_EMERGENCY) || (priority == 1 && medicine > 0)) {
+            return HelpCategory.MEDICINE;
+        }
+        return CATEGORY_ORDER.stream()
+                .filter(c -> score(text, c) > 0)
+                // Highest score wins; on a tie the earlier category in CATEGORY_ORDER.
+                .max(Comparator.comparingInt((HelpCategory c) -> score(text, c))
+                        .thenComparing(c -> -CATEGORY_ORDER.indexOf(c)))
+                .orElse(HelpCategory.HOME_SUPPORT);
+    }
+
+    private static int score(String text, HelpCategory category) {
+        return (int) CATEGORY_KEYWORDS.get(category).stream()
+                .filter(keyword -> containsAtWordStart(text, keyword))
+                .count();
     }
 
     private static List<String> tags(String text) {
         Set<String> tags = new LinkedHashSet<>();
-        if (containsAny(text, List.of("lek", "recept"))) tags.add("leki");
+        if (containsAny(text, List.of("lek", "recept", "tablet"))) tags.add("leki");
         if (containsAtWordStart(text, "apte")) tags.add("apteka");
-        if (containsAny(text, List.of("zakup", "sklep", "jedzeni", "żywnoś"))) tags.add("zakupy");
+        if (containsAny(text, List.of("chor", "ból", "boli", "gorącz", "zawrot", "źle się czuję", "upad",
+                "przewróci", "serc", "cukrzyc"))) tags.add("zdrowie");
+        if (containsAny(text, List.of("przychodni", "szpital", "pielęgniar"))) tags.add("wizyta lekarska");
+        if (containsAny(text, List.of("zakup", "kup", "sklep", "jedzeni", "żywnoś"))) tags.add("zakupy");
+        if (containsAny(text, List.of("obiad", "kolacj", "śniadani", "głodn"))) tags.add("posiłek");
         if (containsAtWordStart(text, "drabin")) tags.add("drabina");
-        if (containsAny(text, List.of("narzęd", "wiertar", "młot"))) tags.add("narzędzia");
-        if (containsAny(text, List.of("napraw", "awari"))) tags.add("naprawa");
-        if (containsAny(text, List.of("wniosek", "formularz", "pismo"))) tags.add("dokumenty");
-        if (containsAny(text, List.of("spacer", "rozmow", "towarzyst", "samotn"))) tags.add("towarzystwo");
+        if (containsAny(text, List.of("narzęd", "wiertar", "wkrętar", "młot"))) tags.add("narzędzia");
+        if (containsAny(text, List.of("wózek", "wózk", "balkonik", "chodzik", "kule "))) tags.add("sprzęt rehabilitacyjny");
+        if (containsAny(text, List.of("napraw", "awari", "zepsu", "nie działa"))) tags.add("naprawa");
+        if (containsAny(text, List.of("sprząt", "posprząt", "śmieci", "pranie"))) tags.add("sprzątanie");
+        if (containsAny(text, List.of("wniosek", "formularz", "pismo", "dokument", "urząd", "urzęd"))) tags.add("dokumenty");
+        if (containsAny(text, List.of("pies", "psa", "kot ", "kota"))) tags.add("zwierzęta");
+        if (containsAny(text, List.of("spacer", "rozmow", "towarzyst", "samotn", "odwiedz", "odwiedzi"))) tags.add("towarzystwo");
         return tags.stream().limit(LlmRequestClassifier.MAX_TAGS).toList();
     }
 

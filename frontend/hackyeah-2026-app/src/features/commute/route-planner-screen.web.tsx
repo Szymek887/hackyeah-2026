@@ -145,7 +145,7 @@ export function RoutePlannerScreen() {
                 </ThemedText>
               </View>
               <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-                Zmień ✎
+                Zmień
               </ThemedText>
             </Pressable>
 
@@ -165,7 +165,7 @@ export function RoutePlannerScreen() {
                 </ThemedText>
               </View>
               <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-                Zmień ✎
+                Zmień
               </ThemedText>
             </Pressable>
           </View>

@@ -136,9 +136,9 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
             color: isCompleted || isRated ? '#ffffff' : theme.text,
           }}>
           {isRated
-            ? '✓ Zlecenie zakończone i ocenione'
+            ? 'Zlecenie zakończone i ocenione'
             : isCompleted
-              ? '✓ Pomoc dostarczona – oczekiwanie na ocenę'
+              ? 'Pomoc dostarczona – oczekiwanie na ocenę'
               : '● Zlecenie w toku (Status: Zaakceptowane)'}
         </ThemedText>
       </ThemedView>

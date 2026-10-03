@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { ApiError, errorMessage } from '@/api/errors';
-import { classifyRequest } from '@/api/requests';
 import type { AiClassification } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
@@ -29,8 +28,8 @@ const DESCRIPTION_MAX = 1000;
 type Errors = Partial<Record<'title' | 'description' | 'street' | 'buildingNumber', string>>;
 
 /**
- * F2.2 – new help request form with AI classification preview. `draft` = request accepted from
- * speech on the start screen (title, description and AI result already filled in).
+ * F2.2 – new help request form; category and priority are set by the backend AI on save. `draft` =
+ * request accepted from speech (title, description and its AI preview already filled in).
  */
 export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
   const theme = useTheme();
@@ -46,25 +45,15 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
   const [classification, setClassification] = useState<AiClassification | null>(() =>
     parseDraftAi(draft?.draftAi),
   );
-  const [classifying, setClassifying] = useState(false);
-  const [classifyError, setClassifyError] = useState<string | null>(null);
-
-  const canClassify = title.trim().length >= 3 && description.trim().length >= 10;
-
-  const handleClassify = async () => {
-    setClassifying(true);
-    setClassifyError(null);
-    try {
-      const result = await classifyRequest({
-        title: title.trim(),
-        description: description.trim(),
-      });
-      setClassification(result);
-    } catch (err) {
-      setClassifyError(errorMessage(err));
-    } finally {
-      setClassifying(false);
-    }
+  // The preview from a voice draft no longer matches once the text is edited; the backend
+  // classifies the request again when it is saved anyway.
+  const changeTitle = (text: string) => {
+    setTitle(text);
+    setClassification(null);
+  };
+  const changeDescription = (text: string) => {
+    setDescription(text);
+    setClassification(null);
   };
 
   const resetForm = () => {
@@ -140,7 +129,7 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
           placeholder="np. Potrzebuję leków z apteki"
           value={title}
           maxLength={TITLE_MAX}
-          onChangeText={setTitle}
+          onChangeText={changeTitle}
           error={errors.title}
         />
         <Input
@@ -149,33 +138,30 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
           value={description}
           maxLength={DESCRIPTION_MAX}
           multiline
-          onChangeText={setDescription}
+          onChangeText={changeDescription}
           error={errors.description}
         />
         <ThemedText type="caption" themeColor="textSecondary" style={styles.counter}>
           {description.length}/{DESCRIPTION_MAX}
         </ThemedText>
 
-        <Button
-          title={classifying ? 'Analizuję opis…' : 'Zaproponuj kategorię (AI)'}
-          variant="secondary"
-          inline
-          disabled={!canClassify || classifying}
-          onPress={handleClassify}
-        />
-        {classifyError && <ThemedText themeColor="danger">{classifyError}</ThemedText>}
+        {!classification && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Rodzaj pomocy i pilność asystent AI nada automatycznie po dodaniu zgłoszenia.
+          </ThemedText>
+        )}
 
         {classification && (
           <Animated.View entering={enterItem()} layout={layoutTransition}>
             <Card highlighted>
-              <ThemedText type="smallBold">Propozycja asystenta</ThemedText>
+              <ThemedText type="smallBold">Rozpoznane z Twojej wypowiedzi</ThemedText>
               <View style={styles.row}>
                 <Badge label={CategoryLabels[classification.category]} />
                 <PriorityBadge priority={classification.priority} />
                 {classification.tags.map((tag) => (
                   <Badge
                     key={tag}
-                    label={`#${tag}`}
+                    label={tag}
                     color={theme.textSecondary}
                     backgroundColor={theme.backgroundElement}
                   />

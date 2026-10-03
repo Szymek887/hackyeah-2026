@@ -58,7 +58,7 @@ export function LocationPermissionModal({
             },
           ]}>
           <View style={[styles.iconCircle, { backgroundColor: theme.primarySoft }]}>
-            <ThemedText style={styles.iconText}>📍</ThemedText>
+            <View style={[styles.locationDot, { backgroundColor: theme.primary }]} />
           </View>
 
           <ThemedText type="subtitle" style={styles.title}>
@@ -81,14 +81,14 @@ export function LocationPermissionModal({
 
           <View style={styles.actions}>
             <Button
-              title={isLoading ? 'Pobieranie pozycji...' : '📍 Włącz lokalizację (GPS)'}
+              title={isLoading ? 'Pobieranie pozycji...' : 'Włącz lokalizację (GPS)'}
               disabled={isLoading}
               onPress={handleRequestGps}
             />
 
             <Button
               variant="secondary"
-              title="🔍 Wybierz lokalizację z listy"
+              title="Wybierz lokalizację z listy"
               onPress={() => {
                 onDismiss();
                 onChooseManual();
@@ -142,8 +142,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.two,
   },
-  iconText: {
-    fontSize: 32,
+  locationDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
   },
   title: {
     textAlign: 'center',

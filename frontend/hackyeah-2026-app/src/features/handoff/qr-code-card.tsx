@@ -53,7 +53,7 @@ export function QrCodeCard({ token, expiresAt: _expiresAt, compact = false }: Qr
         type="small"
         onPress={handleCopy}
         style={{ color: copied ? theme.success : theme.primary, textAlign: 'center' }}>
-        {copied ? '✓ Kod skopiowany' : 'Kod awaryjny (do przepisania)'}
+        {copied ? 'Kod skopiowany' : 'Kod awaryjny (do przepisania)'}
       </ThemedText>
     </ThemedView>
   );

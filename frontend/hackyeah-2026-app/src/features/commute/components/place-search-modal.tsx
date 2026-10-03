@@ -94,7 +94,6 @@ export function PlaceSearchModal({ visible, title, onClose, onSelect }: PlaceSea
               styles.inputWrapper,
               { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             ]}>
-            <ThemedText type="default">🔍</ThemedText>
             <TextInput
               value={query}
               onChangeText={setQuery}
@@ -117,7 +116,6 @@ export function PlaceSearchModal({ visible, title, onClose, onSelect }: PlaceSea
             { backgroundColor: theme.primarySoft, borderColor: theme.border },
             pressed && styles.pressed,
           ]}>
-          <ThemedText type="default">📍</ThemedText>
           <View style={styles.gpsText}>
             <ThemedText type="smallBold" style={{ color: theme.primary }}>
               {isLocating ? 'Pobieram lokalizację GPS...' : 'Użyj mojej bieżącej pozycji'}
@@ -152,27 +150,6 @@ export function PlaceSearchModal({ visible, title, onClose, onSelect }: PlaceSea
                 { borderBottomColor: theme.border },
                 pressed && styles.pressed,
               ]}>
-              <View
-                style={[
-                  styles.itemIcon,
-                  {
-                    backgroundColor:
-                      item.type === 'preset' ? theme.primarySoft : theme.backgroundMuted,
-                  },
-                ]}>
-                <ThemedText type="caption">
-                  {item.name.toLowerCase().includes('cinema')
-                    ? '🎬'
-                    : item.name.toLowerCase().includes('agh') ||
-                        item.name.toLowerCase().includes('uj') ||
-                        item.name.toLowerCase().includes('politechnika')
-                      ? '🎓'
-                      : item.name.toLowerCase().includes('dworzec') ||
-                          item.name.toLowerCase().includes('galeria')
-                        ? '🏬'
-                        : '🏢'}
-                </ThemedText>
-              </View>
               <View style={styles.itemText}>
                 <ThemedText type="defaultBold">{item.name}</ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
@@ -257,13 +234,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Spacing.two,
-  },
-  itemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   itemText: {
     flex: 1,

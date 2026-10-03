@@ -213,7 +213,7 @@ export function RoutePlannerScreen() {
                   {startLabel}
                 </ThemedText>
                 <ThemedText type="caption" style={{ color: theme.primary }}>
-                  Zmień ✎
+                  Zmień
                 </ThemedText>
               </Pressable>
 
@@ -228,7 +228,7 @@ export function RoutePlannerScreen() {
                   {endLabel}
                 </ThemedText>
                 <ThemedText type="caption" style={{ color: theme.primary }}>
-                  Zmień ✎
+                  Zmień
                 </ThemedText>
               </Pressable>
             </View>
@@ -322,7 +322,7 @@ export function RoutePlannerScreen() {
           ]}
           onPress={fitFullRoute}>
           <ThemedText type="smallBold" style={{ color: theme.primary }}>
-            🗺️ Cała trasa
+            Cała trasa
           </ThemedText>
         </Pressable>
 
@@ -337,7 +337,7 @@ export function RoutePlannerScreen() {
             <ActivityIndicator size="small" color={theme.primary} />
           ) : (
             <ThemedText type="smallBold" style={{ color: theme.primary }}>
-              📍 GPS
+              Moja pozycja
             </ThemedText>
           )}
         </Pressable>

@@ -84,7 +84,7 @@ export function RequestDetailsScreen({ id }: { id: number }) {
           }}
           style={[styles.listenBtn, { backgroundColor: theme.backgroundSelected }]}>
           <ThemedText type="smallBold">
-            {voice.isSpeaking ? '⏹️ Zatrzymaj lektora' : '🔊 Odsłuchaj na głos'}
+            {voice.isSpeaking ? 'Zatrzymaj czytanie' : 'Przeczytaj na głos'}
           </ThemedText>
         </Pressable>
       </View>

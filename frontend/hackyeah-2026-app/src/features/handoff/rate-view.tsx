@@ -78,7 +78,6 @@ export function RateView({ requestId }: RateViewProps) {
     return (
       <Screen style={styles.center}>
         <ThemedView type="backgroundElement" style={styles.successCard}>
-          <ThemedText style={{ fontSize: 48, textAlign: 'center' }}>🎉</ThemedText>
           <ThemedText type="subtitle" style={{ textAlign: 'center' }}>
             Dziękujemy za ocenę!
           </ThemedText>
@@ -170,7 +169,7 @@ export function RateView({ requestId }: RateViewProps) {
         {/* Gamification badge */}
         <ThemedView style={styles.rewardCard}>
           <ThemedText type="smallBold" style={{ color: theme.primary }}>
-            🏅 Bonus zaangażowania sąsiedzkiego
+            Bonus zaangażowania sąsiedzkiego
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
             Każda ocena wspiera rzetelność systemu i nagradza wolontariuszy punktami miejskimi

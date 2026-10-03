@@ -90,7 +90,7 @@ export function ProfileScreen() {
       <View style={styles.actions}>
         {user.role === 'REQUESTER' && (
           <Button
-            title="🏠 Prosty ekran startowy"
+            title="Prosty ekran startowy"
             variant="secondary"
             onPress={() => router.push('/start')}
           />
