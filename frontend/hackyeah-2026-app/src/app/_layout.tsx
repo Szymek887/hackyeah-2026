@@ -47,6 +47,7 @@ function RootNavigator() {
 
       <Stack.Protected guard={signedIn && !isAdmin}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="start" options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="request/[id]" options={{ title: 'Zgłoszenie' }} />
         <Stack.Screen name="route-planner" options={{ title: 'Moja trasa' }} />
         <Stack.Screen name="task/[id]" options={{ title: 'Aktywne zadanie' }} />

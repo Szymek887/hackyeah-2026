@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spacing } from '@/constants/theme';
 import type { DisabilityType } from '@/features/accessibility/accessibility-settings';
-import { useAccessibility } from '@/features/accessibility/accessibility-store';
 import { NeedsPicker } from '@/features/accessibility/components/needs-picker';
 import { useAuth } from '@/features/auth/session-context';
 
@@ -17,7 +16,6 @@ const DISPLAY_NAME_MAX = 60;
 /** `POST /api/users` – a new, unverified account. The account type is chosen above the form. */
 export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
   const { signUp } = useAuth();
-  const { applyDisabilities } = useAccessibility();
   const [displayName, setDisplayName] = useState('');
   const [disabilities, setDisabilities] = useState<DisabilityType[]>([]);
   const [needsNotes, setNeedsNotes] = useState('');
@@ -41,8 +39,6 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
         { displayName: name, role, specialNeeds: role === 'REQUESTER' && specialNeeds },
         { disabilities, accessibilityNotes: notes },
       );
-      // E.g. a visual impairment switches on large text and high contrast right away.
-      applyDisabilities(disabilities);
       // Route guard in app/_layout.tsx switches to the app automatically.
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors?.displayName) {

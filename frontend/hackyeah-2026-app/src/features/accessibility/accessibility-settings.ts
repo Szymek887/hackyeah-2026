@@ -1,6 +1,7 @@
 /**
- * Display preferences that make the app easier to read and use. Client-only and per device:
- * they are chosen on the login screen (before anyone is signed in) and can be changed in the profile.
+ * Display preferences that make the app easier to read and use. They follow only from the age
+ * group – there are no manual contrast / color switches. Client-only and per device: the age group
+ * is the first step of the login screen and can be changed in the profile.
  */
 
 export type AgeGroup = 'AGE_18_39' | 'AGE_40_59' | 'AGE_60_74' | 'AGE_75_PLUS';
@@ -26,13 +27,6 @@ export const TextScale: Record<TextSize, number> = {
   comfortable: 1.12,
   large: 1.25,
   xlarge: 1.4,
-};
-
-export const TextSizeLabels: Record<TextSize, string> = {
-  standard: 'Standardowy',
-  comfortable: 'Wygodny',
-  large: 'Duży',
-  xlarge: 'Bardzo duży',
 };
 
 export const AgeGroups: {
@@ -113,29 +107,3 @@ export const Disabilities: { value: DisabilityType; label: string; hint: string 
 export const DisabilityLabels = Object.fromEntries(
   Disabilities.map((d) => [d.value, d.label]),
 ) as Record<DisabilityType, string>;
-
-const TEXT_SIZE_ORDER: TextSize[] = ['standard', 'comfortable', 'large', 'xlarge'];
-
-const atLeast = (current: TextSize, minimum: TextSize) =>
-  TEXT_SIZE_ORDER.indexOf(current) >= TEXT_SIZE_ORDER.indexOf(minimum) ? current : minimum;
-
-/**
- * Display adjustments that follow from the declared needs. Only ever makes the UI more accessible,
- * never less – the user can still turn things off in the profile.
- */
-export function adjustForDisabilities(
-  settings: AccessibilitySettings,
-  disabilities: DisabilityType[],
-): AccessibilitySettings {
-  let next = settings;
-  if (disabilities.includes('VISION')) {
-    next = { ...next, textSize: atLeast(next.textSize, 'large'), highContrast: true };
-  }
-  if (disabilities.includes('MOBILITY')) {
-    next = { ...next, largeTouchTargets: true };
-  }
-  if (disabilities.includes('COGNITIVE')) {
-    next = { ...next, reduceMotion: true, largeTouchTargets: true };
-  }
-  return next;
-}
