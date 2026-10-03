@@ -2,6 +2,8 @@ package com.telecrazy.hackyeah2026backend.api;
 
 import com.telecrazy.hackyeah2026backend.service.HelpRequestService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,5 +27,10 @@ public class HelpRequestController {
             @RequestParam(defaultValue = "3") double radiusKm
     ) {
         return helpRequestService.findNearby(lat, lng, radiusKm);
+    }
+
+    @PostMapping("/along-route")
+    public List<PublicHelpRequestResponse> alongRoute(@RequestBody RouteSearchRequest request) {
+        return helpRequestService.findAlongRoute(request);
     }
 }
