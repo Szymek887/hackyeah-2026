@@ -1,6 +1,6 @@
 import { SymbolView } from 'expo-symbols';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { errorMessage } from '@/api/errors';
@@ -35,16 +35,21 @@ const formatTime = (seconds: number) =>
  *    red dot, live waveform, timer and send,
  * 2. the speech is analysed by AI (category, urgency, keywords),
  * 3. a preview of the request to accept, edit or record again.
+ *
+ * Without a speech module (Expo Go on a phone) the bar holds a text field instead of the waveform:
+ * the person dictates with the keyboard microphone, the rest of the flow is the same.
  */
 export function VoiceRequestFlow({
   onAccept,
   label = 'Powiedz, czego potrzebujesz',
 }: VoiceRequestFlowProps) {
   const theme = useTheme();
-  const { minTouchSize } = useAccessibility();
+  const { minTouchSize, textScale } = useAccessibility();
   const [phase, setPhase] = useState<Phase>('idle');
   const [draft, setDraft] = useState<VoiceDraft | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  /** Keyboard dictation text (Expo Go). */
+  const [typed, setTyped] = useState('');
   /** Set when the person cancels, so the end of recognition does not start the analysis. */
   const cancelledRef = useRef(false);
 
@@ -77,6 +82,7 @@ export function VoiceRequestFlow({
     setProblem(null);
     setDraft(null);
     voice.resetTranscript();
+    setTyped('');
     setPhase('recording');
     voice.startListening();
   };
@@ -85,11 +91,13 @@ export function VoiceRequestFlow({
     cancelledRef.current = true;
     voice.stopListening();
     voice.resetTranscript();
+    setTyped('');
     setPhase('idle');
   };
 
-  // Stopping ends recognition; `onEnd` then runs the analysis with the final transcript.
-  const send = () => voice.stopListening();
+  const keyboard = voice.inputMode === 'keyboard';
+  // Speech: stopping ends recognition and `onEnd` runs the analysis with the final transcript.
+  const send = () => (keyboard ? analyze(typed) : voice.stopListening());
 
   const error = voice.error ?? problem;
   const recording = phase === 'recording';
@@ -112,7 +120,46 @@ export function VoiceRequestFlow({
 
   return (
     <View style={styles.container}>
-      {recording && !stalled ? (
+      {recording && keyboard ? (
+        <Animated.View
+          entering={enterScreen}
+          style={[
+            styles.recorder,
+            { minHeight: minTouchSize + 16, backgroundColor: theme.accent },
+          ]}>
+          <RoundButton
+            label="Anuluj"
+            icon={{ ios: 'xmark', android: 'close', web: 'close' }}
+            background={theme.onAccent}
+            color={theme.accent}
+            onPress={cancel}
+          />
+          <TextInput
+            value={typed}
+            onChangeText={setTyped}
+            autoFocus
+            multiline
+            accessibilityLabel="Treść prośby. Dotknij mikrofon na klawiaturze i mów."
+            placeholder="Mów do mikrofonu na klawiaturze…"
+            placeholderTextColor={theme.textSecondary}
+            style={[
+              styles.dictation,
+              {
+                color: theme.text,
+                backgroundColor: theme.backgroundElement,
+                fontSize: Math.round(16 * textScale),
+              },
+            ]}
+          />
+          <RoundButton
+            label="Wyślij do analizy"
+            icon={{ ios: 'arrow.up', android: 'send', web: 'send' }}
+            background={theme.onAccent}
+            color={theme.accent}
+            onPress={send}
+          />
+        </Animated.View>
+      ) : recording && !stalled ? (
         <Animated.View
           entering={enterScreen}
           accessibilityLiveRegion="polite"
@@ -201,12 +248,18 @@ export function VoiceRequestFlow({
         </Pressable>
       )}
 
-      {recording && voice.transcript ? (
+      {recording && keyboard ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+          Dotknij ikonę mikrofonu na klawiaturze i powiedz, czego potrzebujesz. Tekst pojawi się w
+          polu – potem dotknij strzałkę.
+        </ThemedText>
+      ) : null}
+      {recording && !keyboard && voice.transcript ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
           Słyszę: „{voice.transcript}”
         </ThemedText>
       ) : null}
-      {recording && !voice.transcript && !stalled ? (
+      {recording && !keyboard && !voice.transcript && !stalled ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
           Mów teraz. Gdy skończysz, dotknij strzałkę.
         </ThemedText>
@@ -382,6 +435,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  dictation: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 140,
+    borderRadius: Radius.large,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    textAlignVertical: 'center',
   },
   recDot: {
     width: 10,

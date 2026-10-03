@@ -1,24 +1,17 @@
+/** Web: speech recognition with the browser Web Speech API (Chrome, Edge). */
 import * as Speech from 'expo-speech';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
-export type VoiceState = {
-  isListening: boolean;
-  transcript: string;
-  isSupported: boolean;
-  error: string | null;
-  isSpeaking: boolean;
-  volumeLevel: number; // 0.0 to 1.0 real-time audio volume
-  /** Last few volume samples (0..1, oldest first) for a waveform like a voice message. */
-  levels: number[];
-  /** Recording time in seconds. */
-  elapsedSeconds: number;
-  startListening: () => Promise<void>;
-  stopListening: () => void;
-  speak: (text: string) => void;
-  stopSpeaking: () => void;
-  resetTranscript: () => void;
-};
+import {
+  SILENCE_STOP_MS,
+  SILENT_WAVEFORM,
+  WAVEFORM_SAMPLE_MS,
+  type VoiceOptions,
+  type VoiceState,
+} from '@/features/voice/voice-types';
+
+export type { VoiceState } from '@/features/voice/voice-types';
 
 function getSpeechRecognition(): any {
   if (typeof window === 'undefined') return null;
@@ -31,15 +24,6 @@ function getSpeechRecognition(): any {
     null
   );
 }
-
-const WAVEFORM_BARS = 28;
-const WAVEFORM_SAMPLE_MS = 90;
-const SILENT_WAVEFORM = Array.from({ length: WAVEFORM_BARS }, () => 0);
-
-type VoiceOptions = {
-  /** Called once when recognition ends (silence, stop or error) with the final transcript. */
-  onEnd?: (transcript: string) => void;
-};
 
 export function useVoiceAssistant(
   onResult?: (text: string) => void,
@@ -305,7 +289,7 @@ export function useVoiceAssistant(
         }
         silenceTimerRef.current = setTimeout(() => {
           stopListening();
-        }, 5000);
+        }, SILENCE_STOP_MS);
       };
 
       recognition.onerror = (event: any) => {
@@ -360,6 +344,7 @@ export function useVoiceAssistant(
     isListening,
     transcript,
     isSupported,
+    inputMode: 'speech',
     error,
     isSpeaking,
     volumeLevel,
