@@ -1,26 +1,28 @@
-import { ThemedText } from '@/components/themed-text';
+import { router } from 'expo-router';
+
+import { Screen } from '@/components/ui/screen';
 import { Button } from '@/components/ui/button';
-import { ScreenPlaceholder } from '@/components/ui/screen-placeholder';
+import { ThemedText } from '@/components/themed-text';
+import { ProfileHeader } from '@/features/profile/components/profile-header';
+import { ProfileStats } from '@/features/profile/components/profile-stats';
+import { RoleSwitch } from '@/features/profile/components/role-switch';
 import { useSession } from '@/features/auth/session-context';
 
 export default function ProfileScreen() {
   const { user, role, switchRole } = useSession();
-  const isVolunteer = role === 'VOLUNTEER';
 
   return (
-    <ScreenPlaceholder
-      title="Profil"
-      owner="FE1"
-      tasks={['F1.4 przełącznik roli', 'profil z gwiazdkami']}>
-      <ThemedText>
-        {user.displayName} · {isVolunteer ? 'Wolontariusz' : 'Potrzebujący'} · ★{' '}
-        {user.ratingAverage}
+    <Screen scroll>
+      <ThemedText type="title">Profil</ThemedText>
+      <ProfileHeader user={user} />
+      <ProfileStats user={user} />
+
+      <ThemedText type="smallBold" themeColor="textSecondary">
+        TRYB DEMO
       </ThemedText>
-      <Button
-        variant="secondary"
-        title={isVolunteer ? 'Przełącz na: Potrzebujący' : 'Przełącz na: Wolontariusz'}
-        onPress={() => switchRole(isVolunteer ? 'REQUESTER' : 'VOLUNTEER')}
-      />
-    </ScreenPlaceholder>
+      <RoleSwitch role={role} onChange={switchRole} />
+
+      <Button variant="outline" title="Panel miasta" onPress={() => router.push('/dashboard')} />
+    </Screen>
   );
 }

@@ -78,3 +78,13 @@ Zainstaluj rozszerzenia polecane przez VS Code (Prettier, ESLint, Expo Tools). F
 - Lista statusów (`RATED` vs `CANCELLED`) – patrz `RequestStatus` w `src/api/types.ts`.
 - Format obszaru przybliżonego (okrąg czy heksagon H3).
 - Ścieżki endpointów (w `src/api/requests.ts` są tymczasowe) i adres API widoczny z telefonu (`EXPO_PUBLIC_API_URL`, IP komputera w sieci lokalnej).
+
+## Znane problemy
+
+- **`package.json does not exist`** – `npx expo start` trzeba uruchamiać w `frontend/hackyeah-2026-app`, nie w katalogu głównym repo.
+- **`Unable to resolve module ...` po instalacji pakietu** – zatrzymaj serwer i uruchom z czyszczeniem cache: `npx expo start -c`.
+- **`Type '"/"' is not assignable ...` w `npm run check`** – na Windowsie Expo psuje `.expo/types/router.d.ts`, gdy przy działającym serwerze dodajesz nowe pliki. Aplikacji to nie psuje. Naprawa: zatrzymaj serwer, usuń `.expo/types`, uruchom `npx expo start` ponownie.
+
+## Styl wizualny
+
+Clean & casual: białe karty na jasnoniebieskim tle, niebieski akcent (`primary`), granatowy tekst, cienkie obramowania zamiast cieni, bez gradientów i rozmyć. Gotowe klocki w `src/components/ui/`: `Screen`, `Card`, `Button` (`primary` / `secondary` / `outline`), `Badge`, `Input`, `RatingStars`. Nagłówek ekranu: `<ThemedText type="title">`.

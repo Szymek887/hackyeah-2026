@@ -1,10 +1,8 @@
 import type { PropsWithChildren } from 'react';
-import { StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
-import { Spacing } from '@/constants/theme';
 
 type ScreenPlaceholderProps = PropsWithChildren<{
   title: string;
@@ -16,22 +14,16 @@ type ScreenPlaceholderProps = PropsWithChildren<{
 export function ScreenPlaceholder({ title, owner, tasks, children }: ScreenPlaceholderProps) {
   return (
     <Screen>
-      <ThemedText type="subtitle">{title}</ThemedText>
-      <ThemedView type="backgroundElement" style={styles.card}>
-        <ThemedText type="smallBold">Właściciel: {owner}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Zadania: {tasks.join(', ')}
+      <ThemedText type="title">{title}</ThemedText>
+      <Card highlighted>
+        <ThemedText type="smallBold" themeColor="primary">
+          W budowie · {owner}
         </ThemedText>
-      </ThemedView>
+        <ThemedText type="small" themeColor="textSecondary">
+          {tasks.join(' · ')}
+        </ThemedText>
+      </Card>
       {children}
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.one,
-  },
-});

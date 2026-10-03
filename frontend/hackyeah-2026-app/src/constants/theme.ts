@@ -1,6 +1,7 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * PoDrodze design tokens. Style: clean & casual – white surfaces, light blue accents,
+ * thin borders instead of shadows, no blur / gradients.
+ * Use these tokens instead of hard-coded values.
  */
 
 import '@/global.css';
@@ -9,46 +10,60 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    primary: '#208AEF',
-    onPrimary: '#ffffff',
-    border: '#D9D9E0',
-    danger: '#D93036',
-    success: '#2B9A66',
+    /** Main text, navy instead of pure black. */
+    text: '#0F2440',
+    textSecondary: '#5B6B80',
+    /** Screen background, very light blue. */
+    background: '#F4F8FD',
+    /** Cards, inputs, tab bar. */
+    backgroundElement: '#FFFFFF',
+    /** Selected / highlighted element, light blue. */
+    backgroundSelected: '#E6F1FD',
+    primary: '#1A73D1',
+    primarySoft: '#E6F1FD',
+    onPrimary: '#FFFFFF',
+    border: '#DCE6F2',
+    danger: '#C93B3B',
+    dangerSoft: '#FCEBEB',
+    warning: '#B86E00',
+    warningSoft: '#FFF3DD',
+    success: '#2E8B57',
+    successSoft: '#E7F5EC',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    primary: '#4CA2F5',
-    onPrimary: '#ffffff',
-    border: '#363A3F',
-    danger: '#EC5D5E',
-    success: '#3DD68C',
+    text: '#EAF2FB',
+    textSecondary: '#9DB0C6',
+    background: '#0B1522',
+    backgroundElement: '#132132',
+    backgroundSelected: '#173353',
+    primary: '#5AA9F5',
+    primarySoft: '#173353',
+    onPrimary: '#0B1522',
+    border: '#22344A',
+    danger: '#F07272',
+    dangerSoft: '#3A1D22',
+    warning: '#F2B544',
+    warningSoft: '#3A2C12',
+    success: '#5CC98A',
+    successSoft: '#163325',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-/** Pin / area colors per help request category (same in light and dark mode). */
+/** Category accent colors (pins, badges). `soft` is a background tint for badges. */
 export const CategoryColors = {
-  BASIC_NEEDS: '#E5484D',
-  EQUIPMENT_LOAN: '#F76B15',
-  HOME_SUPPORT: '#0090FF',
-  SOCIAL: '#8E4EC6',
+  BASIC_NEEDS: { color: '#D9534F', soft: '#FCECEB' },
+  EQUIPMENT_LOAN: { color: '#D9822B', soft: '#FDF1E4' },
+  HOME_SUPPORT: { color: '#1A73D1', soft: '#E6F1FD' },
+  SOCIAL: { color: '#7B5CC4', soft: '#F0EBFA' },
 } as const;
 
 /** 1 = critical, 3 = low. */
 export const PriorityColors = {
-  1: '#D93036',
-  2: '#F5A623',
-  3: '#2B9A66',
+  1: { color: '#C93B3B', soft: '#FCEBEB' },
+  2: { color: '#B86E00', soft: '#FFF3DD' },
+  3: { color: '#2E8B57', soft: '#E7F5EC' },
 } as const;
 
 export const Fonts = Platform.select({
@@ -86,5 +101,12 @@ export const Spacing = {
   six: 64,
 } as const;
 
+export const Radius = {
+  small: 8,
+  medium: 12,
+  large: 16,
+  pill: 999,
+} as const;
+
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const MaxContentWidth = 640;

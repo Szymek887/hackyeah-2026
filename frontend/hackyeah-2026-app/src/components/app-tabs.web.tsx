@@ -1,4 +1,3 @@
-import { Link } from 'expo-router';
 import {
   Tabs,
   TabList,
@@ -10,14 +9,15 @@ import {
 import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
+/** Web version of the tab bar: a bottom bar that mirrors the native tabs. */
 export default function AppTabs() {
   return (
-    <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+    <Tabs style={styles.root}>
+      <TabSlot style={styles.slot} />
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="index" href="/" asChild>
@@ -39,70 +39,67 @@ export default function AppTabs() {
 }
 
 export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+  const theme = useTheme();
+
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
+    <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
+      <View
+        style={[
+          styles.tabButtonPill,
+          { backgroundColor: isFocused ? theme.primarySoft : 'transparent' },
+        ]}>
+        <ThemedText type="smallBold" themeColor={isFocused ? 'primary' : 'textSecondary'}>
           {children}
         </ThemedText>
-      </ThemedView>
+      </View>
     </Pressable>
   );
 }
 
 export function CustomTabList(props: TabListProps) {
+  const theme = useTheme();
+
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          PoDrodze
-        </ThemedText>
-
-        {props.children}
-
-        <Link href="/dashboard" asChild>
-          <Pressable style={styles.dashboardLink}>
-            <ThemedText type="linkPrimary">Panel miasta</ThemedText>
-          </Pressable>
-        </Link>
-      </ThemedView>
+    <View
+      {...props}
+      style={[
+        styles.tabListContainer,
+        { backgroundColor: theme.backgroundElement, borderTopColor: theme.border },
+      ]}>
+      <View style={styles.innerContainer}>{props.children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  slot: {
+    flex: 1,
+  },
   tabListContainer: {
-    position: 'absolute',
-    width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
+    borderTopWidth: 1,
     alignItems: 'center',
-    flexDirection: 'row',
   },
   innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
     flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
+    width: '100%',
     maxWidth: MaxContentWidth,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    gap: Spacing.one,
   },
-  brandText: {
-    marginRight: 'auto',
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  tabButtonPill: {
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.pill,
   },
   pressed: {
     opacity: 0.7,
-  },
-  tabButtonView: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-  },
-  dashboardLink: {
-    marginLeft: Spacing.three,
   },
 });
