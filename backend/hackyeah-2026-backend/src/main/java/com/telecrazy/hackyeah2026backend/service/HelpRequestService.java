@@ -41,6 +41,7 @@ public class HelpRequestService {
                 request.getPriority(),
                 request.getStatus(),
                 locationObfuscationService.approximate(request.getLocation()),
+                locationObfuscationService.maskedArea(request.getLocation()),
                 request.getCreatedAt()
         );
     }

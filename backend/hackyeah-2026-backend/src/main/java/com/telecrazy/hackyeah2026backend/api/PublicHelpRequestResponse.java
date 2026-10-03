@@ -12,6 +12,7 @@ public record PublicHelpRequestResponse(
         int priority,
         HelpRequestStatus status,
         GeoJsonPoint approximateLocation,
+        GeoJsonPolygon maskedArea,
         Instant createdAt
 ) {
 }
