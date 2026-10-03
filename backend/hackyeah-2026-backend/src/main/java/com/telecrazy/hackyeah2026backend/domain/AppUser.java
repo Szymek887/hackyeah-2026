@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "app_users")
@@ -38,6 +39,10 @@ public class AppUser {
 
     @Column(nullable = false)
     private int trustScore;
+
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private int ratingCount;
 
     public AppUser(String displayName, UserRole role, boolean identityVerified, boolean specialNeeds, int trustScore) {
         this.displayName = displayName;
