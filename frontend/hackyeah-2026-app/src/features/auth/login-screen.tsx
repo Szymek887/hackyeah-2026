@@ -1,5 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,11 +12,12 @@ import {
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { demoAccounts, type DemoAccount } from '@/api/auth';
-import { ApiError, errorMessage } from '@/api/errors';
+import { getDemoAccounts } from '@/api/auth';
+import { errorMessage } from '@/api/errors';
+import type { UserProfile } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/session-context';
 import { RoleLabels } from '@/features/requests/labels';
@@ -22,35 +25,32 @@ import { useTheme } from '@/hooks/use-theme';
 import { enterItem, enterScreen } from '@/lib/motion';
 
 /**
- * Login portal. The backend has mock auth only (`X-User-Id` header + seeded users),
- * so the user picks a demo account or types a user id from the database.
+ * Login portal. The backend has mock auth only (`X-User-Id` header), so the user picks one of the
+ * accounts from `GET /api/users/demo`.
  */
 export function LoginScreen() {
   const theme = useTheme();
   const { signIn } = useAuth();
-  const [selectedId, setSelectedId] = useState<number>(demoAccounts[0]?.id ?? 1);
-  const [customId, setCustomId] = useState('');
+  const accounts = useQuery({ queryKey: ['users', 'demo'], queryFn: getDemoAccounts });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const userId = customId.trim() ? Number(customId.trim()) : selectedId;
+  const selectedAccount =
+    accounts.data?.find((a) => a.id === selectedId) ?? accounts.data?.[0] ?? null;
 
   const handleSignIn = async () => {
-    if (!Number.isInteger(userId) || userId <= 0) {
-      setError('Wpisz numer konta, np. 9.');
+    if (!selectedAccount) {
+      setError('Wybierz konto, aby kontynuować.');
       return;
     }
     setError(null);
     setPending(true);
     try {
-      await signIn(userId);
+      await signIn(selectedAccount.id);
       // Route guard in app/_layout.tsx switches to the app automatically.
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 401
-          ? `Nie ma konta o numerze ${userId}.`
-          : errorMessage(err),
-      );
+      setError(errorMessage(err));
       setPending(false);
     }
   };
@@ -70,7 +70,8 @@ export function LoginScreen() {
               </View>
               <ThemedText type="title">Witaj w PoDrodze</ThemedText>
               <ThemedText themeColor="textSecondary">
-                Sąsiedzka pomoc po drodze. Zaloguj się, aby zgłosić potrzebę albo komuś pomóc.
+                Sąsiedzka pomoc po drodze. Wybierz profil, aby zgłosić potrzebę albo pomóc komuś na
+                swojej trasie.
               </ThemedText>
             </View>
 
@@ -79,54 +80,60 @@ export function LoginScreen() {
                 styles.panel,
                 { backgroundColor: theme.backgroundElement, borderColor: theme.border },
               ]}>
-              <ThemedText type="smallBold">Wybierz konto</ThemedText>
-              <View style={styles.accounts}>
-                {demoAccounts.map((account, index) => (
-                  <Animated.View key={account.id} entering={enterItem(index)}>
-                    <AccountOption
-                      account={account}
-                      selected={!customId.trim() && account.id === selectedId}
-                      onPress={() => {
-                        setSelectedId(account.id);
-                        setCustomId('');
-                        setError(null);
-                      }}
-                    />
-                  </Animated.View>
-                ))}
-              </View>
+              <ThemedText type="smallBold">Wybierz profil do logowania:</ThemedText>
 
-              <View style={styles.divider}>
-                <View style={[styles.line, { backgroundColor: theme.border }]} />
-                <ThemedText type="caption" themeColor="textSecondary">
-                  albo
+              {accounts.isPending ? (
+                <ActivityIndicator color={theme.primary} />
+              ) : accounts.error ? (
+                <View style={styles.accounts}>
+                  <ThemedText type="small" themeColor="danger">
+                    {errorMessage(accounts.error)}
+                  </ThemedText>
+                  <Button
+                    title="Spróbuj ponownie"
+                    variant="secondary"
+                    inline
+                    onPress={() => accounts.refetch()}
+                  />
+                </View>
+              ) : (
+                <View style={styles.accounts}>
+                  {accounts.data.map((account, index) => (
+                    <Animated.View key={account.id} entering={enterItem(index)}>
+                      <AccountOption
+                        account={account}
+                        selected={account.id === selectedAccount?.id}
+                        onPress={() => {
+                          setSelectedId(account.id);
+                          setError(null);
+                        }}
+                      />
+                    </Animated.View>
+                  ))}
+                </View>
+              )}
+
+              {error && (
+                <ThemedText type="small" themeColor="danger">
+                  {error}
                 </ThemedText>
-                <View style={[styles.line, { backgroundColor: theme.border }]} />
-              </View>
-
-              <Input
-                label="Identyfikator użytkownika"
-                placeholder="np. 9"
-                keyboardType="number-pad"
-                value={customId}
-                onChangeText={(text) => {
-                  setCustomId(text);
-                  setError(null);
-                }}
-                onSubmitEditing={handleSignIn}
-                error={error ?? undefined}
-              />
+              )}
 
               <Button
-                title={pending ? 'Logowanie…' : 'Zaloguj się'}
+                title={
+                  pending
+                    ? 'Logowanie…'
+                    : `Zaloguj jako ${selectedAccount?.displayName ?? 'wybrany użytkownik'}`
+                }
                 size="large"
-                disabled={pending}
+                disabled={pending || !selectedAccount}
                 onPress={handleSignIn}
               />
             </View>
 
             <ThemedText type="caption" themeColor="textSecondary" style={styles.footnote}>
-              Wersja demonstracyjna – logowanie przez mObywatel pojawi się w kolejnej wersji.
+              Wersja demonstracyjna – tożsamość zweryfikowana z makietą Profilu Zaufanego /
+              mObywatel.
             </ThemedText>
           </Animated.View>
         </ScrollView>
@@ -136,7 +143,7 @@ export function LoginScreen() {
 }
 
 type AccountOptionProps = {
-  account: DemoAccount;
+  account: UserProfile;
   selected: boolean;
   onPress: () => void;
 };
@@ -173,9 +180,18 @@ function AccountOption({ account, selected, onPress }: AccountOptionProps) {
       <View style={styles.accountText}>
         <ThemedText type="defaultBold">{account.displayName}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {RoleLabels[account.role]} · ID {account.id}
+          {RoleLabels[account.role]}
         </ThemedText>
       </View>
+      {account.identityVerified ? (
+        <Badge label="Zweryfikowany" color={theme.success} backgroundColor={theme.successSoft} />
+      ) : (
+        <Badge
+          label="Niezweryfikowany"
+          color={theme.textSecondary}
+          backgroundColor={theme.backgroundMuted}
+        />
+      )}
     </Pressable>
   );
 }
@@ -234,15 +250,6 @@ const styles = StyleSheet.create({
   },
   accountText: {
     flex: 1,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  line: {
-    flex: 1,
-    height: 1,
   },
   footnote: {
     textAlign: 'center',

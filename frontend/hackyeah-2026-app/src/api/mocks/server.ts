@@ -64,6 +64,7 @@ const conflict = (detail: string) => new ApiError(409, detail);
 type Handler = (ctx: { params: string[]; req: ApiRequest }) => unknown;
 
 const routes: [ApiRequest['method'], RegExp, Handler][] = [
+  ['GET', /^\/api\/users\/demo$/, () => demoAccounts()],
   ['GET', /^\/api\/users\/me$/, ({ req }) => currentUser(req)],
   ['GET', /^\/api\/help-requests\/nearby$/, ({ req }) => nearby(req.query)],
   ['POST', /^\/api\/help-requests\/along-route$/, ({ req }) => alongRoute(req.body)],
@@ -139,6 +140,11 @@ function currentUser(req: ApiRequest): UserProfile {
   if (!user) throw unauthorized(`Unknown user ${req.userId}`);
   return user;
 }
+
+// UserController.demo: role order (enum ordinal), then id. Public, no X-User-Id needed.
+const ROLE_ORDER: UserProfile['role'][] = ['REQUESTER', 'VOLUNTEER', 'CITY_ADMIN'];
+const demoAccounts = () =>
+  [...users].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.id - b.id);
 
 // ---------- Views (HelpRequestViewMapper + policies) ----------
 

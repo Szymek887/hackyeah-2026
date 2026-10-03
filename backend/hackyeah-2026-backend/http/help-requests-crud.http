@@ -1,7 +1,7 @@
-### Create help request as requester "Anna K." (id 1, has special needs -> priority bumped)
+### Create help request as requester "Anna K." ({{requesterId}}, has special needs -> priority bumped)
 POST {{host}}/api/help-requests
 Content-Type: application/json
-X-User-Id: 1
+X-User-Id: {{requesterId}}
 
 {
   "title": "Potrzebuję leków",
@@ -25,7 +25,7 @@ X-User-Id: 1
 
 ### Read as the author -> FULL
 GET {{host}}/api/help-requests/{{helpRequestId}}
-X-User-Id: 1
+X-User-Id: {{requesterId}}
 
 > {%
     client.test("Author sees full details", function () {
@@ -34,9 +34,9 @@ X-User-Id: 1
     });
 %}
 
-### Read as volunteer "Kuba W." (id 4) before acceptance -> PUBLIC, no address
+### Read as volunteer "Kuba W." ({{volunteerId}}) before acceptance -> PUBLIC, no address
 GET {{host}}/api/help-requests/{{helpRequestId}}
-X-User-Id: 4
+X-User-Id: {{volunteerId}}
 
 > {%
     client.test("Others see only masked public details", function () {
@@ -52,7 +52,7 @@ X-User-Id: 4
 ### Suspected scam -> UNDER_REVIEW, hidden from others
 POST {{host}}/api/help-requests
 Content-Type: application/json
-X-User-Id: 2
+X-User-Id: {{otherRequesterId}}
 
 {
   "title": "Pilnie pieniądze",
@@ -73,7 +73,7 @@ X-User-Id: 2
 
 ### Scam request is not visible to other users
 GET {{host}}/api/help-requests/{{scamRequestId}}
-X-User-Id: 4
+X-User-Id: {{volunteerId}}
 
 > {%
     client.test("Request under review returns 404 for others", function () {
@@ -84,7 +84,7 @@ X-User-Id: 4
 ### City admin cannot create help requests
 POST {{host}}/api/help-requests
 Content-Type: application/json
-X-User-Id: 5
+X-User-Id: {{cityAdminId}}
 
 {
   "title": "Test",
@@ -104,7 +104,7 @@ X-User-Id: 5
 ### Validation errors
 POST {{host}}/api/help-requests
 Content-Type: application/json
-X-User-Id: 1
+X-User-Id: {{requesterId}}
 
 {
   "title": "",
