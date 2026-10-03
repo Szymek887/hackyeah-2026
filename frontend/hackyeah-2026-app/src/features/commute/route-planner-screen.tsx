@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import MapView, { Callout, Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,6 +45,7 @@ export function RoutePlannerScreen() {
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
   );
+  const [mapRegion, setMapRegion] = useState<Region>(KRAKOW_INITIAL_REGION);
   const directRoute = useMemo(() => [start, end], [end, start]);
   const {
     data: drivingRoute,
@@ -88,6 +89,18 @@ export function RoutePlannerScreen() {
     setIsRouteConfirmed(false);
   };
 
+  const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
+    mapRef.current?.animateToRegion(
+      {
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        latitudeDelta: Math.max(mapRegion.latitudeDelta / 3, 0.004),
+        longitudeDelta: Math.max(mapRegion.longitudeDelta / 3, 0.004),
+      },
+      260,
+    );
+  };
+
   return (
     <ThemedView style={styles.root}>
       <MapView
@@ -95,9 +108,10 @@ export function RoutePlannerScreen() {
         style={styles.map}
         initialRegion={KRAKOW_INITIAL_REGION}
         onPress={(event) => updateEndpoint(editedEndpoint, event.nativeEvent.coordinate)}
-        onRegionChangeComplete={(region) =>
-          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta))
-        }
+        onRegionChangeComplete={(region) => {
+          setMapRegion(region);
+          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
+        }}
         mapPadding={{ top: insets.top + 8, right: 12, bottom: 260, left: 12 }}>
         <Polyline coordinates={route} strokeColor={`${theme.primary}24`} strokeWidth={22} />
         <Polyline coordinates={route} strokeColor={theme.primary} strokeWidth={5} />
@@ -121,12 +135,7 @@ export function RoutePlannerScreen() {
               <Marker
                 key={cluster.id}
                 coordinate={cluster.coordinate}
-                onPress={() =>
-                  mapRef.current?.animateCamera({
-                    center: cluster.coordinate,
-                    zoom: Math.min(18, mapZoom + 2),
-                  })
-                }>
+                onPress={() => zoomToCluster(cluster.coordinate)}>
                 <View
                   style={[
                     styles.clusterMarker,
@@ -142,7 +151,10 @@ export function RoutePlannerScreen() {
 
           const request = cluster.requests[0];
           return (
-            <Marker key={request.id} coordinate={toLatLng(request.approximateLocation.coordinates)}>
+            <Marker
+              key={request.id}
+              coordinate={toLatLng(request.approximateLocation.coordinates)}
+              onPress={() => {}}>
               <View
                 style={[
                   styles.requestMarker,
@@ -152,12 +164,6 @@ export function RoutePlannerScreen() {
                   },
                 ]}
               />
-              <Callout>
-                <View style={styles.callout}>
-                  <ThemedText type="smallBold">{request.title}</ThemedText>
-                  <ThemedText type="small">Priorytet {request.priority}</ThemedText>
-                </View>
-              </Callout>
             </Marker>
           );
         })}
@@ -335,9 +341,5 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 3,
-  },
-  callout: {
-    gap: Spacing.half,
-    maxWidth: 220,
   },
 });

@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import MapView, { Callout, Marker, Polygon } from 'react-native-maps';
+import MapView, { Marker, Polygon, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorMessage } from '@/api/errors';
@@ -11,6 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
 import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import { clusterRequests, zoomFromLongitudeDelta } from '@/features/map/map-clustering';
+import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
@@ -22,6 +23,7 @@ export function MapScreen() {
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
   );
+  const [mapRegion, setMapRegion] = useState<Region>(KRAKOW_INITIAL_REGION);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const {
     data: requests = [],
@@ -37,6 +39,19 @@ export function MapScreen() {
   const selectedAreaRings = selectedRequest ? getAreaPolygonRings(selectedRequest.maskedArea) : [];
   const [selectedOuterRing, ...selectedHoles] = selectedAreaRings;
 
+  const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
+    setSelectedRequestId(null);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        latitudeDelta: Math.max(mapRegion.latitudeDelta / 3, 0.004),
+        longitudeDelta: Math.max(mapRegion.longitudeDelta / 3, 0.004),
+      },
+      260,
+    );
+  };
+
   return (
     <ThemedView style={styles.root}>
       <MapView
@@ -45,9 +60,10 @@ export function MapScreen() {
         initialRegion={KRAKOW_INITIAL_REGION}
         showsCompass
         showsScale
-        onRegionChangeComplete={(region) =>
-          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta))
-        }
+        onRegionChangeComplete={(region) => {
+          setMapRegion(region);
+          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
+        }}
         mapPadding={{ top: insets.top + 8, right: 12, bottom: 160, left: 12 }}>
         {selectedRequest && selectedOuterRing && (
           <Polygon
@@ -65,12 +81,7 @@ export function MapScreen() {
               <Marker
                 key={cluster.id}
                 coordinate={cluster.coordinate}
-                onPress={() =>
-                  mapRef.current?.animateCamera({
-                    center: cluster.coordinate,
-                    zoom: Math.min(18, mapZoom + 2),
-                  })
-                }>
+                onPress={() => zoomToCluster(cluster.coordinate)}>
                 <View
                   style={[
                     styles.clusterMarker,
@@ -99,12 +110,6 @@ export function MapScreen() {
                   },
                 ]}
               />
-              <Callout>
-                <View style={styles.callout}>
-                  <ThemedText type="smallBold">{request.title}</ThemedText>
-                  <ThemedText type="small">Priorytet {request.priority}</ThemedText>
-                </View>
-              </Callout>
             </Marker>
           );
         })}
@@ -116,6 +121,26 @@ export function MapScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             Przybliż, aby rozdzielić grupy. Strefa pojawi się po wybraniu zgłoszenia.
           </ThemedText>
+          {selectedRequest && (
+            <View style={styles.selectedRequest}>
+              <View
+                style={[
+                  styles.requestMarker,
+                  {
+                    backgroundColor: CategoryColors[selectedRequest.category].color,
+                    borderColor: PriorityColors[selectedRequest.priority].color,
+                  },
+                ]}
+              />
+              <View style={styles.selectedText}>
+                <ThemedText type="smallBold">{selectedRequest.title}</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {CategoryLabels[selectedRequest.category]} ·{' '}
+                  {PriorityLabels[selectedRequest.priority].toLowerCase()}
+                </ThemedText>
+              </View>
+            </View>
+          )}
           {isPending && <ActivityIndicator color={theme.primary} />}
           {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
         </ThemedView>
@@ -144,9 +169,14 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.one,
   },
-  callout: {
+  selectedRequest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  selectedText: {
+    flex: 1,
     gap: Spacing.half,
-    maxWidth: 220,
   },
   clusterMarker: {
     width: 30,
