@@ -103,7 +103,7 @@ export function NewRequestScreen() {
       return;
     }
     resetForm();
-    router.push({ pathname: '/tasks', params: { stage: 'pending' } });
+    router.push({ pathname: '/tasks', params: { tab: 'active' } });
   };
 
   const flags = classification?.riskFlags ?? [];

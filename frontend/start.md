@@ -83,7 +83,7 @@ Clean & casual: białe karty na jasnoniebieskim tle, niebieski akcent (`primary`
 
 ## Logowanie
 
-- Backend ma uwierzytelnianie testowe: użytkownik = nagłówek `X-User-Id` (dodaje go `apiRequest`). Ekran logowania pobiera listę kont z `GET /api/users/demo` (nie wpisujemy ID na sztywno), a logowanie sprawdza konto przez `GET /api/users/me`.
+- Backend ma uwierzytelnianie testowe: użytkownik = nagłówek `X-User-Id` (dodaje go `apiRequest`). Ekran logowania ma dwie zakładki: „Mam konto” (lista rozwijana z `GET /api/users/demo`, nie wpisujemy ID na sztywno) i „Nowe konto” (`POST /api/users`). Logowanie sprawdza konto przez `GET /api/users/me`.
 - Konta z seedera: 1 Anna K., 2 Marek S., 3 Ewa P., 4 Zofia M., 5 Jan B., 6 Halina R., 7 Piotr N., 8 Maria T. (potrzebujący), 9 Kuba W., 10 Ola D., 11 Bartek L., 12 Nadia P. (wolontariusze), 13 Miasto Kraków.
 - `useSession()` zwraca `{ user: UserProfile, role, signOut, refreshUser, profileDetails }`. `profileDetails` (opis, potrzeby) jest tylko po stronie aplikacji – backend jeszcze tego nie przechowuje.
 - Przepływ: OPEN → „Chcę pomóc” (OFFERED) → przyjęcie lub odrzucenie przez zgłaszającego → ACCEPTED → skan QR (COMPLETED) → oceny obu stron (RATED). Zgłaszający może anulować do momentu ACCEPTED włącznie.
@@ -92,5 +92,6 @@ Clean & casual: białe karty na jasnoniebieskim tle, niebieski akcent (`primary`
 
 (Gotowe po stronie backendu: CORS dla wersji webowej i `GET /api/users/demo`.)
 
+- **`POST /api/users`** (zakładanie konta z ekranu logowania) – opisane w `documentation/api-contract.md` §4.2 jako PROPOSED, działa w mockach. Na prawdziwym backendzie ekran pokaże „Serwer nie obsługuje jeszcze zakładania kont”.
 - **Ręczny kod QR** – token ma 43 znaki; do wpisywania ręcznego przydałby się krótki kod (np. 6 cyfr).
 - **Pola profilu** (opis, potrzeby, dostępność) i **geokodowanie adresu** (teraz każde nowe zgłoszenie dostaje środek Krakowa).

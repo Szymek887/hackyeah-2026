@@ -10,9 +10,9 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 
-import { getMe } from '@/api/auth';
+import { createUser, getMe } from '@/api/auth';
 import { setApiUserId } from '@/api/client';
-import type { UserProfile, UserRole } from '@/api/types';
+import type { CreateUserDto, UserProfile, UserRole } from '@/api/types';
 import { emptyProfileDetails, type ProfileDetails } from '@/features/profile/profile-details';
 
 type AuthStatus = 'restoring' | 'signedOut' | 'signedIn';
@@ -23,6 +23,8 @@ type Auth = {
   /** Client-only profile description of the logged-in user. */
   profileDetails: ProfileDetails;
   signIn: (userId: number) => Promise<UserProfile>;
+  /** Creates a new account (`POST /api/users`) and logs in as it. */
+  signUp: (dto: CreateUserDto) => Promise<UserProfile>;
   /** Re-reads `/users/me`, e.g. after a rating changed trust score or city points. */
   refreshUser: () => Promise<void>;
   signOut: () => void;
@@ -73,6 +75,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signIn = useCallback((userId: number) => getMe(userId).then(applyUser), [applyUser]);
+  const signUp = useCallback((dto: CreateUserDto) => createUser(dto).then(applyUser), [applyUser]);
 
   const signOut = useCallback(() => {
     setApiUserId(null);
@@ -116,11 +119,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
       user,
       profileDetails,
       signIn,
+      signUp,
       refreshUser,
       signOut,
       updateProfileDetails,
     }),
-    [status, user, profileDetails, signIn, refreshUser, signOut, updateProfileDetails],
+    [status, user, profileDetails, signIn, signUp, refreshUser, signOut, updateProfileDetails],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { errorMessage } from '@/api/errors';
+import type { HelpRequestView } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,31 +12,31 @@ import { Screen } from '@/components/ui/screen';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Spacing } from '@/constants/theme';
 import { useSession } from '@/features/auth/session-context';
+import { RatingsSummary } from '@/features/tasks/components/ratings-summary';
 import { TaskCard } from '@/features/tasks/components/task-card';
 import {
-  STAGES,
-  StageLabels,
-  groupByStage,
+  TASK_TABS,
+  TaskTabLabels,
+  groupTasks,
   useMyTasks,
-  type TaskStage,
+  type TaskTab,
 } from '@/features/tasks/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { enterItem, exitItem, layoutTransition } from '@/lib/motion';
 
-const EMPTY_TEXT: Record<TaskStage, string> = {
-  pending: 'Brak zadań czekających na start.',
-  inProgress: 'Nic nie jest teraz w toku.',
+const EMPTY_TEXT: Record<TaskTab, string> = {
+  active: 'Nie masz teraz żadnych zadań w trakcie.',
   done: 'Zadania pojawią się tu po zeskanowaniu kodu QR.',
+  ratings: 'Nic nie czeka na ocenę.',
 };
 
 export function TasksScreen() {
   const theme = useTheme();
   const { role } = useSession();
-  // `?stage=pending` lets other screens (e.g. the new request form) open a specific column.
-  const params = useLocalSearchParams<{ stage?: TaskStage }>();
-  const [selected, setSelected] = useState<TaskStage | null>(null);
-  const stage =
-    selected ?? (params.stage && STAGES.includes(params.stage) ? params.stage : 'inProgress');
+  // `?tab=active` lets other screens (e.g. the new request form) open a specific tab.
+  const params = useLocalSearchParams<{ tab?: TaskTab }>();
+  const [selected, setSelected] = useState<TaskTab | null>(null);
+  const tab = selected ?? (params.tab && TASK_TABS.includes(params.tab) ? params.tab : 'active');
   const { data = [], isPending, error } = useMyTasks();
 
   if (role === 'CITY_ADMIN') {
@@ -52,8 +53,12 @@ export function TasksScreen() {
     );
   }
 
-  const groups = groupByStage(data);
-  const tasks = groups[stage];
+  const groups = groupTasks(data);
+  const tasks: Record<TaskTab, HelpRequestView[]> = {
+    active: groups.active,
+    done: groups.done,
+    ratings: groups.toRate,
+  };
 
   return (
     <Screen>
@@ -67,12 +72,12 @@ export function TasksScreen() {
       </View>
 
       <SegmentedControl
-        value={stage}
+        value={tab}
         onChange={setSelected}
-        options={STAGES.map((value) => ({
+        options={TASK_TABS.map((value) => ({
           value,
-          label: StageLabels[value],
-          count: groups[value].length,
+          label: TaskTabLabels[value],
+          count: tasks[value].length,
         }))}
       />
 
@@ -80,17 +85,27 @@ export function TasksScreen() {
       {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
 
       <FlatList
-        // Remount on tab change so the entrance animation plays for the new column.
-        key={stage}
-        data={tasks}
+        // Remount on tab change so the entrance animation plays for the new tab.
+        key={tab}
+        data={tasks[tab]}
         keyExtractor={(task) => String(task.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          tab === 'ratings' ? (
+            <View style={styles.ratingsHeader}>
+              <RatingsSummary ratedCount={groups.rated.length} />
+              {tasks.ratings.length > 0 && (
+                <ThemedText type="smallBold">Czekają na ocenę</ThemedText>
+              )}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           isPending ? null : (
             <Card highlighted style={styles.empty}>
-              <ThemedText themeColor="textSecondary">{EMPTY_TEXT[stage]}</ThemedText>
-              {stage === 'pending' && role === 'REQUESTER' && (
+              <ThemedText themeColor="textSecondary">{EMPTY_TEXT[tab]}</ThemedText>
+              {tab === 'active' && role === 'REQUESTER' && (
                 <Button
                   title="Dodaj zgłoszenie"
                   variant="secondary"
@@ -118,6 +133,9 @@ const styles = StyleSheet.create({
   list: {
     gap: Spacing.three,
     paddingBottom: Spacing.three,
+  },
+  ratingsHeader: {
+    gap: Spacing.three,
   },
   empty: {
     alignItems: 'flex-start',

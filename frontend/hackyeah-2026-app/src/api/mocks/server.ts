@@ -15,6 +15,7 @@ import type {
   Category,
   ClassifyRequestDto,
   CreateHelpRequestDto,
+  CreateUserDto,
   GeoPoint,
   GeoPolygon,
   HandoffToken,
@@ -65,6 +66,7 @@ type Handler = (ctx: { params: string[]; req: ApiRequest }) => unknown;
 
 const routes: [ApiRequest['method'], RegExp, Handler][] = [
   ['GET', /^\/api\/users\/demo$/, () => demoAccounts()],
+  ['POST', /^\/api\/users$/, ({ req }) => createUser(req.body as CreateUserDto)],
   ['GET', /^\/api\/users\/me$/, ({ req }) => currentUser(req)],
   ['GET', /^\/api\/help-requests\/nearby$/, ({ req }) => nearby(req.query)],
   ['POST', /^\/api\/help-requests\/along-route$/, ({ req }) => alongRoute(req.body)],
@@ -145,6 +147,35 @@ function currentUser(req: ApiRequest): UserProfile {
 const ROLE_ORDER: UserProfile['role'][] = ['REQUESTER', 'VOLUNTEER', 'CITY_ADMIN'];
 const demoAccounts = () =>
   [...users].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.id - b.id);
+
+// Proposed UserController.create: new accounts start unverified with a neutral trust score.
+const NEW_USER_TRUST = 50;
+const DISPLAY_NAME_MAX = 60;
+
+function createUser(body: CreateUserDto): UserProfile {
+  const errors: Record<string, string> = {};
+  const displayName = body?.displayName?.trim() ?? '';
+  if (!displayName) errors.displayName = 'must not be blank';
+  else if (displayName.length > DISPLAY_NAME_MAX)
+    errors.displayName = `size must be between 0 and ${DISPLAY_NAME_MAX}`;
+  if (body?.role !== 'REQUESTER' && body?.role !== 'VOLUNTEER')
+    errors.role = 'must be REQUESTER or VOLUNTEER';
+  if (Object.keys(errors).length) throw new ApiError(400, 'Request validation failed', errors);
+
+  const user: UserProfile = {
+    id: Math.max(...users.map((u) => u.id)) + 1,
+    displayName,
+    role: body.role,
+    identityVerified: false,
+    specialNeeds: body.role === 'REQUESTER' && Boolean(body.specialNeeds),
+    trustScore: NEW_USER_TRUST,
+    ratingCount: 0,
+    ratingAverage: null,
+    cityPoints: 0,
+  };
+  users.push(user);
+  return user;
+}
 
 // ---------- Views (HelpRequestViewMapper + policies) ----------
 

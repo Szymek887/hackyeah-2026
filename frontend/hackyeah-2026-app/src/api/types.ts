@@ -87,6 +87,17 @@ export type UserSummary = {
   ratingCount: number;
 };
 
+/**
+ * `CreateUserRequest` – `POST /api/users` (🔵 PROPOSED in documentation/api-contract.md §4.2).
+ * City admin accounts cannot be created from the app.
+ */
+export type CreateUserDto = {
+  displayName: string;
+  role: Exclude<UserRole, 'CITY_ADMIN'>;
+  /** Only meaningful for requesters (raises request priority, see PriorityPolicy). */
+  specialNeeds: boolean;
+};
+
 // ---------- Help requests ----------
 
 /** `PublicHelpRequestResponse` – items of `/nearby` and `/along-route`. Never exact location. */
