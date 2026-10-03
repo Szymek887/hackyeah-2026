@@ -1,0 +1,33 @@
+### Current user profile (seeded requester "Anna K." has id 1)
+GET {{host}}/api/users/me
+Accept: application/json
+X-User-Id: 1
+
+> {%
+    client.test("Returns profile of the mocked user", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.id === 1, "Expected user id 1");
+        client.assert(response.body.role !== undefined, "Expected role");
+    });
+%}
+
+### Missing X-User-Id header
+GET {{host}}/api/users/me
+Accept: application/json
+
+> {%
+    client.test("Missing header returns 401", function () {
+        client.assert(response.status === 401, "Expected status 401");
+    });
+%}
+
+### Unknown user
+GET {{host}}/api/users/me
+Accept: application/json
+X-User-Id: 999999
+
+> {%
+    client.test("Unknown user returns 401", function () {
+        client.assert(response.status === 401, "Expected status 401");
+    });
+%}
