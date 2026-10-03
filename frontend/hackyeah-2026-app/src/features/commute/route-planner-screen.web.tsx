@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -18,6 +19,7 @@ import {
 } from '@/features/commute/route-geometry';
 import { useDrivingRoute } from '@/features/commute/hooks';
 import { KRAKOW_COMMUTE_ROUTE } from '@/features/map/krakow-map-data';
+import { RequestCard } from '@/features/requests/components/request-card';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
@@ -30,6 +32,7 @@ export function RoutePlannerScreen() {
   const [editedEndpoint, setEditedEndpoint] = useState<RouteEndpoint>('start');
   const [start, setStart] = useState<RouteCoordinate>(DEFAULT_START);
   const [end, setEnd] = useState<RouteCoordinate>(DEFAULT_END);
+  const [isRouteConfirmed, setIsRouteConfirmed] = useState(false);
   const directRoute = useMemo(() => [start, end], [end, start]);
   const {
     data: drivingRoute,
@@ -49,6 +52,7 @@ export function RoutePlannerScreen() {
   });
 
   const updateEndpoint = (endpoint: RouteEndpoint, coordinate: RouteCoordinate) => {
+    setIsRouteConfirmed(false);
     if (endpoint === 'start') setStart(coordinate);
     else setEnd(coordinate);
   };
@@ -57,6 +61,7 @@ export function RoutePlannerScreen() {
     setStart(DEFAULT_START);
     setEnd(DEFAULT_END);
     setEditedEndpoint('start');
+    setIsRouteConfirmed(false);
   };
 
   return (
@@ -84,7 +89,14 @@ export function RoutePlannerScreen() {
           <ThemedText type="small">A: {formatRouteCoordinate(start)}</ThemedText>
           <ThemedText type="small">B: {formatRouteCoordinate(end)}</ThemedText>
         </View>
-        <Button title="Przywróć trasę demo" variant="ghost" inline onPress={resetRoute} />
+        <View style={styles.actions}>
+          <Button
+            title={isRouteConfirmed ? 'Trasa zatwierdzona' : 'Zatwierdź trasę'}
+            disabled={isRouting || isPending || isRouteConfirmed}
+            onPress={() => setIsRouteConfirmed(true)}
+          />
+          <Button title="Przywróć trasę demo" variant="ghost" inline onPress={resetRoute} />
+        </View>
         {drivingRoute && (
           <ThemedText type="smallBold">
             {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
@@ -115,11 +127,37 @@ export function RoutePlannerScreen() {
           W korytarzu {ROUTE_BUFFER_METERS} m: {matchingRequests.length}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Zgłoszenia są dopasowane do rzeczywistego przebiegu ulic, nie do linii prostej.
+          {isRouteConfirmed
+            ? 'To są zgłoszenia, które możesz obsłużyć po drodze.'
+            : 'Zatwierdź trasę, żeby przejść do wyboru osoby, której chcesz pomóc.'}
         </ThemedText>
         {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
         {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
       </Card>
+
+      {isRouteConfirmed && (
+        <View style={styles.results}>
+          <ThemedText type="subtitle">Komu możesz pomóc</ThemedText>
+          {matchingRequests.length > 0 ? (
+            matchingRequests.map((request) => (
+              <RequestCard
+                key={request.id}
+                request={request}
+                onPress={() =>
+                  router.push({ pathname: '/request/[id]', params: { id: request.id } })
+                }
+              />
+            ))
+          ) : (
+            <Card>
+              <ThemedText type="smallBold">Brak zgłoszeń przy tej trasie</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Przesuń start lub cel i spróbuj zatwierdzić trasę jeszcze raz.
+              </ThemedText>
+            </Card>
+          )}
+        </View>
+      )}
     </Screen>
   );
 }
@@ -133,5 +171,14 @@ const styles = StyleSheet.create({
   },
   coordinates: {
     gap: Spacing.one,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  results: {
+    gap: Spacing.two,
   },
 });
