@@ -138,8 +138,9 @@ export const CategoryColors = {
   SOCIAL: { color: '#7B5CC4', soft: '#F0EBFA' },
 } as const;
 
-/** 1 = critical, 3 = low. */
+/** 0 = special (medicine), 1 = critical, 3 = low. */
 export const PriorityColors = {
+  0: { color: '#0E7C86', soft: '#E0F3F4' },
   1: { color: '#C93B3B', soft: '#FCEBEB' },
   2: { color: '#B86E00', soft: '#FFF3DD' },
   3: { color: '#2E8B57', soft: '#E7F5EC' },

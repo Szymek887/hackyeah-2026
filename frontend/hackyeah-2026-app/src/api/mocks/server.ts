@@ -8,7 +8,12 @@
  */
 import type { ApiRequest } from '@/api/client';
 import { ApiError } from '@/api/errors';
-import { classifyByKeywords } from '@/api/mocks/classifier';
+import {
+  classify as classifyRequest,
+  MEDICINE_DESCRIPTION,
+  MEDICINE_TITLE,
+  SPECIAL_PRIORITY,
+} from '@/api/mocks/classifier';
 import { newRequestId, ratings, requests, users, type MockHelpRequest } from '@/api/mocks/db';
 import type {
   AnalyticsSummary,
@@ -242,7 +247,7 @@ const viewerRole = (r: MockHelpRequest, u: UserProfile): ViewerRole =>
   isRequester(r, u) ? 'REQUESTER' : isVolunteer(r, u) ? 'VOLUNTEER' : 'NONE';
 
 const GENERIC_TITLES: Record<Category, string> = {
-  MEDICINE: 'Prośba o pomoc z lekami',
+  MEDICINE: MEDICINE_TITLE,
   GROCERIES: 'Prośba o pomoc z zakupami',
   EQUIPMENT_LOAN: 'Prośba o pożyczenie sprzętu',
   HOME_SUPPORT: 'Prośba o pomoc w domu',
@@ -405,7 +410,7 @@ function alongRoute(body: unknown) {
 function classify(body: ClassifyRequestDto) {
   if (!body?.title?.trim() || !body?.description?.trim())
     throw badRequest('Request validation failed');
-  return classifyByKeywords(body);
+  return classifyRequest(body);
 }
 
 function create(body: CreateHelpRequestDto, user: UserProfile) {
@@ -422,16 +427,22 @@ function create(body: CreateHelpRequestDto, user: UserProfile) {
   if (typeof body?.lng !== 'number') errors.lng = 'must not be null';
   if (Object.keys(errors).length) throw new ApiError(400, 'Request validation failed', errors);
 
-  const classification = classifyByKeywords(body);
-  // PriorityPolicy: special needs bump one level, never above 1.
-  const priority = Math.max(1, classification.priority - (user.specialNeeds ? 1 : 0)) as Priority;
+  const classification = classifyRequest(body);
+  // PriorityPolicy: special needs bump one level, never above 1; the special medicine priority stays.
+  const priority = (
+    classification.priority === SPECIAL_PRIORITY
+      ? SPECIAL_PRIORITY
+      : Math.max(1, classification.priority - (user.specialNeeds ? 1 : 0))
+  ) as Priority;
+  // MedicineRedaction: medicine names and usage are not stored, details are given in person.
+  const redact = classification.category === 'MEDICINE';
   const createdAt = new Date().toISOString();
   const request: MockHelpRequest = {
     id: newRequestId(),
     requesterId: user.id,
     volunteerId: null,
-    title: body.title.trim(),
-    description: body.description.trim(),
+    title: redact ? MEDICINE_TITLE : body.title.trim(),
+    description: redact ? MEDICINE_DESCRIPTION : body.description.trim(),
     category: classification.category,
     priority,
     aiPriority: classification.priority,
@@ -682,8 +693,8 @@ function summary(query: Record<string, string>): AnalyticsSummary {
       all.map((r) => r.category),
     ),
     byPriority: countBy(
-      ['1', '2', '3'],
-      all.map((r) => String(r.priority) as '1' | '2' | '3'),
+      ['0', '1', '2', '3'],
+      all.map((r) => String(r.priority) as '0' | '1' | '2' | '3'),
     ),
   };
 }

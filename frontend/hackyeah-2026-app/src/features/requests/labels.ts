@@ -9,6 +9,7 @@ export const CategoryLabels: Record<Category, string> = {
 };
 
 export const PriorityLabels: Record<Priority, string> = {
+  0: 'Specjalne',
   1: 'Pilne',
   2: 'Ważne',
   3: 'Zwykłe',

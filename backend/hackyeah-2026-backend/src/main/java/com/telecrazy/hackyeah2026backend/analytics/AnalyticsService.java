@@ -100,7 +100,7 @@ public class AnalyticsService {
         Map<HelpRequestStatus, Long> byStatus = zeroCounts(HelpRequestStatus.class);
         byStatus.keySet().removeAll(HelpRequestStatus.HIDDEN_FROM_PUBLIC);
         Map<HelpCategory, Long> byCategory = zeroCounts(HelpCategory.class);
-        Map<Integer, Long> byPriority = new TreeMap<>(Map.of(1, 0L, 2, 0L, 3, 0L));
+        Map<Integer, Long> byPriority = new TreeMap<>(Map.of(0, 0L, 1, 0L, 2, 0L, 3, 0L));
         long total = 0;
 
         for (SummaryRow row : rows) {

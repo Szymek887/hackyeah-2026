@@ -36,8 +36,8 @@ export type GeoLineString = {
 /** `HelpCategory` */
 export type Category = 'MEDICINE' | 'GROCERIES' | 'EQUIPMENT_LOAN' | 'HOME_SUPPORT' | 'SOCIAL';
 
-/** 1 = critical, 2 = high, 3 = normal. */
-export type Priority = 1 | 2 | 3;
+/** 0 = special (medicine, details given in person), 1 = critical, 2 = high, 3 = normal. */
+export type Priority = 0 | 1 | 2 | 3;
 
 /**
  * `HelpRequestStatus`
@@ -283,7 +283,7 @@ export type AnalyticsSummary = {
   /** UNDER_REVIEW is never included. */
   byStatus: Record<Exclude<RequestStatus, 'UNDER_REVIEW'>, number>;
   byCategory: Record<Category, number>;
-  byPriority: Record<'1' | '2' | '3', number>;
+  byPriority: Record<'0' | '1' | '2' | '3', number>;
 };
 
 /** Query of the analytics endpoints. */

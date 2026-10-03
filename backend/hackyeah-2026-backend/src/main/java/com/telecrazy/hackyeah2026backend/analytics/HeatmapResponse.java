@@ -33,7 +33,7 @@ public record HeatmapResponse(
 
     /**
      * @param count      number of requests in the hexagon
-     * @param weight     priority-weighted count: priority 1 counts 3, priority 2 counts 2, priority 3 counts 1
+     * @param weight     priority-weighted count: priority 0 (medicine) counts 4, priority 1 counts 3, priority 2 counts 2, priority 3 counts 1
      * @param byCategory number of requests per category (every category present, zero if none)
      */
     public record Properties(

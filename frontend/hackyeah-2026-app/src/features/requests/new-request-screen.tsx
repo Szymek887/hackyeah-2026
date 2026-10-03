@@ -176,6 +176,18 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
           </Animated.View>
         )}
 
+        {classification?.category === 'MEDICINE' && (
+          <Card style={{ backgroundColor: theme.warningSoft, borderColor: theme.warning }}>
+            <ThemedText type="defaultBold" style={{ color: theme.warning }}>
+              Szczegóły dotyczące leków przekażesz osobiście
+            </ThemedText>
+            <ThemedText>
+              Ze względów prawnych nie zapisujemy nazw leków ani sposobu ich stosowania. Tytuł i
+              opis zostaną zastąpione ogólnym komunikatem, a wolontariuszowi powiesz wszystko na
+              miejscu.
+            </ThemedText>
+          </Card>
+        )}
         {flags.includes('MEDICAL_EMERGENCY') && (
           <Card style={{ backgroundColor: theme.dangerSoft, borderColor: theme.danger }}>
             <ThemedText type="defaultBold" themeColor="danger">

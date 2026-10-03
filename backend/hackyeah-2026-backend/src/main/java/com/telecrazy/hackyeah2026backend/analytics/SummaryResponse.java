@@ -13,7 +13,7 @@ import java.util.Map;
  * @param fulfilled       requests where help was delivered ({@code COMPLETED}, {@code RATED})
  * @param cancelled       cancelled requests
  * @param fulfillmentRate {@code fulfilled / (total - cancelled)}, 0 when there is nothing to fulfil
- * @param byPriority      keys 1 (critical), 2 (high), 3 (normal)
+ * @param byPriority      keys 0 (special, medicine), 1 (critical), 2 (high), 3 (normal)
  */
 public record SummaryResponse(
         long total,

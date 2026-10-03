@@ -44,9 +44,10 @@ public class LlmRequestClassifier {
                     "priority", Map.of("type", "integer", "enum", List.of(1, 2, 3)),
                     "tags", Map.of("type", "array", "items", Map.of("type", "string")),
                     "riskFlags", Map.of("type", "array", "items",
-                            Map.of("type", "string", "enum", names(RiskFlag.values())))
+                            Map.of("type", "string", "enum", names(RiskFlag.values()))),
+                    "mentionsMedication", Map.of("type", "boolean")
             ),
-            "required", List.of("category", "priority", "tags", "riskFlags")
+            "required", List.of("category", "priority", "tags", "riskFlags", "mentionsMedication")
     );
 
     private final OllamaClient ollamaClient;
@@ -72,6 +73,10 @@ public class LlmRequestClassifier {
     static RequestClassification normalize(LlmOutput output) {
         HelpCategory category = HelpCategory.valueOf(
                 Objects.requireNonNull(output.category(), "category").trim().toUpperCase(Locale.ROOT));
+        // Any mention of medication makes it a medicine request, so its text is redacted (MedicineRedaction).
+        if (Boolean.TRUE.equals(output.mentionsMedication())) {
+            category = HelpCategory.MEDICINE;
+        }
 
         int priority = Math.clamp(
                 Objects.requireNonNull(output.priority(), "priority"),
@@ -117,6 +122,12 @@ public class LlmRequestClassifier {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record LlmOutput(String category, Integer priority, List<String> tags, List<String> riskFlags) {
+    record LlmOutput(
+            String category,
+            Integer priority,
+            List<String> tags,
+            List<String> riskFlags,
+            Boolean mentionsMedication
+    ) {
     }
 }

@@ -6,7 +6,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * Entry point for classifying help requests: tries the LLM first and falls back to keyword rules
- * on any failure (Ollama down, timeout, invalid JSON, unknown category).
+ * on any failure (Ollama down, timeout, invalid JSON, unknown category). Medicine requests are then
+ * restricted by {@link MedicineRedaction}.
  */
 @Service
 public class RequestClassificationService {
@@ -28,6 +29,10 @@ public class RequestClassificationService {
     }
 
     public RequestClassification classify(ClassificationInput input) {
+        return MedicineRedaction.apply(classifyWithFallback(input));
+    }
+
+    private RequestClassification classifyWithFallback(ClassificationInput input) {
         if (!properties.enabled()) {
             return keywordClassifier.classify(input);
         }

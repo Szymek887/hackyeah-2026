@@ -1,5 +1,6 @@
 package com.telecrazy.hackyeah2026backend.service;
 
+import com.telecrazy.hackyeah2026backend.ai.MedicineRedaction;
 import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
@@ -25,7 +26,7 @@ public final class PublicTextPolicy {
 
     static String genericTitle(HelpCategory category) {
         return switch (category) {
-            case MEDICINE -> "Prośba o pomoc z lekami";
+            case MEDICINE -> MedicineRedaction.TITLE;
             case GROCERIES -> "Prośba o pomoc z zakupami";
             case EQUIPMENT_LOAN -> "Prośba o pożyczenie sprzętu";
             case HOME_SUPPORT -> "Prośba o pomoc w domu";
