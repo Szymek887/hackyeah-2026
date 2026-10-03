@@ -6,15 +6,12 @@ import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
 import { LeafletMap } from '@/features/map/leaflet-map';
 import { useNearbyRequests } from '@/features/requests/hooks';
 import { filterRequestsAlongRoute } from '@/lib/route-matching';
 import { CategoryLabels, PriorityLabels } from '@/features/requests/labels';
-import {
-  KRAKOW_CENTER_GEOJSON,
-  KRAKOW_COMMUTE_ROUTE,
-  KRAKOW_INITIAL_REGION,
-} from '@/features/map/krakow-map-data';
+import { KRAKOW_COMMUTE_ROUTE, KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 
 export function MapScreen() {
   const { data = [] } = useNearbyRequests({
@@ -22,27 +19,27 @@ export function MapScreen() {
     lng: KRAKOW_INITIAL_REGION.longitude,
     radiusKm: 5,
   });
-  const matchingRequests = filterRequestsAlongRoute(data, KRAKOW_COMMUTE_ROUTE, 450);
+  const matchingRequests = filterRequestsAlongRoute(
+    data,
+    KRAKOW_COMMUTE_ROUTE,
+    ROUTE_BUFFER_METERS,
+  );
 
   return (
     <Screen scroll>
       <View style={styles.header}>
         <ThemedText type="subtitle">Mapa</ThemedText>
         <ThemedText themeColor="textSecondary">
-          Webowy test Leaflet: Krakow, rozmyte strefy i trasa wolontariusza.
+          Zgłoszenia w Krakowie są grupowane, żeby mapa pozostała czytelna.
         </ThemedText>
       </View>
 
-      <LeafletMap
-        centerGeoJson={KRAKOW_CENTER_GEOJSON}
-        matchingRequests={matchingRequests}
-        requests={data}
-      />
+      <LeafletMap matchingRequests={matchingRequests} requests={data} />
 
       <Card highlighted style={styles.stats}>
         <ThemedText type="smallBold">Pasujące do trasy: {matchingRequests.length}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Filtr liczy dystans zgłoszenia od polilinii i wybiera prośby w buforze 450 m.
+          Kliknij grupę, aby ją przybliżyć, a punkt, aby zobaczyć przybliżoną strefę.
         </ThemedText>
       </Card>
 

@@ -1,19 +1,19 @@
 import 'leaflet/dist/leaflet.css';
 
-import { createElement, useEffect, useRef, type CSSProperties } from 'react';
+import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { FeatureCollection } from 'geojson';
 import type { LayerGroup, Map as LeafletMapInstance } from 'leaflet';
 
 import type { HelpRequestListItem } from '@/api/types';
-import { CategoryColors, PriorityColors, Radius } from '@/constants/theme';
+import { CategoryColors, Colors, PriorityColors, Radius } from '@/constants/theme';
 import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import {
   KRAKOW_COMMUTE_ROUTE,
   KRAKOW_INITIAL_REGION,
-  KRAKOW_ROUTE_BUFFER,
   toLatLng,
 } from '@/features/map/krakow-map-data';
+import { clusterRequests } from '@/features/map/map-clustering';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
 export type RouteEndpoint = 'start' | 'end';
@@ -25,7 +25,6 @@ type LeafletMapProps = {
   showAreas?: boolean;
   showRouteBuffer?: boolean;
   routeCoordinates?: RouteCoordinate[];
-  routeBufferCoordinates?: RouteCoordinate[];
   editableRoute?: boolean;
   onMapPress?: (coordinate: RouteCoordinate) => void;
   onRouteEndpointChange?: (endpoint: RouteEndpoint, coordinate: RouteCoordinate) => void;
@@ -43,7 +42,6 @@ export function LeafletMap({
   showAreas = true,
   showRouteBuffer = false,
   routeCoordinates = KRAKOW_COMMUTE_ROUTE,
-  routeBufferCoordinates = KRAKOW_ROUTE_BUFFER,
   editableRoute = false,
   onMapPress,
   onRouteEndpointChange,
@@ -51,6 +49,15 @@ export function LeafletMap({
   const elementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMapInstance | null>(null);
   const overlayRef = useRef<LayerGroup | null>(null);
+  const fittedRouteRef = useRef('');
+  const [zoom, setZoom] = useState(14);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const markerRequests = showRouteBuffer ? matchingRequests : requests;
+  const requestClusters = useMemo(
+    () => clusterRequests(markerRequests, zoom),
+    [markerRequests, zoom],
+  );
+  const selectedRequest = markerRequests.find((request) => request.id === selectedRequestId);
 
   useEffect(() => {
     let disposed = false;
@@ -68,6 +75,7 @@ export function LeafletMap({
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap',
         }).addTo(mapRef.current);
+        mapRef.current.on('zoomend', () => setZoom(mapRef.current?.getZoom() ?? 14));
       }
 
       if (overlayRef.current) {
@@ -77,9 +85,6 @@ export function LeafletMap({
       const overlays = L.layerGroup().addTo(mapRef.current);
       overlayRef.current = overlays;
       const routePositions = routeCoordinates.map(
-        (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
-      );
-      const bufferPositions = routeBufferCoordinates.map(
         (coordinate) => [coordinate.latitude, coordinate.longitude] as [number, number],
       );
 
@@ -92,25 +97,39 @@ export function LeafletMap({
 
       if (centerGeoJson) {
         L.geoJSON(centerGeoJson, {
-          style: { color: '#1A73D1', fillColor: '#E6F1FD', fillOpacity: 0.3, weight: 2 },
+          style: {
+            color: Colors.light.primary,
+            fillColor: Colors.light.primarySoft,
+            fillOpacity: 0.2,
+            weight: 1,
+          },
         }).addTo(overlays);
       }
 
-      if (showRouteBuffer && bufferPositions.length >= 3) {
-        L.polygon(bufferPositions, {
-          color: '#1A73D1',
-          fillColor: '#E6F1FD',
-          fillOpacity: 0.35,
-          weight: 2,
+      if (showRouteBuffer && routePositions.length >= 2) {
+        L.polyline(routePositions, {
+          color: Colors.light.primary,
+          opacity: 0.14,
+          weight: 22,
         }).addTo(overlays);
       }
 
       if (routePositions.length >= 2) {
         L.polyline(routePositions, {
-          color: '#1A73D1',
+          color: Colors.light.primary,
           dashArray: showRouteBuffer ? undefined : '8 6',
           weight: 5,
         }).addTo(overlays);
+      }
+
+      const routeSignature = `${routePositions.length}:${routePositions[0]?.join(',')}:${routePositions.at(-1)?.join(',')}`;
+      if (
+        editableRoute &&
+        routePositions.length >= 2 &&
+        fittedRouteRef.current !== routeSignature
+      ) {
+        fittedRouteRef.current = routeSignature;
+        mapRef.current.fitBounds(routePositions, { padding: [32, 32] });
       }
 
       if (editableRoute && routeCoordinates.length >= 2) {
@@ -141,36 +160,56 @@ export function LeafletMap({
       }
 
       if (showAreas) {
-        requests.forEach((request) => {
-          const categoryColor = CategoryColors[request.category];
-          const polygonRings = getAreaPolygonRings(request.maskedArea).map((ring) =>
+        if (selectedRequest) {
+          const categoryColor = CategoryColors[selectedRequest.category];
+          const polygonRings = getAreaPolygonRings(selectedRequest.maskedArea).map((ring) =>
             ring.map(({ latitude, longitude }) => [latitude, longitude] as [number, number]),
           );
 
           L.polygon(polygonRings, {
             color: categoryColor.color,
             fillColor: categoryColor.soft,
-            fillOpacity: 0.35,
-            weight: 2,
-          })
-            .bindPopup(`<strong>${request.title}</strong><br />Priorytet ${request.priority}`)
-            .addTo(overlays);
-        });
+            fillOpacity: 0.22,
+            weight: 1,
+          }).addTo(overlays);
+        }
       }
 
-      matchingRequests.forEach((request) => {
+      requestClusters.forEach((cluster) => {
+        if (cluster.requests.length > 1) {
+          const marker = L.marker([cluster.coordinate.latitude, cluster.coordinate.longitude], {
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="width:30px;height:30px;border-radius:15px;background:${Colors.light.primary};color:${Colors.light.onPrimary};border:2px solid ${Colors.light.backgroundElement};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.24)">${cluster.requests.length}</div>`,
+              iconAnchor: [15, 15],
+              iconSize: [30, 30],
+            }),
+          }).addTo(overlays);
+          marker.on('click', () => {
+            const currentZoom = mapRef.current?.getZoom() ?? 14;
+            mapRef.current?.flyTo(
+              [cluster.coordinate.latitude, cluster.coordinate.longitude],
+              Math.min(18, currentZoom + 2),
+            );
+          });
+          return;
+        }
+
+        const request = cluster.requests[0];
         const coordinate = toLatLng(request.approximateLocation.coordinates);
+        const categoryColor = CategoryColors[request.category].color;
         const priorityColor = PriorityColors[request.priority].color;
 
-        L.circleMarker([coordinate.latitude, coordinate.longitude], {
+        const marker = L.circleMarker([coordinate.latitude, coordinate.longitude], {
           color: priorityColor,
-          fillColor: priorityColor,
+          fillColor: categoryColor,
           fillOpacity: 1,
-          radius: 8,
+          radius: 5,
           weight: 2,
         })
-          .bindPopup(`<strong>${request.title}</strong><br />Zgłoszenie w korytarzu trasy`)
+          .bindPopup(`<strong>${request.title}</strong><br />Priorytet ${request.priority}`)
           .addTo(overlays);
+        marker.on('click', () => setSelectedRequestId(request.id));
       });
 
       mapRef.current.invalidateSize();
@@ -190,8 +229,9 @@ export function LeafletMap({
     onMapPress,
     onRouteEndpointChange,
     requests,
-    routeBufferCoordinates,
+    requestClusters,
     routeCoordinates,
+    selectedRequest,
     showAreas,
     showRouteBuffer,
   ]);

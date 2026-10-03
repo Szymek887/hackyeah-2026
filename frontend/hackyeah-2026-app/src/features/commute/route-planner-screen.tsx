@@ -1,6 +1,6 @@
-import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
-import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import MapView, { Callout, Marker, Polyline } from 'react-native-maps';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorMessage } from '@/api/errors';
@@ -8,13 +8,16 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { CategoryColors, Spacing } from '@/constants/theme';
+import { CategoryColors, PriorityColors, Spacing } from '@/constants/theme';
 import {
-  createRouteBuffer,
   formatRouteCoordinate,
+  formatRouteDistance,
+  formatRouteDuration,
   ROUTE_BUFFER_METERS,
+  simplifyRoute,
   toRouteLineString,
 } from '@/features/commute/route-geometry';
+import { useDrivingRoute } from '@/features/commute/hooks';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -22,6 +25,7 @@ import {
   KRAKOW_INITIAL_REGION,
   toLatLng,
 } from '@/features/map/krakow-map-data';
+import { clusterRequests, zoomFromLongitudeDelta } from '@/features/map/map-clustering';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
 type EditedEndpoint = 'start' | 'end';
@@ -32,12 +36,22 @@ const DEFAULT_END = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
 export function RoutePlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const mapRef = useRef<MapView>(null);
   const [editedEndpoint, setEditedEndpoint] = useState<EditedEndpoint>('start');
   const [start, setStart] = useState<RouteCoordinate>(DEFAULT_START);
   const [end, setEnd] = useState<RouteCoordinate>(DEFAULT_END);
-  const route = useMemo(() => [start, end], [end, start]);
-  const routeLine = useMemo(() => toRouteLineString(route), [route]);
-  const routeBuffer = useMemo(() => createRouteBuffer(route, ROUTE_BUFFER_METERS), [route]);
+  const [mapZoom, setMapZoom] = useState(() =>
+    zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
+  );
+  const directRoute = useMemo(() => [start, end], [end, start]);
+  const {
+    data: drivingRoute,
+    isFetching: isRouting,
+    error: routingError,
+  } = useDrivingRoute(start, end);
+  const route = drivingRoute?.coordinates ?? directRoute;
+  const apiRoute = useMemo(() => simplifyRoute(route), [route]);
+  const routeLine = useMemo(() => toRouteLineString(apiRoute), [apiRoute]);
   const {
     data: matchingRequests = [],
     isPending,
@@ -46,6 +60,18 @@ export function RoutePlannerScreen() {
     route: routeLine,
     bufferMeters: ROUTE_BUFFER_METERS,
   });
+  const requestClusters = useMemo(
+    () => clusterRequests(matchingRequests, mapZoom),
+    [mapZoom, matchingRequests],
+  );
+
+  useEffect(() => {
+    if (!drivingRoute) return;
+    mapRef.current?.fitToCoordinates(route, {
+      animated: true,
+      edgePadding: { top: 56, right: 48, bottom: 300, left: 48 },
+    });
+  }, [drivingRoute, route]);
 
   const updateEndpoint = (endpoint: EditedEndpoint, coordinate: RouteCoordinate) => {
     if (endpoint === 'start') setStart(coordinate);
@@ -61,16 +87,15 @@ export function RoutePlannerScreen() {
   return (
     <ThemedView style={styles.root}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={KRAKOW_INITIAL_REGION}
         onPress={(event) => updateEndpoint(editedEndpoint, event.nativeEvent.coordinate)}
+        onRegionChangeComplete={(region) =>
+          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta))
+        }
         mapPadding={{ top: insets.top + 8, right: 12, bottom: 260, left: 12 }}>
-        <Polygon
-          coordinates={routeBuffer}
-          fillColor={`${theme.primary}1F`}
-          strokeColor={`${theme.primary}99`}
-          strokeWidth={2}
-        />
+        <Polyline coordinates={route} strokeColor={`${theme.primary}24`} strokeWidth={22} />
         <Polyline coordinates={route} strokeColor={theme.primary} strokeWidth={5} />
         <Marker
           coordinate={start}
@@ -86,14 +111,52 @@ export function RoutePlannerScreen() {
           title="Cel"
           onDragEnd={(event) => updateEndpoint('end', event.nativeEvent.coordinate)}
         />
-        {matchingRequests.map((request) => (
-          <Marker
-            key={request.id}
-            coordinate={toLatLng(request.approximateLocation.coordinates)}
-            pinColor={CategoryColors[request.category].color}
-            title={request.title}
-          />
-        ))}
+        {requestClusters.map((cluster) => {
+          if (cluster.requests.length > 1) {
+            return (
+              <Marker
+                key={cluster.id}
+                coordinate={cluster.coordinate}
+                onPress={() =>
+                  mapRef.current?.animateCamera({
+                    center: cluster.coordinate,
+                    zoom: Math.min(18, mapZoom + 2),
+                  })
+                }>
+                <View
+                  style={[
+                    styles.clusterMarker,
+                    { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
+                  ]}>
+                  <ThemedText type="caption" style={{ color: theme.onPrimary }}>
+                    {cluster.requests.length}
+                  </ThemedText>
+                </View>
+              </Marker>
+            );
+          }
+
+          const request = cluster.requests[0];
+          return (
+            <Marker key={request.id} coordinate={toLatLng(request.approximateLocation.coordinates)}>
+              <View
+                style={[
+                  styles.requestMarker,
+                  {
+                    backgroundColor: CategoryColors[request.category].color,
+                    borderColor: PriorityColors[request.priority].color,
+                  },
+                ]}
+              />
+              <Callout>
+                <View style={styles.callout}>
+                  <ThemedText type="smallBold">{request.title}</ThemedText>
+                  <ThemedText type="small">Priorytet {request.priority}</ThemedText>
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
 
       <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
@@ -124,6 +187,23 @@ export function RoutePlannerScreen() {
             </ThemedText>
             <Button title="Resetuj" variant="ghost" inline onPress={resetRoute} />
           </View>
+          {drivingRoute && (
+            <ThemedText type="small" themeColor="textSecondary">
+              Trasa drogami: {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
+              {formatRouteDuration(drivingRoute.durationSeconds)}
+            </ThemedText>
+          )}
+          {isRouting && (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <ThemedText type="small">Wyznaczam trasę po drogach...</ThemedText>
+            </View>
+          )}
+          {routingError && !isRouting && (
+            <ThemedText type="small" themeColor="warning">
+              Nie udało się wyznaczyć trasy drogowej. Tymczasowo pokazuję linię prostą.
+            </ThemedText>
+          )}
           {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
           {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
         </ThemedView>
@@ -158,5 +238,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  clusterMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestMarker: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
+  },
+  callout: {
+    gap: Spacing.half,
+    maxWidth: 220,
   },
 });

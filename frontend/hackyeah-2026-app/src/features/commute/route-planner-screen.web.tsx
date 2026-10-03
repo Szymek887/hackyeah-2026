@@ -9,11 +9,14 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import {
-  createRouteBuffer,
   formatRouteCoordinate,
+  formatRouteDistance,
+  formatRouteDuration,
   ROUTE_BUFFER_METERS,
+  simplifyRoute,
   toRouteLineString,
 } from '@/features/commute/route-geometry';
+import { useDrivingRoute } from '@/features/commute/hooks';
 import { KRAKOW_COMMUTE_ROUTE } from '@/features/map/krakow-map-data';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
 import type { RouteCoordinate } from '@/lib/route-matching';
@@ -27,9 +30,15 @@ export function RoutePlannerScreen() {
   const [editedEndpoint, setEditedEndpoint] = useState<RouteEndpoint>('start');
   const [start, setStart] = useState<RouteCoordinate>(DEFAULT_START);
   const [end, setEnd] = useState<RouteCoordinate>(DEFAULT_END);
-  const route = useMemo(() => [start, end], [end, start]);
-  const routeLine = useMemo(() => toRouteLineString(route), [route]);
-  const routeBuffer = useMemo(() => createRouteBuffer(route, ROUTE_BUFFER_METERS), [route]);
+  const directRoute = useMemo(() => [start, end], [end, start]);
+  const {
+    data: drivingRoute,
+    isFetching: isRouting,
+    error: routingError,
+  } = useDrivingRoute(start, end);
+  const route = drivingRoute?.coordinates ?? directRoute;
+  const apiRoute = useMemo(() => simplifyRoute(route), [route]);
+  const routeLine = useMemo(() => toRouteLineString(apiRoute), [apiRoute]);
   const {
     data: matchingRequests = [],
     isPending,
@@ -76,6 +85,18 @@ export function RoutePlannerScreen() {
           <ThemedText type="small">B: {formatRouteCoordinate(end)}</ThemedText>
         </View>
         <Button title="Przywróć trasę demo" variant="ghost" inline onPress={resetRoute} />
+        {drivingRoute && (
+          <ThemedText type="smallBold">
+            {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
+            {formatRouteDuration(drivingRoute.durationSeconds)}
+          </ThemedText>
+        )}
+        {isRouting && <ThemedText type="small">Wyznaczam trasę po drogach...</ThemedText>}
+        {routingError && !isRouting && (
+          <ThemedText type="small" themeColor="warning">
+            Nie udało się wyznaczyć trasy drogowej. Tymczasowo pokazuję linię prostą.
+          </ThemedText>
+        )}
       </Card>
 
       <LeafletMap
@@ -85,7 +106,6 @@ export function RoutePlannerScreen() {
         showRouteBuffer
         editableRoute
         routeCoordinates={route}
-        routeBufferCoordinates={routeBuffer}
         onMapPress={(coordinate) => updateEndpoint(editedEndpoint, coordinate)}
         onRouteEndpointChange={updateEndpoint}
       />
@@ -95,8 +115,7 @@ export function RoutePlannerScreen() {
           W korytarzu {ROUTE_BUFFER_METERS} m: {matchingRequests.length}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Na mockach filtr działa po stronie frontendu, a z backendem używa PostGIS endpointu
-          /api/help-requests/along-route.
+          Zgłoszenia są dopasowane do rzeczywistego przebiegu ulic, nie do linii prostej.
         </ThemedText>
         {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
         {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}

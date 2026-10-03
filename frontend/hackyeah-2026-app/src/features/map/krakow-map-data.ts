@@ -24,17 +24,6 @@ export const KRAKOW_COMMUTE_LINE: GeoLineString = {
   coordinates: KRAKOW_COMMUTE_ROUTE.map(({ longitude, latitude }) => [longitude, latitude]),
 };
 
-export const KRAKOW_ROUTE_BUFFER: MapCoordinate[] = [
-  { latitude: 50.0518, longitude: 19.9242 },
-  { latitude: 50.0564, longitude: 19.935 },
-  { latitude: 50.0627, longitude: 19.9477 },
-  { latitude: 50.0692, longitude: 19.9594 },
-  { latitude: 50.0735, longitude: 19.9569 },
-  { latitude: 50.067, longitude: 19.943 },
-  { latitude: 50.0602, longitude: 19.9341 },
-  { latitude: 50.0562, longitude: 19.9252 },
-];
-
 const oldTownRing: LngLat[] = [
   [19.9284, 50.0649],
   [19.9317, 50.0599],
