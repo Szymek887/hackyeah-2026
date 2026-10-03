@@ -45,7 +45,7 @@ class HelpRequestDetailsServiceTest {
     private final HelpRequestDetailsService service = new HelpRequestDetailsService(
             repository,
             classifier,
-            new LocationObfuscationService()
+            new HelpRequestViewMapper(new LocationObfuscationService())
     );
 
     private final AppUser anna = user(1L, UserRole.REQUESTER, true);

@@ -10,7 +10,9 @@ public record UserProfileResponse(
         boolean identityVerified,
         boolean specialNeeds,
         int trustScore,
-        int ratingCount
+        int ratingCount,
+        Double ratingAverage,
+        int cityPoints
 ) {
 
     public static UserProfileResponse from(AppUser user) {
@@ -21,7 +23,9 @@ public record UserProfileResponse(
                 user.isIdentityVerified(),
                 user.isSpecialNeeds(),
                 user.getTrustScore(),
-                user.getRatingCount()
+                user.getRatingCount(),
+                user.getRatingAverage(),
+                user.getCityPoints()
         );
     }
 }

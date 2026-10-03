@@ -8,8 +8,18 @@ public sealed interface HelpRequestView permits FullHelpRequestResponse, PublicH
 
     Visibility visibility();
 
+    ViewerRole viewerRole();
+
     enum Visibility {
         FULL,
         PUBLIC
+    }
+
+    /** The caller's part in the request, so clients do not have to compare ids (PUBLIC has none). */
+    enum ViewerRole {
+        REQUESTER,
+        /** The volunteer who offered help or was accepted. */
+        VOLUNTEER,
+        NONE
     }
 }

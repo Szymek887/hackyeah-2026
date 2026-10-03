@@ -1,5 +1,6 @@
 package com.telecrazy.hackyeah2026backend.service;
 
+import com.telecrazy.hackyeah2026backend.api.HelpRequestView.ViewerRole;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
@@ -36,14 +37,24 @@ public final class HelpRequestVisibilityPolicy {
         return isRequester(request, user) || isAssignedVolunteerAfterAcceptance(request, user);
     }
 
-    private static boolean isRequester(HelpRequest request, AppUser user) {
+    public static ViewerRole viewerRole(HelpRequest request, AppUser user) {
+        if (isRequester(request, user)) {
+            return ViewerRole.REQUESTER;
+        }
+        return isVolunteer(request, user) ? ViewerRole.VOLUNTEER : ViewerRole.NONE;
+    }
+
+    public static boolean isRequester(HelpRequest request, AppUser user) {
         return Objects.equals(request.getRequester().getId(), user.getId());
     }
 
-    private static boolean isAssignedVolunteerAfterAcceptance(HelpRequest request, AppUser user) {
+    /** The volunteer who offered help or was accepted, regardless of the status. */
+    public static boolean isVolunteer(HelpRequest request, AppUser user) {
         AppUser volunteer = request.getVolunteer();
-        return volunteer != null
-                && Objects.equals(volunteer.getId(), user.getId())
-                && VOLUNTEER_FULL_ACCESS_STATUSES.contains(request.getStatus());
+        return volunteer != null && Objects.equals(volunteer.getId(), user.getId());
+    }
+
+    private static boolean isAssignedVolunteerAfterAcceptance(HelpRequest request, AppUser user) {
+        return isVolunteer(request, user) && VOLUNTEER_FULL_ACCESS_STATUSES.contains(request.getStatus());
     }
 }

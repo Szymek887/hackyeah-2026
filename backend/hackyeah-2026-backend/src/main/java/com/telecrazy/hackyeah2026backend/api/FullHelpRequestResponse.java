@@ -32,7 +32,8 @@ public record FullHelpRequestResponse(
         UserSummary requester,
         UserSummary volunteer,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        ViewerRole viewerRole
 ) implements HelpRequestView {
 
     @Override
