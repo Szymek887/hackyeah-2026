@@ -19,7 +19,9 @@ import {
   toRouteLineString,
 } from '@/features/commute/route-geometry';
 import { useDrivingRoute } from '@/features/commute/hooks';
+import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
+import { useUserLocation } from '@/features/map/use-user-location';
 import { useTheme } from '@/hooks/use-theme';
 import {
   KRAKOW_COMMUTE_ROUTE,
@@ -38,10 +40,13 @@ export function RoutePlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
+  const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
+
   const [editedEndpoint, setEditedEndpoint] = useState<EditedEndpoint>('start');
-  const [start, setStart] = useState<RouteCoordinate>(DEFAULT_START);
-  const [end, setEnd] = useState<RouteCoordinate>(DEFAULT_END);
-  const [isRouteConfirmed, setIsRouteConfirmed] = useState(false);
+  const [start, setStart] = useState<RouteCoordinate>(savedRoute?.start ?? DEFAULT_START);
+  const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END);
+  const [isRouteConfirmed, setIsRouteConfirmed] = useState(Boolean(savedRoute?.isActive));
   const [mapZoom, setMapZoom] = useState(() =>
     zoomFromLongitudeDelta(KRAKOW_INITIAL_REGION.longitudeDelta),
   );
@@ -72,7 +77,7 @@ export function RoutePlannerScreen() {
     if (!drivingRoute) return;
     mapRef.current?.fitToCoordinates(route, {
       animated: true,
-      edgePadding: { top: 56, right: 48, bottom: 300, left: 48 },
+      edgePadding: { top: 56, right: 48, bottom: 320, left: 48 },
     });
   }, [drivingRoute, route]);
 
@@ -82,11 +87,54 @@ export function RoutePlannerScreen() {
     else setEnd(coordinate);
   };
 
+  const setStartToUserLocation = async () => {
+    const loc = await locate();
+    if (loc) {
+      updateEndpoint('start', loc);
+      mapRef.current?.animateToRegion(
+        {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          latitudeDelta: 0.015,
+          longitudeDelta: 0.015,
+        },
+        300,
+      );
+    }
+  };
+
+  const centerOnMyLocation = async () => {
+    const loc = await locate();
+    if (loc) {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        },
+        300,
+      );
+    }
+  };
+
   const resetRoute = () => {
     setStart(DEFAULT_START);
     setEnd(DEFAULT_END);
     setEditedEndpoint('start');
     setIsRouteConfirmed(false);
+  };
+
+  const handleConfirmRoute = () => {
+    setIsRouteConfirmed(true);
+    setSavedRoute({
+      start,
+      end,
+      coordinates: route,
+      distanceMeters: drivingRoute?.distanceMeters ?? 0,
+      durationSeconds: drivingRoute?.durationSeconds ?? 0,
+      isActive: true,
+    });
   };
 
   const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
@@ -107,12 +155,13 @@ export function RoutePlannerScreen() {
         ref={mapRef}
         style={styles.map}
         initialRegion={KRAKOW_INITIAL_REGION}
+        showsUserLocation
         onPress={(event) => updateEndpoint(editedEndpoint, event.nativeEvent.coordinate)}
         onRegionChangeComplete={(region) => {
           setMapRegion(region);
           setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
         }}
-        mapPadding={{ top: insets.top + 8, right: 12, bottom: 260, left: 12 }}>
+        mapPadding={{ top: insets.top + 8, right: 12, bottom: 280, left: 12 }}>
         <Polyline coordinates={route} strokeColor={`${theme.primary}24`} strokeWidth={22} />
         <Polyline coordinates={route} strokeColor={theme.primary} strokeWidth={5} />
         <Marker
@@ -169,45 +218,92 @@ export function RoutePlannerScreen() {
         })}
       </MapView>
 
+      <View style={[styles.floatingControls, { top: insets.top + Spacing.two }]}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.locateFab,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            pressed && styles.pressed,
+          ]}
+          onPress={centerOnMyLocation}>
+          {isLocating ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <ThemedText type="smallBold" style={{ color: theme.primary }}>
+              📍 Wycentruj
+            </ThemedText>
+          )}
+        </Pressable>
+      </View>
+
       <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
         <ThemedView type="backgroundElement" style={styles.summary}>
           <ThemedText type="smallBold">Ustaw trasę na mapie</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             Wybierz punkt, a potem stuknij mapę albo przeciągnij jego pinezkę.
           </ThemedText>
+
           <SegmentedControl
             value={editedEndpoint}
             onChange={setEditedEndpoint}
             options={[
-              { value: 'start', label: 'Start' },
-              { value: 'end', label: 'Cel' },
+              { value: 'start', label: 'Start (A)' },
+              { value: 'end', label: 'Cel (B)' },
             ]}
           />
+
           <View style={styles.coordinateRow}>
+            <View style={styles.endpointInfo}>
+              <ThemedText type="caption" themeColor="textSecondary">
+                A: {formatRouteCoordinate(start)}
+              </ThemedText>
+              <Pressable
+                onPress={setStartToUserLocation}
+                disabled={isLocating}
+                style={({ pressed }) => [styles.myLocationBtn, pressed && styles.pressed]}>
+                <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '600' }}>
+                  {isLocating ? 'Pobieram...' : '🎯 Użyj mojej pozycji jako Start'}
+                </ThemedText>
+              </Pressable>
+            </View>
             <ThemedText type="caption" themeColor="textSecondary">
-              A {formatRouteCoordinate(start)}
+              B: {formatRouteCoordinate(end)}
             </ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              B {formatRouteCoordinate(end)}
-            </ThemedText>
+            {locationError && (
+              <ThemedText type="caption" themeColor="warning">
+                {locationError}
+              </ThemedText>
+            )}
           </View>
+
           <View style={styles.resultRow}>
             <ThemedText type="smallBold">
               W korytarzu {ROUTE_BUFFER_METERS} m: {matchingRequests.length}
             </ThemedText>
             <Button title="Resetuj" variant="ghost" inline onPress={resetRoute} />
           </View>
+
           <Button
-            title={isRouteConfirmed ? 'Trasa zatwierdzona' : 'Zatwierdź trasę'}
-            disabled={isRouting || isPending || isRouteConfirmed}
-            onPress={() => setIsRouteConfirmed(true)}
+            title={isRouteConfirmed ? '✓ Trasa zapisana (aktywna)' : 'Zatwierdź trasę'}
+            disabled={isRouting || isPending}
+            onPress={handleConfirmRoute}
           />
+
+          {isRouteConfirmed && (
+            <Button
+              title="Wróć do mapy z tą trasą"
+              variant="secondary"
+              onPress={() => router.push('/(tabs)')}
+            />
+          )}
+
           {drivingRoute && (
             <ThemedText type="small" themeColor="textSecondary">
               Trasa drogami: {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
               {formatRouteDuration(drivingRoute.durationSeconds)}
             </ThemedText>
           )}
+
           {isRouting && (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={theme.primary} />
@@ -221,9 +317,10 @@ export function RoutePlannerScreen() {
           )}
           {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
           {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
+
           {isRouteConfirmed && (
             <View style={styles.results}>
-              <ThemedText type="smallBold">Komu możesz pomóc</ThemedText>
+              <ThemedText type="smallBold">Komu możesz pomóc na trasie</ThemedText>
               {matchingRequests.length > 0 ? (
                 <ScrollView
                   style={styles.requestList}
@@ -250,6 +347,11 @@ export function RoutePlannerScreen() {
                           Priorytet {request.priority}
                         </ThemedText>
                       </View>
+                      <ThemedText
+                        type="caption"
+                        style={{ color: theme.primary, fontWeight: '600' }}>
+                        Zobacz →
+                      </ThemedText>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -273,6 +375,25 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
+  floatingControls: {
+    position: 'absolute',
+    right: Spacing.three,
+    zIndex: 10,
+  },
+  locateFab: {
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   panel: {
     position: 'absolute',
     left: Spacing.three,
@@ -286,6 +407,17 @@ const styles = StyleSheet.create({
   },
   coordinateRow: {
     gap: Spacing.half,
+  },
+  endpointInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  myLocationBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: Spacing.one,
   },
   resultRow: {
     flexDirection: 'row',

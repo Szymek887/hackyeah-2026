@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { errorMessage } from '@/api/errors';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import {
   formatRouteCoordinate,
   formatRouteDistance,
@@ -18,6 +18,8 @@ import {
   toRouteLineString,
 } from '@/features/commute/route-geometry';
 import { useDrivingRoute } from '@/features/commute/hooks';
+import { useSavedCommuteRoute } from '@/features/commute/commute-store';
+import { useUserLocation } from '@/features/map/use-user-location';
 import { KRAKOW_COMMUTE_ROUTE } from '@/features/map/krakow-map-data';
 import { RequestCard } from '@/features/requests/components/request-card';
 import { useRequestsAlongRoute } from '@/features/requests/hooks';
@@ -29,10 +31,13 @@ const DEFAULT_START = KRAKOW_COMMUTE_ROUTE[0];
 const DEFAULT_END = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
 
 export function RoutePlannerScreen() {
+  const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
+  const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
+
   const [editedEndpoint, setEditedEndpoint] = useState<RouteEndpoint>('start');
-  const [start, setStart] = useState<RouteCoordinate>(DEFAULT_START);
-  const [end, setEnd] = useState<RouteCoordinate>(DEFAULT_END);
-  const [isRouteConfirmed, setIsRouteConfirmed] = useState(false);
+  const [start, setStart] = useState<RouteCoordinate>(savedRoute?.start ?? DEFAULT_START);
+  const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END);
+  const [isRouteConfirmed, setIsRouteConfirmed] = useState(Boolean(savedRoute?.isActive));
   const directRoute = useMemo(() => [start, end], [end, start]);
   const {
     data: drivingRoute,
@@ -57,11 +62,30 @@ export function RoutePlannerScreen() {
     else setEnd(coordinate);
   };
 
+  const setStartToUserLocation = async () => {
+    const loc = await locate();
+    if (loc) {
+      updateEndpoint('start', loc);
+    }
+  };
+
   const resetRoute = () => {
     setStart(DEFAULT_START);
     setEnd(DEFAULT_END);
     setEditedEndpoint('start');
     setIsRouteConfirmed(false);
+  };
+
+  const handleConfirmRoute = () => {
+    setIsRouteConfirmed(true);
+    setSavedRoute({
+      start,
+      end,
+      coordinates: route,
+      distanceMeters: drivingRoute?.distanceMeters ?? 0,
+      durationSeconds: drivingRoute?.durationSeconds ?? 0,
+      isActive: true,
+    });
   };
 
   return (
@@ -78,25 +102,50 @@ export function RoutePlannerScreen() {
           value={editedEndpoint}
           onChange={setEditedEndpoint}
           options={[
-            { value: 'start', label: 'Ustaw start' },
-            { value: 'end', label: 'Ustaw cel' },
+            { value: 'start', label: 'Ustaw start (A)' },
+            { value: 'end', label: 'Ustaw cel (B)' },
           ]}
         />
         <ThemedText type="small" themeColor="textSecondary">
           Kliknij mapę, aby przesunąć wybrany punkt, albo przeciągnij znacznik A/B.
         </ThemedText>
+
         <View style={styles.coordinates}>
-          <ThemedText type="small">A: {formatRouteCoordinate(start)}</ThemedText>
+          <View style={styles.endpointRow}>
+            <ThemedText type="small">A: {formatRouteCoordinate(start)}</ThemedText>
+            <Pressable
+              onPress={setStartToUserLocation}
+              disabled={isLocating}
+              style={({ pressed }) => [styles.myLocationBtn, pressed && styles.pressed]}>
+              <ThemedText type="caption" style={{ color: Colors.light.primary, fontWeight: '700' }}>
+                {isLocating ? 'Pobieram...' : '🎯 Użyj mojej pozycji jako Start'}
+              </ThemedText>
+            </Pressable>
+          </View>
           <ThemedText type="small">B: {formatRouteCoordinate(end)}</ThemedText>
+          {locationError && (
+            <ThemedText type="caption" themeColor="warning">
+              {locationError}
+            </ThemedText>
+          )}
         </View>
+
         <View style={styles.actions}>
           <Button
-            title={isRouteConfirmed ? 'Trasa zatwierdzona' : 'Zatwierdź trasę'}
-            disabled={isRouting || isPending || isRouteConfirmed}
-            onPress={() => setIsRouteConfirmed(true)}
+            title={isRouteConfirmed ? '✓ Trasa zapisana (aktywna)' : 'Zatwierdź trasę'}
+            disabled={isRouting || isPending}
+            onPress={handleConfirmRoute}
           />
+          {isRouteConfirmed && (
+            <Button
+              title="Wróć do mapy z tą trasą"
+              variant="secondary"
+              onPress={() => router.push('/(tabs)')}
+            />
+          )}
           <Button title="Przywróć trasę demo" variant="ghost" inline onPress={resetRoute} />
         </View>
+
         {drivingRoute && (
           <ThemedText type="smallBold">
             {formatRouteDistance(drivingRoute.distanceMeters)} · około{' '}
@@ -128,8 +177,8 @@ export function RoutePlannerScreen() {
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {isRouteConfirmed
-            ? 'To są zgłoszenia, które możesz obsłużyć po drodze.'
-            : 'Zatwierdź trasę, żeby przejść do wyboru osoby, której chcesz pomóc.'}
+            ? 'Trasa jest aktywna – te zgłoszenia możesz obsłużyć po drodze.'
+            : 'Zatwierdź trasę, żeby zapisać ją na mapie głównej i przejść do wyboru zgłoszenia.'}
         </ThemedText>
         {isPending && <ThemedText type="small">Szukam zgłoszeń przy trasie...</ThemedText>}
         {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
@@ -171,6 +220,20 @@ const styles = StyleSheet.create({
   },
   coordinates: {
     gap: Spacing.one,
+  },
+  endpointRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  myLocationBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: Spacing.one,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   actions: {
     flexDirection: 'row',

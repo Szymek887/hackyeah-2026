@@ -93,9 +93,9 @@ function requestPopupHtml(request: HelpRequestListItem) {
       <div style="font-size:14px;font-weight:700;line-height:18px;color:${Colors.light.text};word-break:break-word;">
         ${escapeHtml(request.title)}
       </div>
-      <div style="font-size:12px;line-height:16px;color:${Colors.light.textSecondary};">
-        Kliknij kartę zgłoszenia pod mapą albo przejdź przez trasę, żeby zaoferować pomoc.
-      </div>
+      <a href="/request/${request.id}" style="display:inline-block;text-align:center;padding:7px 12px;background:${Colors.light.primary};color:#ffffff;border-radius:8px;text-decoration:none;font-size:12px;font-weight:700;margin-top:4px;">
+        Zobacz szczegóły i pomóż →
+      </a>
     </div>
   `;
 }
