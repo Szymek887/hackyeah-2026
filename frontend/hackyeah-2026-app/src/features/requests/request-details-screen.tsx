@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 
-import type { HelpRequestDetails, User } from '@/api/types';
+import { errorMessage } from '@/api/errors';
+import type { HelpRequestView, UserSummary } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,15 +12,20 @@ import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
 import { useSession } from '@/features/auth/session-context';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
-import { useAcceptOffer, useOfferHelp, useRequest } from '@/features/requests/hooks';
+import {
+  useAcceptOffer,
+  useCancelRequest,
+  useOfferHelp,
+  useRejectOffer,
+  useRequest,
+} from '@/features/requests/hooks';
 import { StatusLabels, timeAgo } from '@/features/requests/labels';
+import { formatAddress, isFull } from '@/features/requests/view-helpers';
 import { useTheme } from '@/hooks/use-theme';
-import { enterItem } from '@/lib/motion';
 
-/** F2.4 – request details with the "Chcę pomóc" / "Zaakceptuj" flow. */
-export function RequestDetailsScreen({ id }: { id: string }) {
+/** F2.4 – `GET /api/help-requests/{id}` with the offer / accept / reject / cancel actions. */
+export function RequestDetailsScreen({ id }: { id: number }) {
   const theme = useTheme();
-  const { user } = useSession();
   const { data: request, isPending, error } = useRequest(id);
 
   if (isPending) {
@@ -34,7 +39,7 @@ export function RequestDetailsScreen({ id }: { id: string }) {
   if (error || !request) {
     return (
       <Screen>
-        <ThemedText themeColor="danger">{error?.message ?? 'Nie znaleziono zgłoszenia'}</ThemedText>
+        <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>
         <Button title="Wróć" variant="secondary" inline onPress={() => router.back()} />
       </Screen>
     );
@@ -42,127 +47,181 @@ export function RequestDetailsScreen({ id }: { id: string }) {
 
   return (
     <Screen scroll>
-      <Animated.View entering={enterItem(0)} style={styles.block}>
+      <View style={styles.block}>
         <View style={styles.badges}>
           <PriorityBadge priority={request.priority} />
           <CategoryBadge category={request.category} />
           <Badge
             label={StatusLabels[request.status]}
             color={theme.textSecondary}
-            backgroundColor={theme.backgroundMuted}
+            backgroundColor={theme.backgroundSelected}
           />
         </View>
         <ThemedText type="title">{request.title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           Dodano {timeAgo(request.createdAt)}
         </ThemedText>
-      </Animated.View>
+      </View>
 
-      <Animated.View entering={enterItem(1)}>
-        <Card>
-          <ThemedText type="subtitle">Opis</ThemedText>
+      <Card>
+        {request.description ? (
           <ThemedText>{request.description}</ThemedText>
-          {request.tags.length > 0 && (
-            <View style={styles.badges}>
-              {request.tags.map((tag) => (
-                <Badge
-                  key={tag}
-                  label={`#${tag}`}
-                  color={theme.textSecondary}
-                  backgroundColor={theme.backgroundMuted}
-                />
-              ))}
-            </View>
-          )}
-          {request.accessibilitySupport && <Badge label="Potrzebne wsparcie dostępności" />}
-        </Card>
-      </Animated.View>
-
-      <Animated.View entering={enterItem(2)}>
-        <Card>
-          <ThemedText type="subtitle">Zgłaszający</ThemedText>
-          <ThemedText type="defaultBold">{request.requester.displayName}</ThemedText>
-          <RatingStars
-            value={request.requester.ratingAverage}
-            count={request.requester.ratingCount}
-          />
-          <ThemedText type="small" themeColor="textSecondary">
-            {request.requester.verified ? 'Tożsamość zweryfikowana' : 'Tożsamość niezweryfikowana'}{' '}
-            · zaufanie {request.requester.trustScore}%
+        ) : (
+          <ThemedText themeColor="textSecondary">
+            Opis widzą tylko osoby biorące udział w zgłoszeniu, bo zawiera dane osobowe.
           </ThemedText>
-        </Card>
-      </Animated.View>
+        )}
+        {request.tags.length > 0 && (
+          <View style={styles.badges}>
+            {request.tags.map((tag) => (
+              <Badge
+                key={tag}
+                label={`#${tag}`}
+                color={theme.textSecondary}
+                backgroundColor={theme.backgroundSelected}
+              />
+            ))}
+          </View>
+        )}
+      </Card>
 
-      <Animated.View entering={enterItem(3)}>
+      {isFull(request) ? (
+        <>
+          <Card highlighted>
+            <ThemedText type="smallBold">Adres</ThemedText>
+            <ThemedText>{formatAddress(request)}</ThemedText>
+          </Card>
+          <Person title="Prosi o pomoc" person={request.requester} />
+          {request.volunteer && (
+            <Person
+              title={request.status === 'OFFERED' ? 'Chce pomóc' : 'Pomaga'}
+              person={request.volunteer}
+            />
+          )}
+        </>
+      ) : (
         <Card highlighted>
           <ThemedText type="smallBold">Lokalizacja</ThemedText>
           <ThemedText type="small">
-            {request.address
-              ? `${request.address.street} ${request.address.building}${
-                  request.address.apartment ? ` / ${request.address.apartment}` : ''
-                }, ${request.address.city}`
-              : `Przybliżona okolica (~${request.area.radiusMeters} m). Dokładny adres pojawi się po akceptacji pomocy.`}
+            Widoczna jest tylko okolica (ok. 300 m). Dokładny adres zobaczysz, gdy osoba
+            potrzebująca przyjmie Twoją pomoc.
           </ThemedText>
         </Card>
-      </Animated.View>
+      )}
 
-      <Animated.View entering={enterItem(4)}>
-        <RequestActions request={request} user={user} />
-      </Animated.View>
+      <RequestActions request={request} />
     </Screen>
   );
 }
 
-function RequestActions({ request, user }: { request: HelpRequestDetails; user: User }) {
-  const offerMutation = useOfferHelp();
-  const acceptMutation = useAcceptOffer();
-  const isOwner = request.requester.id === user.id;
-  const isAssigned = request.volunteer?.id === user.id;
-  const error = offerMutation.error ?? acceptMutation.error;
+function Person({ title, person }: { title: string; person: UserSummary }) {
+  return (
+    <Card>
+      <ThemedText type="smallBold">{title}</ThemedText>
+      <ThemedText type="defaultBold">{person.displayName}</ThemedText>
+      {person.ratingAverage !== null && (
+        <RatingStars value={person.ratingAverage} count={person.ratingCount} />
+      )}
+      <ThemedText type="small" themeColor="textSecondary">
+        {person.identityVerified ? 'Tożsamość potwierdzona' : 'Tożsamość niepotwierdzona'}, zaufanie{' '}
+        {person.trustScore}%
+      </ThemedText>
+    </Card>
+  );
+}
 
-  const openTask = () => router.push({ pathname: '/task/[id]', params: { id: request.id } });
+/** Buttons follow the backend rules: who may do what in which status (else 403 / 409). */
+function RequestActions({ request }: { request: HelpRequestView }) {
+  const { role } = useSession();
+  const offer = useOfferHelp();
+  const accept = useAcceptOffer();
+  const reject = useRejectOffer();
+  const cancel = useCancelRequest();
+  const error = offer.error ?? accept.error ?? reject.error ?? cancel.error;
+  const busy = offer.isPending || accept.isPending || reject.isPending || cancel.isPending;
 
-  let content: React.ReactNode = null;
+  const isRequester = request.viewerRole === 'REQUESTER';
+  const isVolunteer = request.viewerRole === 'VOLUNTEER';
+  const { status } = request;
+  const goTo = (pathname: '/task/[id]' | '/rate/[id]') =>
+    router.push({ pathname, params: { id: request.id } });
 
-  if (request.status === 'ACCEPTED' && (isOwner || isAssigned)) {
-    content = <Button title="Otwórz aktywne zadanie" size="large" onPress={openTask} />;
-  } else if (user.role === 'VOLUNTEER' && request.status === 'OPEN') {
-    content = (
+  const buttons: React.ReactNode[] = [];
+
+  if (status === 'OPEN' && request.viewerRole === 'NONE' && role === 'VOLUNTEER') {
+    buttons.push(
       <Button
-        title={offerMutation.isPending ? 'Wysyłanie…' : 'Chcę pomóc'}
+        key="offer"
+        title="Chcę pomóc"
         size="large"
-        disabled={offerMutation.isPending}
-        onPress={() => offerMutation.mutate(request.id)}
-      />
+        disabled={busy}
+        onPress={() => offer.mutate(request.id)}
+      />,
     );
-  } else if (isAssigned && request.status === 'OFFERED') {
-    content = (
-      <Card highlighted>
+  }
+  if (status === 'OFFERED' && isVolunteer) {
+    buttons.push(
+      <Card key="waiting" highlighted>
         <ThemedText>
-          Zgłosiłeś chęć pomocy. Czekasz na akceptację – zadanie jest w zakładce „Oczekujące”.
+          Zgłosiłeś się do pomocy. Czekasz, aż osoba potrzebująca to potwierdzi.
         </ThemedText>
-      </Card>
+      </Card>,
     );
-  } else if (isOwner && request.status === 'OFFERED') {
-    content = (
-      <Card highlighted>
+  }
+  if (status === 'OFFERED' && isRequester) {
+    buttons.push(
+      <Button
+        key="accept"
+        title="Przyjmij pomoc"
+        size="large"
+        disabled={busy}
+        onPress={() => accept.mutate(request.id, { onSuccess: () => goTo('/task/[id]') })}
+      />,
+      <Button
+        key="reject"
+        title="Odrzuć ofertę"
+        variant="secondary"
+        disabled={busy}
+        onPress={() => reject.mutate(request.id)}
+      />,
+    );
+  }
+  if (status === 'ACCEPTED' && (isRequester || isVolunteer)) {
+    buttons.push(
+      <Button key="task" title="Otwórz zadanie" size="large" onPress={() => goTo('/task/[id]')} />,
+    );
+  }
+  if (status === 'COMPLETED' && (isRequester || isVolunteer)) {
+    buttons.push(
+      <Button key="rate" title="Oceń pomoc" size="large" onPress={() => goTo('/rate/[id]')} />,
+    );
+  }
+  if (status === 'UNDER_REVIEW' && isRequester) {
+    buttons.push(
+      <Card key="review" highlighted>
         <ThemedText>
-          <ThemedText type="defaultBold">{request.volunteer?.displayName}</ThemedText> chce Ci
-          pomóc. Po akceptacji zobaczy Twój dokładny adres.
+          Zgłoszenie czeka na sprawdzenie, bo opis przypominał prośbę o pieniądze. Do tego czasu nie
+          widzą go inni.
         </ThemedText>
-        <Button
-          title={acceptMutation.isPending ? 'Akceptowanie…' : 'Zaakceptuj pomoc'}
-          disabled={acceptMutation.isPending}
-          onPress={() => acceptMutation.mutate(request.id, { onSuccess: openTask })}
-        />
-      </Card>
+      </Card>,
+    );
+  }
+  if (isRequester && ['OPEN', 'OFFERED', 'ACCEPTED', 'UNDER_REVIEW'].includes(status)) {
+    buttons.push(
+      <Button
+        key="cancel"
+        title="Anuluj zgłoszenie"
+        variant="danger"
+        disabled={busy}
+        onPress={() => cancel.mutate(request.id)}
+      />,
     );
   }
 
   return (
     <View style={styles.block}>
-      {content}
-      {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+      {buttons}
+      {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
     </View>
   );
 }

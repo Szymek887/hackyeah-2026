@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { ActivityIndicator, FlatList, StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { errorMessage } from '@/api/errors';
 import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
@@ -14,8 +15,6 @@ const QUERY = { ...DEFAULT_CENTER, radiusKm: 5 };
 
 export default function RequestsScreen() {
   const { data, isPending, error } = useNearbyRequests(QUERY);
-  // Public board: only requests still waiting for a volunteer.
-  const open = data?.filter((request) => request.status === 'OPEN');
 
   return (
     <Screen>
@@ -23,11 +22,12 @@ export default function RequestsScreen() {
       <ThemedText themeColor="textSecondary">Otwarte prośby o pomoc w promieniu 5 km</ThemedText>
 
       {isPending && <ActivityIndicator />}
-      {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+      {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
 
       <FlatList
-        data={open}
-        keyExtractor={(item) => item.id}
+        // `/nearby` already returns only OPEN requests, most urgent first.
+        data={data}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => (

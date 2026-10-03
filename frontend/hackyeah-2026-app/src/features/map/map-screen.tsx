@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import MapView, { Callout, Marker, Geojson, Polygon, Polyline } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { errorMessage } from '@/api/errors';
 import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -54,10 +55,10 @@ export function MapScreen() {
         />
 
         {requests.map((request) => {
-          const coordinate = toLatLng(request.area.center.coordinates);
+          const coordinate = toLatLng(request.approximateLocation.coordinates);
           const categoryColor = CategoryColors[request.category];
           const priorityColor = PriorityColors[request.priority];
-          const [outerRing, ...holes] = getAreaPolygonRings(request.area);
+          const [outerRing, ...holes] = getAreaPolygonRings(request.maskedArea);
 
           return (
             <Fragment key={request.id}>
@@ -88,7 +89,7 @@ export function MapScreen() {
             Obszary pokazują przybliżone strefy, a linia testową trasę wolontariusza.
           </ThemedText>
           {isPending && <ActivityIndicator color={theme.primary} />}
-          {error && <ThemedText themeColor="danger">{error.message}</ThemedText>}
+          {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
         </ThemedView>
         <Button title="Zaplanuj trasę" onPress={() => router.push('/route-planner')} />
       </View>

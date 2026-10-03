@@ -2,14 +2,24 @@ import { Fragment } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
 
-import type { HeatmapPoint } from '@/api/types';
+import type { Category, GeoPolygon } from '@/api/types';
 import { CategoryColors, Radius } from '@/constants/theme';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
 
+export type HeatmapPointItem = {
+  lat: number;
+  lng: number;
+  weight: number;
+  category: Category;
+  byCategory?: Record<Category, number>;
+  totalInCell?: number;
+  area?: GeoPolygon;
+};
+
 type CityHeatmapMapProps = {
-  points: HeatmapPoint[];
+  points: HeatmapPointItem[];
 };
 
 const DISTRICT_CENTERS = [

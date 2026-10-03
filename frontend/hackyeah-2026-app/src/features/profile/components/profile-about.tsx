@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
-import type { User } from '@/api/types';
+import type { UserProfile } from '@/api/types';
+import type { ProfileDetails } from '@/features/profile/profile-details';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -8,8 +9,7 @@ import { CategoryColors, Spacing } from '@/constants/theme';
 import { CategoryLabels } from '@/features/requests/labels';
 
 /** Read-only view of who the person is and what they need / offer. */
-export function ProfileAbout({ user }: { user: User }) {
-  const { profile } = user;
+export function ProfileAbout({ user, profile }: { user: UserProfile; profile: ProfileDetails }) {
   const isVolunteer = user.role === 'VOLUNTEER';
 
   return (
@@ -44,7 +44,7 @@ export function ProfileAbout({ user }: { user: User }) {
             <Value
               text={profile.accessibilityNotes}
               empty={
-                user.hasSpecialNeeds
+                user.specialNeeds
                   ? 'Opisz, na co wolontariusz powinien zwrócić uwagę.'
                   : 'Brak szczególnych potrzeb.'
               }

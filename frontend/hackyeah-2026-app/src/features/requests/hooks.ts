@@ -2,19 +2,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   acceptOffer,
+  cancelRequest,
   createRequest,
+  getMyRequests,
   getNearbyRequests,
   getRequest,
   getRequestsAlongRoute,
   offerHelp,
+  rejectOffer,
 } from '@/api/requests';
-import type { AlongRouteQuery, NearbyQuery } from '@/api/types';
+import type { AlongRouteQuery, HelpRequestView, NearbyQuery } from '@/api/types';
 
 export const requestKeys = {
   all: ['requests'] as const,
   nearby: (query: NearbyQuery) => [...requestKeys.all, 'nearby', query] as const,
   alongRoute: (query: AlongRouteQuery) => [...requestKeys.all, 'along-route', query] as const,
-  detail: (id: string) => [...requestKeys.all, 'detail', id] as const,
+  mine: (userId: number) => [...requestKeys.all, 'mine', userId] as const,
+  detail: (id: number) => [...requestKeys.all, 'detail', id] as const,
 };
 
 export function useNearbyRequests(query: NearbyQuery) {
@@ -31,10 +35,19 @@ export function useRequestsAlongRoute(query: AlongRouteQuery) {
   });
 }
 
-export function useRequest(id: string) {
+export function useRequest(id: number) {
   return useQuery({
     queryKey: requestKeys.detail(id),
     queryFn: () => getRequest(id),
+    enabled: Number.isInteger(id),
+  });
+}
+
+/** `/mine` depends on the `X-User-Id`, so the key includes the user. */
+export function useMyRequests(userId: number) {
+  return useQuery({
+    queryKey: requestKeys.mine(userId),
+    queryFn: getMyRequests,
   });
 }
 
@@ -46,14 +59,22 @@ export function useCreateRequest() {
   });
 }
 
-/** Offer / accept change the status, so every request list and the task board are refreshed. */
-function useStatusMutation(mutationFn: (id: string) => Promise<unknown>) {
+/**
+ * Workflow actions return the request as the caller sees it afterwards: put it in the cache right
+ * away (no flicker), then refresh lists whose content depends on the status.
+ */
+function useWorkflowAction(mutationFn: (id: number) => Promise<HelpRequestView>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: requestKeys.all }),
+    onSuccess: (view) => {
+      queryClient.setQueryData(requestKeys.detail(view.id), view);
+      queryClient.invalidateQueries({ queryKey: requestKeys.all });
+    },
   });
 }
 
-export const useOfferHelp = () => useStatusMutation(offerHelp);
-export const useAcceptOffer = () => useStatusMutation(acceptOffer);
+export const useOfferHelp = () => useWorkflowAction(offerHelp);
+export const useAcceptOffer = () => useWorkflowAction(acceptOffer);
+export const useRejectOffer = () => useWorkflowAction(rejectOffer);
+export const useCancelRequest = () => useWorkflowAction(cancelRequest);

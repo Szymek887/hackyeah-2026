@@ -45,7 +45,9 @@ Docs: https://docs.expo.dev/eas/index.md
 Team rules live in `../start.md`. In short:
 
 - Screens in `src/app/` stay thin; screen logic and components go to `src/features/<area>/`.
-- Data access only through `src/api/*.ts` functions (mock/real switch via `EXPO_PUBLIC_USE_MOCKS`) and TanStack Query hooks in `src/features/*/hooks.ts`.
-- `src/api/types.ts` is the backend contract: GeoJSON with `[lng, lat]` (WGS84). List payloads never contain exact location or address.
+- Data access only through `src/api/*.ts` (one function per backend endpoint, calling `apiRequest`) and TanStack Query hooks in `src/features/*/hooks.ts`. Never call `fetch` or the mock server directly.
+- Mocks (`src/api/mocks/`) are a port of the backend (same JSON, rules and error codes). When backend rules change, update `mocks/server.ts` too.
+- `src/api/types.ts` mirrors the backend DTOs 1:1 (Java record named in each comment). Never add frontend-only fields there. Check `visibility` (FULL / PUBLIC) before reading address or people; use `viewerRole` for the user's part in a request.
+- Show API errors with `errorMessage(error)` from `src/api/errors.ts`.
 - Use `ThemedText`/`ThemedView`, `src/components/ui/*` and tokens from `src/constants/theme.ts`; no hard-coded colors.
 - Run `npm run check` before declaring a task done.

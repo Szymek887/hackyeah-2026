@@ -12,8 +12,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.Optional;
 
+import static org.hamcrest.Matchers.contains;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -29,6 +31,25 @@ class UserControllerTest {
 
     @MockitoBean
     private AppUserRepository userRepository;
+
+    @Test
+    void demoListsAccountsByRoleThenIdWithoutAuthentication() throws Exception {
+        given(userRepository.findAll()).willReturn(List.of(
+                user(13L, "Miasto Kraków", UserRole.CITY_ADMIN),
+                user(10L, "Ola D.", UserRole.VOLUNTEER),
+                user(2L, "Marek S.", UserRole.REQUESTER),
+                user(9L, "Kuba W.", UserRole.VOLUNTEER),
+                user(1L, "Anna K.", UserRole.REQUESTER)
+        ));
+
+        mockMvc.perform(get("/api/users/demo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id").value(contains(1, 2, 9, 10, 13)))
+                .andExpect(jsonPath("$[0].role").value("REQUESTER"))
+                .andExpect(jsonPath("$[2].displayName").value("Kuba W."))
+                .andExpect(jsonPath("$[4].role").value("CITY_ADMIN"))
+                .andExpect(jsonPath("$[0].cityPoints").value(0));
+    }
 
     @Test
     void returnsProfileOfUserFromHeader() throws Exception {
@@ -70,5 +91,11 @@ class UserControllerTest {
         mockMvc.perform(get("/api/users/me").header("X-User-Id", "999"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Unknown user 999"));
+    }
+
+    private static AppUser user(long id, String name, UserRole role) {
+        AppUser user = new AppUser(name, role, true, false, 50);
+        user.setId(id);
+        return user;
     }
 }

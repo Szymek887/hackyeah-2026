@@ -33,7 +33,6 @@ Każdy ekran ma na razie placeholder z nazwą właściciela i numerami zadań z 
 ## Pliki wspólne – zmieniaj po uzgodnieniu
 
 `src/app/_layout.tsx`, `src/components/app-tabs*.tsx`, `src/api/types.ts`, `src/constants/theme.ts`, `package.json`.
-<<<<<<< HEAD
 Napisz na czacie, zrób mały osobny commit i od razu go wypchnij.
 
 ## Git
@@ -45,26 +44,11 @@ Pracujemy bezpośrednio na `main` (bez osobnych gałęzi), więc:
 - Commity: `feat(map): ...`, `fix(qr): ...`, `chore: ...`.
 - Przed pushem: `npm run check` (typecheck + lint). `npm run format` formatuje wszystko.
 - Trzymaj się swoich plików (tabela wyżej) – wtedy rebase przechodzi bez konfliktów.
-=======
-Napisz na czacie, zrób mały osobny PR i zmerguj go szybko.
-
-## Git
-
-- Gałęzie: `fe/<obszar>-<opis>`, np. `fe/map-hexagons`, `fe/qr-scanner`.
-- Jeden PR = jedno zadanie z planu. Przed PR: `git pull --rebase origin main`.
-- Commity: `feat(map): ...`, `fix(qr): ...`, `chore: ...`.
-- Merge do `main` przez squash, po szybkim przejrzeniu przez drugą osobę.
-- Przed PR: `npm run check` (typecheck + lint). `npm run format` formatuje wszystko.
->>>>>>> 1b5235cc580f257b2128af3c0fb13aa711d7ae73
 
 ## Biblioteki
 
 - Instalacja zawsze przez `npx expo install <pakiet>` (dobiera wersję do SDK). Na Windows dev-zależności: `npx expo install <pakiet> "--" --dev`.
-<<<<<<< HEAD
 - `package.json` + `package-lock.json` commituj i wypychaj od razu w osobnym commicie.
-=======
-- `package.json` + `package-lock.json` commituj od razu w osobnym PR.
->>>>>>> 1b5235cc580f257b2128af3c0fb13aa711d7ae73
 - Konflikt w `package-lock.json`: nie rozwiązuj ręcznie – weź wersję z `main` i uruchom ponownie `npx expo install`.
 - Przed dodaniem natywnej biblioteki sprawdź, czy działa w Expo Go.
 - `react-native-maps` nie działa na webie – dashboard potrzebuje osobnej biblioteki w pliku `.web.tsx`.
@@ -72,12 +56,6 @@ Napisz na czacie, zrób mały osobny PR i zmerguj go szybko.
 ## Edytor
 
 Zainstaluj rozszerzenia polecane przez VS Code (Prettier, ESLint, Expo Tools). Formatowanie przy zapisie jest skonfigurowane w `.vscode/settings.json`, końce linii to LF (`.gitattributes`).
-
-## Do ustalenia z backendem
-
-- Lista statusów (`RATED` vs `CANCELLED`) – patrz `RequestStatus` w `src/api/types.ts`.
-- Format obszaru przybliżonego (okrąg czy heksagon H3).
-- Ścieżki endpointów (w `src/api/requests.ts` są tymczasowe) i adres API widoczny z telefonu (`EXPO_PUBLIC_API_URL`, IP komputera w sieci lokalnej).
 
 ## Znane problemy
 
@@ -92,10 +70,28 @@ Zainstaluj rozszerzenia polecane przez VS Code (Prettier, ESLint, Expo Tools). F
 
 Clean & casual: białe karty na jasnoniebieskim tle, niebieski akcent (`primary`), granatowy tekst, cienkie obramowania zamiast cieni, bez gradientów i rozmyć. Gotowe klocki w `src/components/ui/`: `Screen`, `Card`, `Button` (`primary` / `secondary` / `outline`), `Badge`, `Input`, `RatingStars`. Nagłówek ekranu: `<ThemedText type="title">`.
 
-## Logowanie (od teraz zamiast przełącznika ról)
+## Współpraca z backendem (kontrakt API)
 
-- Aplikacja startuje od ekranu `/login`. Konta demo odpowiadają seederowi backendu: 1 Anna K., 2 Marek S., 3 Ewa P. (potrzebujący), 4 Kuba W. (wolontariusz), 5 konto miasta.
-- Zalogowany użytkownik jest wysyłany do backendu w nagłówku `X-User-Id` (robi to `apiRequest`).
-- W kodzie: `useSession()` zwraca `{ user, role, signOut, updateProfile }`, `useAuth()` działa też bez zalogowania.
-- Przepływ zadania: OPEN → „Chcę pomóc” (OFFERED) → akceptacja zgłaszającego (ACCEPTED) → skan QR (COMPLETED) → ocena (RATED). Zakładka „Zadania” dzieli je na Oczekujące / W toku / Zakończone.
-- Animacje: gotowe ustawienia w `src/lib/motion.ts` (`enterItem(index)`, `layoutTransition`), `Screen` sam robi fade-in.
+- `src/api/types.ts` to **lustro DTO z backendu** (rekordy z `backend/.../api`). Nazwy pól i kształty 1:1, przy każdym typie podana klasa Javy. Nie dopisujemy tam pól „tylko dla frontu”.
+- Gdy backend zmieni DTO: najpierw `types.ts`, potem `npm run check` pokaże ekrany do poprawy.
+- Każdy endpoint to jedna funkcja w `src/api/*.ts` (`requests.ts`, `auth.ts`, `dashboard.ts`) wołająca `apiRequest`. Bez `if (USE_MOCKS)` w funkcjach.
+- **Mocki = mini-backend** (`src/api/mocks/`): `server.ts` odpowiada na te same ścieżki tym samym JSON-em i kodami błędów (400/401/403/404/409), `db.ts` to ten sam seeder co w Javie (te same konta i id), `classifier.ts` to port `KeywordRequestClassifier`. Zmiana reguły w backendzie = ta sama zmiana w `server.ts`.
+- Przełączenie na prawdziwy backend: w `.env.local` ustaw `EXPO_PUBLIC_USE_MOCKS=false` i `EXPO_PUBLIC_API_URL`. Ekrany się nie zmieniają.
+- Szczegóły zgłoszenia mają dwa warianty: sprawdzaj `isFull(view)` (`features/requests/view-helpers.ts`). Adres i osoby są tylko w `FULL`. Moją rolę w zgłoszeniu bierz z `view.viewerRole`, nie z roli konta.
+- Błędy pokazuj przez `errorMessage(error)` z `src/api/errors.ts` – tłumaczy komunikaty backendu na polski.
+- Id z backendu to liczby; parametry tras (`useLocalSearchParams`) zamieniaj `Number(id)` w pliku trasy.
+
+## Logowanie
+
+- Backend ma uwierzytelnianie testowe: użytkownik = nagłówek `X-User-Id` (dodaje go `apiRequest`). Ekran logowania ma dwie zakładki: „Mam konto” (lista rozwijana z `GET /api/users/demo`, nie wpisujemy ID na sztywno) i „Nowe konto” (`POST /api/users`). Logowanie sprawdza konto przez `GET /api/users/me`.
+- Konta z seedera: 1 Anna K., 2 Marek S., 3 Ewa P., 4 Zofia M., 5 Jan B., 6 Halina R., 7 Piotr N., 8 Maria T. (potrzebujący), 9 Kuba W., 10 Ola D., 11 Bartek L., 12 Nadia P. (wolontariusze), 13 Miasto Kraków.
+- `useSession()` zwraca `{ user: UserProfile, role, signOut, refreshUser, profileDetails }`. `profileDetails` (opis, potrzeby) jest tylko po stronie aplikacji – backend jeszcze tego nie przechowuje.
+- Przepływ: OPEN → „Chcę pomóc” (OFFERED) → przyjęcie lub odrzucenie przez zgłaszającego → ACCEPTED → skan QR (COMPLETED) → oceny obu stron (RATED). Zgłaszający może anulować do momentu ACCEPTED włącznie.
+
+## Do ustalenia z backendem
+
+(Gotowe po stronie backendu: CORS dla wersji webowej i `GET /api/users/demo`.)
+
+- **`POST /api/users`** (zakładanie konta z ekranu logowania) – opisane w `documentation/api-contract.md` §4.2 jako PROPOSED, działa w mockach. Na prawdziwym backendzie ekran pokaże „Serwer nie obsługuje jeszcze zakładania kont”.
+- **Ręczny kod QR** – token ma 43 znaki; do wpisywania ręcznego przydałby się krótki kod (np. 6 cyfr).
+- **Pola profilu** (opis, potrzeby, dostępność) i **geokodowanie adresu** (teraz każde nowe zgłoszenie dostaje środek Krakowa).

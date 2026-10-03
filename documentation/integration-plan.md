@@ -28,8 +28,8 @@ The frontend has a clean seam for integration: every call goes through `src/api/
 
 ### 2.1 Blockers (nothing works end-to-end without these)
 
-1. **User ids don't match.** `src/api/mocks/data.ts` hard-codes users 1–5 (`4 = Kuba W. VOLUNTEER`, `5 = Miasto Warszawa CITY_ADMIN`). The seeder creates 8 requesters first, so id 4 is *Zofia M. REQUESTER*, Kuba is **9**, the city admin ("Miasto Kraków") is **13**. Logging in as the "volunteer" in real mode gives a requester. Ids also depend on a fresh database (IDENTITY columns).
-2. **No CORS config.** Native (Expo Go) is fine, but the **web build** (`localhost:8081`, used for the dashboard and demos on a laptop) is blocked by the browser.
+1. **User ids don't match.** `src/api/mocks/data.ts` hard-codes users 1–5 (`4 = Kuba W. VOLUNTEER`, `5 = Miasto Warszawa CITY_ADMIN`). The seeder creates 8 requesters first, so id 4 is *Zofia M. REQUESTER*, Kuba is **9**, the city admin ("Miasto Kraków") is **13**. Logging in as the "volunteer" in real mode gives a requester. Ids also depend on a fresh database (IDENTITY columns). Backend side fixed: `GET /api/users/demo` is live (step 0.2) – the login screen still has to use it (step 0.3, FE1).
+2. ✅ ~~**No CORS config.**~~ Fixed (step 0.1). Native (Expo Go) was never affected; the **web build** (`localhost:8081`, dashboard, laptop demos) can now call the API.
 3. **Category enum mismatch.** Frontend: `BASIC_NEEDS | EQUIPMENT_LOAN | HOME_SUPPORT | SOCIAL`. Backend: `MEDICINE | GROCERIES | EQUIPMENT_LOAN | HOME_SUPPORT | SOCIAL`. Backend values are persisted and returned by classify/heatmap/summary, so the frontend must adopt them.
 4. **Status enum.** Frontend lacks `UNDER_REVIEW`. `StageByStatus: Record<RequestStatus, …>` will crash (`undefined` stage) when the backend returns it for a scam-flagged request in "my tasks".
 5. **Path prefix.** Frontend mixes `/api/requests/…` and `/api/help-requests/…`. Contract: everything under `/api/help-requests`, except `/api/requests/classify`.
@@ -77,8 +77,8 @@ Each step is a small PR. ⏱ = rough estimate. Steps within a phase can run in p
 
 | # | Task | Owner | Done when |
 |---|---|---|---|
-| 0.1 | CORS: `WebMvcConfigurer.addCorsMappings("/api/**")`, allowed origin patterns from env (default `http://localhost:*`, `http://192.168.*:*`), methods GET/POST, header `X-User-Id`, expose `Location` | Dev 2 | Expo web calls `/api/health` without CORS error |
-| 0.2 | `GET /api/users/demo` (contract §4.2) | Dev 2 | returns the seeded users |
+| 0.1 | ✅ CORS: `WebMvcConfigurer.addCorsMappings("/api/**")`, allowed origin patterns from env `CORS_ALLOWED_ORIGIN_PATTERNS` (default `http://localhost:*`, `http://127.0.0.1:*`, `http://192.168.*:*`, `http://10.*:*`, `http://172.*:*`), methods GET/POST, header `X-User-Id`, expose `Location` | Dev 2 | Expo web calls `/api/health` without CORS error |
+| 0.2 | ✅ `GET /api/users/demo` (contract §4.2) | Dev 2 | returns the seeded users |
 | 0.3 | Login screen loads demo accounts from 0.2 when mocks are off (keep mock list for mock mode) | FE1 | logging in as the volunteer in real mode gives `role: VOLUNTEER` |
 | 0.4 | Call `/api/health` on startup in real mode; show a banner/toast "Brak połączenia z serwerem" when it fails | FE1 | – |
 | 0.5 | Document local setup: `docker compose up`, `ollama pull qwen2.5:7b` (or `AI_ENABLED=false`), `./mvnw spring-boot:run`, `.env.local` values per device type. Fix conflict markers in `start.md` | FE1 + Dev 1 | a new person runs both sides in 10 minutes |

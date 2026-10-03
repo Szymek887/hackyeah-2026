@@ -1,16 +1,17 @@
 import type { Category, Priority, RequestStatus, UserRole } from '@/api/types';
 
 export const CategoryLabels: Record<Category, string> = {
-  BASIC_NEEDS: 'Leki i zakupy',
+  MEDICINE: 'Leki',
+  GROCERIES: 'Zakupy',
   EQUIPMENT_LOAN: 'Pożyczenie sprzętu',
-  HOME_SUPPORT: 'Pomoc domowa',
+  HOME_SUPPORT: 'Pomoc w domu',
   SOCIAL: 'Towarzystwo',
 };
 
 export const PriorityLabels: Record<Priority, string> = {
   1: 'Pilne',
-  2: 'Średni priorytet',
-  3: 'Niski priorytet',
+  2: 'Ważne',
+  3: 'Zwykłe',
 };
 
 export const StatusLabels: Record<RequestStatus, string> = {
@@ -20,6 +21,7 @@ export const StatusLabels: Record<RequestStatus, string> = {
   COMPLETED: 'Zrealizowane',
   RATED: 'Ocenione',
   CANCELLED: 'Anulowane',
+  UNDER_REVIEW: 'W weryfikacji',
 };
 
 /** "5 min temu", "2 godz. temu", "3 dni temu". */

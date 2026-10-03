@@ -24,6 +24,7 @@ See [How to change this contract](#how-to-change-this-contract) at the bottom be
 - Base URL: `EXPO_PUBLIC_API_URL` (default `http://localhost:8080`). All paths start with `/api`.
 - JSON only: `Content-Type: application/json`, `Accept: application/json`.
 - Help-request endpoints live under **`/api/help-requests`**. The only exception is the AI preview `POST /api/requests/classify` (kept for compatibility).
+- **CORS** (browser clients only – Expo web, dashboard; native apps are not affected): `/api/**` allows origins matching `CORS_ALLOWED_ORIGIN_PATTERNS` (default `http://localhost:*`, `http://127.0.0.1:*`, `http://192.168.*:*`, `http://10.*:*`, `http://172.*:*`), methods `GET`/`POST`, request headers `Content-Type`, `Accept`, `X-User-Id`; `Location` is exposed. No credentials (no cookies). Error responses carry the CORS headers too, so the browser can read `ProblemDetail`. Other origins get **403** on preflight.
 
 ### 1.2 Authentication (mock)
 
@@ -256,9 +257,24 @@ type PublicHelpRequestDetailsResponse = {
 #### `GET /api/users/me` — ✅ `LIVE`
 Auth required. → `200 UserProfileResponse`. 401 for unknown id.
 
-#### `GET /api/users/demo` — 🔵 `PROPOSED`
+#### `GET /api/users/demo` — ✅ `LIVE`
 Public. Accounts for the login screen (replaces the hard-coded list whose ids do not match the seeder).
-→ `200 UserProfileResponse[]`, ordered: requesters, volunteers, city admin.
+→ `200 UserProfileResponse[]`, ordered: requesters, volunteers, city admin; by `id` within a role.
+Ids come from the database (IDENTITY), so the client must use this list instead of hard-coded ids. On a fresh database with the current seeder: Anna K. = 1, Kuba W. (volunteer) = 9, Miasto Kraków (city admin) = 13.
+
+#### `POST /api/users` — 🔵 `PROPOSED` (frontend: login screen „Nowe konto”, already in mocks)
+Public. Creates a new account for the mock login; the client then sends its id as `X-User-Id`.
+
+Request (`CreateUserRequest`):
+```json
+{ "displayName": "Tomek Z.", "role": "VOLUNTEER", "specialNeeds": false }
+```
+- `displayName` – required, trimmed, 1–60 chars.
+- `role` – `REQUESTER` or `VOLUNTEER` (`CITY_ADMIN` → 400).
+- `specialNeeds` – optional, default `false`; stored only for `REQUESTER` (ignored for volunteers).
+
+→ `201 UserProfileResponse` (+ `Location: /api/users/{id}`), with `identityVerified = false`, `trustScore = 50`, no ratings, 0 city points. The new account appears in `GET /api/users/demo`.
+400 `Request validation failed` with `errors.displayName` / `errors.role`.
 
 #### `POST /api/users/me/verify` — 🔵 `PROPOSED` (optional, low priority)
 Auth required. Mock mObywatel: sets `identityVerified = true`. No body. → `200 UserProfileResponse`.
@@ -530,5 +546,7 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-03 | Proposed `POST /api/users` (create account from the login screen, §4.2). | FE1 |
+| 2026-10-03 | Integration phase 0: `GET /api/users/demo` live; CORS for browser clients on `/api/**` (§1.1). | Dev 2 |
 | 2026-10-03 | Stage 3 live: offer / accept / reject / cancel, `GET /mine`, QR (`/qr`, `/complete`), ratings. `viewerRole` on request views; `ratingAverage` on `UserSummary` and profile; `cityPoints` on profile. Decided: QR TTL 24 h with automatic reissue, stored city points (4★ = 20, 5★ = 25), requester may cancel `UNDER_REVIEW`. | – |
 | 2026-10-03 | Initial contract: documents live endpoints, proposes stage-3 endpoints, `viewerRole`, `requesterTrust`, list `tags`/`accessibilitySupport`, `GET /users/demo`. | – |

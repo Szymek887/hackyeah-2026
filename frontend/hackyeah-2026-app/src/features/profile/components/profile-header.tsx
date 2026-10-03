@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import type { User } from '@/api/types';
+import type { UserProfile } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -17,7 +17,7 @@ const initials = (name: string) =>
     .slice(0, 2)
     .toUpperCase();
 
-export function ProfileHeader({ user }: { user: User }) {
+export function ProfileHeader({ user }: { user: UserProfile }) {
   const theme = useTheme();
 
   return (
@@ -30,12 +30,12 @@ export function ProfileHeader({ user }: { user: User }) {
 
       <View style={styles.info}>
         <ThemedText type="subtitle">{user.displayName}</ThemedText>
-        {user.role !== 'CITY_ADMIN' && (
+        {user.role !== 'CITY_ADMIN' && user.ratingAverage !== null && (
           <RatingStars value={user.ratingAverage} count={user.ratingCount} />
         )}
         <View style={styles.badges}>
           <Badge label={RoleLabels[user.role]} />
-          {user.verified ? (
+          {user.identityVerified ? (
             <Badge
               dot
               label="Zweryfikowany"

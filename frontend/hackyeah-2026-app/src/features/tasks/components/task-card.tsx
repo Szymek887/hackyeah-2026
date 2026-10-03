@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { HelpRequestDetails, UserRole } from '@/api/types';
+import type { HelpRequestView, RequestStatus } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,23 +9,42 @@ import { Card } from '@/components/ui/card';
 import { Radius, Spacing } from '@/constants/theme';
 import { CategoryBadge } from '@/features/requests/components/request-badges';
 import { StatusLabels, timeAgo } from '@/features/requests/labels';
-import { STAGES, StageByStatus, StageLabels } from '@/features/tasks/hooks';
+import { isFull } from '@/features/requests/view-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
-type TaskCardProps = {
-  task: HelpRequestDetails;
-  role: UserRole;
+type Step = 'waiting' | 'inProgress' | 'done';
+
+const STEPS: Step[] = ['waiting', 'inProgress', 'done'];
+
+const StepLabels: Record<Step, string> = {
+  waiting: 'Oczekuje',
+  inProgress: 'W toku',
+  done: 'Zakończone',
 };
 
-export function TaskCard({ task, role }: TaskCardProps) {
+const StepByStatus: Record<RequestStatus, Step> = {
+  OPEN: 'waiting',
+  OFFERED: 'waiting',
+  UNDER_REVIEW: 'waiting',
+  ACCEPTED: 'inProgress',
+  COMPLETED: 'done',
+  RATED: 'done',
+  CANCELLED: 'done',
+};
+
+type TaskCardProps = {
+  task: HelpRequestView;
+};
+
+export function TaskCard({ task }: TaskCardProps) {
   const theme = useTheme();
-  const isVolunteer = role === 'VOLUNTEER';
-  const stage = StageByStatus[task.status];
-  const otherPerson = isVolunteer ? task.requester : task.volunteer;
+  // viewerRole comes from the backend: my part in this request, not my account role.
+  const isVolunteer = task.viewerRole === 'VOLUNTEER';
+  const step = StepByStatus[task.status];
 
   const openDetails = () =>
     router.push(
-      stage === 'pending'
+      step === 'waiting'
         ? { pathname: '/request/[id]', params: { id: task.id } }
         : { pathname: '/task/[id]', params: { id: task.id } },
     );
@@ -50,11 +69,11 @@ export function TaskCard({ task, role }: TaskCardProps) {
             <View style={styles.statusRow}>
               <Badge
                 label={StatusLabels[task.status]}
-                color={stage === 'done' ? theme.success : theme.primary}
-                backgroundColor={stage === 'done' ? theme.successSoft : theme.primarySoft}
+                color={step === 'done' ? theme.success : theme.primary}
+                backgroundColor={step === 'done' ? theme.successSoft : theme.primarySoft}
               />
               <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                {statusHint(task, isVolunteer, otherPerson?.displayName)}
+                {statusHint(task, isVolunteer)}
               </ThemedText>
             </View>
 
@@ -66,28 +85,31 @@ export function TaskCard({ task, role }: TaskCardProps) {
   );
 }
 
-function statusHint(task: HelpRequestDetails, isVolunteer: boolean, otherName?: string) {
+function statusHint(task: HelpRequestView, isVolunteer: boolean) {
+  // Names are only in the FULL view (requester always, volunteer after acceptance).
+  const requester = isFull(task) ? task.requester.displayName : 'osoba potrzebująca';
+  const volunteer = (isFull(task) && task.volunteer?.displayName) || 'Wolontariusz';
   switch (task.status) {
     case 'OPEN':
       return 'Czeka na wolontariusza';
     case 'OFFERED':
       return isVolunteer
-        ? `Czekasz na akceptację: ${task.requester.displayName}`
-        : `${otherName ?? 'Wolontariusz'} chce pomóc – zaakceptuj`;
+        ? 'Czekasz, aż osoba potrzebująca przyjmie Twoją pomoc'
+        : `${volunteer} chce pomóc – zaakceptuj`;
     case 'ACCEPTED':
-      return isVolunteer
-        ? `Pomagasz: ${task.requester.displayName}`
-        : `Pomaga Ci: ${otherName ?? 'wolontariusz'}`;
+      return isVolunteer ? `Pomagasz: ${requester}` : `Pomaga Ci: ${volunteer}`;
     case 'COMPLETED':
       return 'Potwierdzone kodem QR – czeka na ocenę';
     case 'RATED':
       return 'Zakończone i ocenione';
     case 'CANCELLED':
       return 'Zgłoszenie anulowane';
+    case 'UNDER_REVIEW':
+      return 'Sprawdzamy zgłoszenie, zanim zobaczą je inni';
   }
 }
 
-function TaskAction({ task, isVolunteer }: { task: HelpRequestDetails; isVolunteer: boolean }) {
+function TaskAction({ task, isVolunteer }: { task: HelpRequestView; isVolunteer: boolean }) {
   if (task.status === 'ACCEPTED') {
     return isVolunteer ? (
       <Button
@@ -113,15 +135,15 @@ function TaskAction({ task, isVolunteer }: { task: HelpRequestDetails; isVolunte
   return null;
 }
 
-/** Three-step bar: Oczekujące → W toku → Zakończone. */
-function StageProgress({ status }: { status: HelpRequestDetails['status'] }) {
+/** Three-step bar: Oczekuje → W toku → Zakończone. */
+function StageProgress({ status }: { status: RequestStatus }) {
   const theme = useTheme();
-  const current = STAGES.indexOf(StageByStatus[status]);
+  const current = STEPS.indexOf(StepByStatus[status]);
 
   return (
-    <View style={styles.progress} accessibilityLabel={`Etap: ${StageLabels[STAGES[current]]}`}>
-      {STAGES.map((stage, index) => (
-        <View key={stage} style={styles.step}>
+    <View style={styles.progress} accessibilityLabel={`Etap: ${StepLabels[STEPS[current]]}`}>
+      {STEPS.map((step, index) => (
+        <View key={step} style={styles.step}>
           <View
             style={[
               styles.bar,
@@ -129,7 +151,7 @@ function StageProgress({ status }: { status: HelpRequestDetails['status'] }) {
             ]}
           />
           <ThemedText type="caption" themeColor={index === current ? 'primary' : 'textSecondary'}>
-            {StageLabels[stage]}
+            {StepLabels[step]}
           </ThemedText>
         </View>
       ))}

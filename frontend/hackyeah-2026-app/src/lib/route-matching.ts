@@ -1,4 +1,4 @@
-import type { HelpRequestPublic, LngLat } from '@/api/types';
+import type { HelpRequestListItem, LngLat } from '@/api/types';
 import { distanceMeters } from '@/lib/geo';
 
 export type RouteCoordinate = {
@@ -50,11 +50,12 @@ export function distanceToRouteMeters(point: LngLat, route: RouteCoordinate[]) {
 }
 
 export function filterRequestsAlongRoute(
-  requests: HelpRequestPublic[],
+  requests: HelpRequestListItem[],
   route: RouteCoordinate[],
   bufferMeters: number,
 ) {
   return requests.filter(
-    (request) => distanceToRouteMeters(request.area.center.coordinates, route) <= bufferMeters,
+    (request) =>
+      distanceToRouteMeters(request.approximateLocation.coordinates, route) <= bufferMeters,
   );
 }

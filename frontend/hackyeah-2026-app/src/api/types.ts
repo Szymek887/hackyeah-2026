@@ -1,79 +1,70 @@
 /**
- * API contract shared by the whole frontend team.
- * Changes here affect everyone: announce them on the team chat and ship them in a small, separate PR.
- * Shapes follow documentation/plan.md; confirm them with the backend team before integration.
+ * API contract – a 1:1 mirror of the backend DTOs (backend/hackyeah-2026-backend, package `api`).
+ *
+ * Rules for the whole frontend team:
+ * - Field names and shapes here MUST match the Java records named in the comments. When the backend
+ *   changes a DTO, change it here first, then fix the screens (`npm run check` shows where).
+ * - Do not add frontend-only fields to these types. Screen-only data lives next to the screen.
+ * - Mocks (src/api/mocks) return exactly these shapes, so switching EXPO_PUBLIC_USE_MOCKS changes nothing
+ *   in the UI.
  */
 
-// ---------- Geo (GeoJSON, WGS84 / SRID 4326, coordinates are [lng, lat]) ----------
+// ---------- Geo (GeoJSON, WGS84, coordinates are [lng, lat]) ----------
 
 export type LngLat = [lng: number, lat: number];
 
+/** `GeoJsonPoint` */
 export type GeoPoint = {
   type: 'Point';
   coordinates: LngLat;
 };
 
-export type GeoLineString = {
-  type: 'LineString';
-  coordinates: LngLat[];
-};
-
+/** `GeoJsonPolygon` */
 export type GeoPolygon = {
   type: 'Polygon';
   coordinates: LngLat[][];
 };
 
+/** Frontend helper for routes; sent to the backend as `RouteSearchRequest.points`. */
+export type GeoLineString = {
+  type: 'LineString';
+  coordinates: LngLat[];
+};
+
 // ---------- Enums ----------
 
-export type Category = 'BASIC_NEEDS' | 'EQUIPMENT_LOAN' | 'HOME_SUPPORT' | 'SOCIAL';
+/** `HelpCategory` */
+export type Category = 'MEDICINE' | 'GROCERIES' | 'EQUIPMENT_LOAN' | 'HOME_SUPPORT' | 'SOCIAL';
 
-/** 1 = critical, 2 = medium, 3 = low. */
+/** 1 = critical, 2 = high, 3 = normal. */
 export type Priority = 1 | 2 | 3;
 
 /**
- * TODO(backend): plan.md lists both RATED (section 1) and CANCELLED (B3.1), confirm the final list.
- * Flow: OPEN -> OFFERED -> ACCEPTED (address revealed) -> COMPLETED (QR scanned) -> RATED.
+ * `HelpRequestStatus`
+ * OPEN -offer-> OFFERED -accept-> ACCEPTED -complete (QR)-> COMPLETED -both rated-> RATED.
+ * OFFERED -reject-> OPEN. CANCELLED by the requester. UNDER_REVIEW = suspected scam, visible only
+ * to the requester.
  */
-export type RequestStatus = 'OPEN' | 'OFFERED' | 'ACCEPTED' | 'COMPLETED' | 'RATED' | 'CANCELLED';
+export type RequestStatus =
+  'OPEN' | 'OFFERED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED' | 'RATED' | 'UNDER_REVIEW';
 
-/** Matches backend `UserRole`. CITY_ADMIN only uses the city dashboard. */
+/** `UserRole` */
 export type UserRole = 'REQUESTER' | 'VOLUNTEER' | 'CITY_ADMIN';
+
+/** `RiskFlag` */
+export type RiskFlag =
+  'SCAM_SUSPECTED' | 'MEDICAL_EMERGENCY' | 'PERSONAL_DATA' | 'INAPPROPRIATE_CONTENT';
+
+/** `ClassificationSource`: LLM = model answered, FALLBACK = keyword rules. */
+export type ClassificationSource = 'LLM' | 'FALLBACK';
+
+/** `HelpRequestView.ViewerRole` – the caller's part in a request. */
+export type ViewerRole = 'REQUESTER' | 'VOLUNTEER' | 'NONE';
 
 // ---------- Users ----------
 
-/** Safe-to-show user data. Never contains surname or address. */
-export type UserPublic = {
-  id: string;
-  displayName: string;
-  verified: boolean;
-  trustScore: number;
-  ratingAverage: number;
-  ratingCount: number;
-};
-
-/**
- * Self-described profile shown on the profile screen.
- * TODO(backend): not in `UserProfileResponse` yet, kept on the client until the backend adds it.
- */
-export type UserProfileDetails = {
-  about: string;
-  district: string;
-  availability: string;
-  /** Requester: what they usually need help with. Volunteer: what they can help with. */
-  helpTopics: Category[];
-  /** Accessibility / special needs details, visible only to the assigned volunteer. */
-  accessibilityNotes: string;
-};
-
-export type User = UserPublic & {
-  role: UserRole;
-  hasSpecialNeeds: boolean;
-  cityPoints: number;
-  profile: UserProfileDetails;
-};
-
-/** `GET /api/users/me` response (backend `UserProfileResponse`). */
-export type BackendUserProfile = {
+/** `UserProfileResponse` – `GET /api/users/me`. */
+export type UserProfile = {
   id: number;
   displayName: string;
   role: UserRole;
@@ -81,88 +72,131 @@ export type BackendUserProfile = {
   specialNeeds: boolean;
   trustScore: number;
   ratingCount: number;
+  /** null until the user is rated. */
+  ratingAverage: number | null;
+  cityPoints: number;
+};
+
+/** `UserSummary` – the other side of a request. */
+export type UserSummary = {
+  id: number;
+  displayName: string;
+  trustScore: number;
+  identityVerified: boolean;
+  ratingAverage: number | null;
+  ratingCount: number;
+};
+
+/**
+ * `CreateUserRequest` – `POST /api/users` (🔵 PROPOSED in documentation/api-contract.md §4.2).
+ * City admin accounts cannot be created from the app.
+ */
+export type CreateUserDto = {
+  displayName: string;
+  role: Exclude<UserRole, 'CITY_ADMIN'>;
+  /** Only meaningful for requesters (raises request priority, see PriorityPolicy). */
+  specialNeeds: boolean;
 };
 
 // ---------- Help requests ----------
 
-/**
- * Approximate area shown on the public map.
- * TODO(backend): circle vs hexagon (H3), confirm the format.
- */
-export type ApproximateArea = {
-  center: GeoPoint;
-  radiusMeters: number;
-  polygon?: GeoPolygon;
-};
-
-/** Backend `RiskFlag`. */
-export type RiskFlag =
-  'SCAM_SUSPECTED' | 'MEDICAL_EMERGENCY' | 'PERSONAL_DATA' | 'INAPPROPRIATE_CONTENT';
-
-/** `POST /api/requests/classify` response (backend `RequestClassification`). */
-export type AiClassification = {
-  category: Category;
-  priority: Priority;
-  tags: string[];
-  riskFlags: RiskFlag[];
-  /** LLM = model answered, FALLBACK = keyword rules (model unavailable). */
-  source: 'LLM' | 'FALLBACK';
-};
-
-/** Item returned by list / map endpoints. Must never contain the exact location. */
-export type HelpRequestPublic = {
-  id: string;
+/** `PublicHelpRequestResponse` – items of `/nearby` and `/along-route`. Never exact location. */
+export type HelpRequestListItem = {
+  id: number;
   title: string;
   category: Category;
   priority: Priority;
   status: RequestStatus;
-  tags: string[];
-  accessibilitySupport: boolean;
-  area: ApproximateArea;
-  requester: UserPublic;
+  approximateLocation: GeoPoint;
+  maskedArea: GeoPolygon;
   createdAt: string;
 };
 
-export type Address = {
-  street: string;
-  building: string;
-  apartment?: string;
-  city: string;
-};
-
-/** Single request. `exactLocation` and `address` are present only for the assigned volunteer after ACCEPTED. */
-export type HelpRequestDetails = HelpRequestPublic & {
-  description: string;
-  volunteer?: UserPublic;
-  exactLocation?: GeoPoint;
-  address?: Address;
-};
-
-// ---------- Requests payloads / queries ----------
-
-export type CreateHelpRequestDto = {
+/**
+ * `FullHelpRequestResponse` – the requester, or the assigned volunteer from ACCEPTED on.
+ * Discriminated by `visibility`.
+ */
+export type HelpRequestFull = {
+  visibility: 'FULL';
+  id: number;
   title: string;
   description: string;
   category: Category;
-  accessibilitySupport: boolean;
+  priority: Priority;
+  aiPriority: number | null;
+  status: RequestStatus;
+  tags: string[];
+  riskFlags: RiskFlag[];
+  classificationSource: ClassificationSource | null;
   location: GeoPoint;
-  address: Address;
-  /** Accepted AI suggestion, the backend re-classifies anyway. */
-  priority?: Priority;
-  tags?: string[];
+  street: string;
+  buildingNumber: string;
+  apartmentNumber: string | null;
+  requester: UserSummary;
+  volunteer: UserSummary | null;
+  createdAt: string;
+  updatedAt: string;
+  viewerRole: ViewerRole;
 };
 
+/**
+ * `PublicHelpRequestDetailsResponse` – everyone else. No address, no requester identity.
+ * `description` is null when the AI found personal data (the title is then a generic one).
+ */
+export type HelpRequestPublic = {
+  visibility: 'PUBLIC';
+  id: number;
+  title: string;
+  description: string | null;
+  category: Category;
+  priority: Priority;
+  status: RequestStatus;
+  tags: string[];
+  approximateLocation: GeoPoint;
+  maskedArea: GeoPolygon;
+  createdAt: string;
+  viewerRole: ViewerRole;
+};
+
+/** `HelpRequestView` – `GET /{id}`, `/mine` and every workflow action. Check `visibility`. */
+export type HelpRequestView = HelpRequestFull | HelpRequestPublic;
+
+// ---------- Payloads ----------
+
+/** `CreateHelpRequestRequest` – category, priority and tags are set by the backend AI. */
+export type CreateHelpRequestDto = {
+  title: string;
+  description: string;
+  lat: number;
+  lng: number;
+  street: string;
+  buildingNumber: string;
+  apartmentNumber?: string;
+};
+
+/** `ClassificationInput` */
 export type ClassifyRequestDto = {
   title: string;
   description: string;
 };
 
+/** `RequestClassification` – `POST /api/requests/classify` (preview, nothing is saved). */
+export type AiClassification = {
+  category: Category;
+  priority: Priority;
+  tags: string[];
+  riskFlags: RiskFlag[];
+  source: ClassificationSource;
+};
+
+/** Query of `GET /nearby`. */
 export type NearbyQuery = {
   lat: number;
   lng: number;
   radiusKm: number;
 };
 
+/** Frontend form of `RouteSearchRequest` (converted to `{ points: {lat,lng}[], bufferMeters }`). */
 export type AlongRouteQuery = {
   route: GeoLineString;
   bufferMeters: number;
@@ -170,32 +204,75 @@ export type AlongRouteQuery = {
 
 // ---------- Handoff (QR) & rating ----------
 
+/** `HandoffTokenResponse` – the QR code encodes `token` as is. */
 export type HandoffToken = {
-  requestId: string;
+  requestId: number;
   token: string;
   expiresAt: string;
 };
 
+/** `CreateRatingRequest` */
 export type RatingDto = {
-  requestId: string;
   stars: 1 | 2 | 3 | 4 | 5;
   comment?: string;
 };
 
-// ---------- City dashboard ----------
+/** `RatingResponse` */
+export type RatingResult = {
+  /** RATED once both sides rated, COMPLETED before that. */
+  requestStatus: RequestStatus;
+  ratedUser: UserSummary;
+  cityPointsAwarded: number;
+};
 
-export type HeatmapPoint = {
-  lat: number;
-  lng: number;
-  weight: number;
-  category: Category;
+// ---------- City analytics ----------
+
+/** `HeatmapResponse` – GeoJSON FeatureCollection, one point per non-empty hexagon. */
+export type HeatmapResponse = {
+  type: 'FeatureCollection';
+  cellSizeMeters: number;
+  totalRequests: number;
+  features: {
+    type: 'Feature';
+    geometry: GeoPoint;
+    properties: {
+      count: number;
+      /** priority 1 counts 3, priority 2 counts 2, priority 3 counts 1 */
+      weight: number;
+      byCategory: Record<Category, number>;
+      area: GeoPolygon;
+    };
+  }[];
+};
+
+/** `SummaryResponse` – every map contains all keys. */
+export type AnalyticsSummary = {
+  total: number;
+  open: number;
+  inProgress: number;
+  fulfilled: number;
+  cancelled: number;
+  fulfillmentRate: number;
+  /** UNDER_REVIEW is never included. */
+  byStatus: Record<Exclude<RequestStatus, 'UNDER_REVIEW'>, number>;
+  byCategory: Record<Category, number>;
+  byPriority: Record<'1' | '2' | '3', number>;
+};
+
+/** Query of the analytics endpoints. */
+export type AnalyticsQuery = {
+  category?: Category;
+  from?: string;
+  to?: string;
 };
 
 // ---------- Errors ----------
 
-/** 400 invalid coordinates, 404 request not found, 409 request already taken. */
-export type ApiErrorBody = {
+/** RFC 9457 ProblemDetail from `GlobalExceptionHandler`. */
+export type ProblemDetail = {
   status: number;
-  message: string;
-  code?: string;
+  title?: string;
+  detail?: string;
+  /** Field errors on 400 "Request validation failed". */
+  errors?: Record<string, string>;
 };

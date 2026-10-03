@@ -57,9 +57,10 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-/** Category accent colors (pins, badges). `soft` is a background tint for badges. */
+/** Category accent colors (pins, badges), keys = backend `HelpCategory`. `soft` is a badge background. */
 export const CategoryColors = {
-  BASIC_NEEDS: { color: '#D9534F', soft: '#FCECEB' },
+  MEDICINE: { color: '#D9534F', soft: '#FCECEB' },
+  GROCERIES: { color: '#2E8B57', soft: '#E7F5EC' },
   EQUIPMENT_LOAN: { color: '#D9822B', soft: '#FDF1E4' },
   HOME_SUPPORT: { color: '#1A73D1', soft: '#E6F1FD' },
   SOCIAL: { color: '#7B5CC4', soft: '#F0EBFA' },

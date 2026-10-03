@@ -1,46 +1,41 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { ApiError, errorMessage } from '@/api/errors';
 import { classifyRequest } from '@/api/requests';
-import type { AiClassification, Category } from '@/api/types';
+import type { AiClassification } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
-import { useSession } from '@/features/auth/session-context';
 import { PriorityBadge } from '@/features/requests/components/request-badges';
 import { useCreateRequest } from '@/features/requests/hooks';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
-import { DEFAULT_CENTER, point } from '@/lib/geo';
+import { DEFAULT_CENTER } from '@/lib/geo';
 import { enterItem, layoutTransition } from '@/lib/motion';
 
-const CATEGORIES = Object.keys(CategoryLabels) as Category[];
 const TITLE_MAX = 120;
-const DESCRIPTION_MAX = 2000;
+/** Limits of backend `CreateHelpRequestRequest`. */
+const DESCRIPTION_MAX = 1000;
 
-type Errors = Partial<Record<'title' | 'description' | 'category' | 'street' | 'building', string>>;
+type Errors = Partial<Record<'title' | 'description' | 'street' | 'buildingNumber', string>>;
 
 /** F2.2 – new help request form with AI classification preview. */
 export function NewRequestScreen() {
   const theme = useTheme();
-  const { user } = useSession();
   const createMutation = useCreateRequest();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<Category | null>(null);
   const [street, setStreet] = useState('');
   const [building, setBuilding] = useState('');
   const [apartment, setApartment] = useState('');
-  const [city, setCity] = useState('Kraków');
-  const [accessibilitySupport, setAccessibilitySupport] = useState(user.hasSpecialNeeds);
   const [errors, setErrors] = useState<Errors>({});
 
   const [classification, setClassification] = useState<AiClassification | null>(null);
@@ -58,9 +53,8 @@ export function NewRequestScreen() {
         description: description.trim(),
       });
       setClassification(result);
-      setCategory((current) => current ?? result.category);
     } catch (err) {
-      setClassifyError(err instanceof Error ? err.message : 'Nie udało się przeanalizować opisu.');
+      setClassifyError(errorMessage(err));
     } finally {
       setClassifying(false);
     }
@@ -69,7 +63,6 @@ export function NewRequestScreen() {
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setCategory(null);
     setStreet('');
     setBuilding('');
     setApartment('');
@@ -82,33 +75,35 @@ export function NewRequestScreen() {
     if (title.trim().length < 3) next.title = 'Podaj krótki tytuł (min. 3 znaki).';
     if (description.trim().length < 10)
       next.description = 'Opisz, czego potrzebujesz (min. 10 znaków).';
-    if (!category) next.category = 'Wybierz kategorię.';
     if (!street.trim()) next.street = 'Podaj ulicę.';
-    if (!building.trim()) next.building = 'Podaj numer.';
+    if (!building.trim()) next.buildingNumber = 'Podaj numer.';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async () => {
-    if (!validate() || !category) return;
-    await createMutation.mutateAsync({
-      title: title.trim(),
-      description: description.trim(),
-      category,
-      accessibilitySupport,
-      // TODO(geocoding): convert the address to coordinates; city center until then.
-      location: point(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
-      address: {
+    if (!validate()) return;
+    try {
+      // Category, priority and tags are decided by the backend AI from title + description.
+      await createMutation.mutateAsync({
+        title: title.trim(),
+        description: description.trim(),
+        // TODO(geocoding): convert the address to coordinates; city center until then.
+        lat: DEFAULT_CENTER.lat,
+        lng: DEFAULT_CENTER.lng,
         street: street.trim(),
-        building: building.trim(),
-        apartment: apartment.trim() || undefined,
-        city: city.trim() || 'Kraków',
-      },
-      priority: classification?.priority,
-      tags: classification?.tags,
-    });
+        buildingNumber: building.trim(),
+        apartmentNumber: apartment.trim() || undefined,
+      });
+    } catch (err) {
+      // 400 "Request validation failed" carries per-field messages.
+      if (err instanceof ApiError && err.fieldErrors) {
+        setErrors((current) => ({ ...current, ...err.fieldErrors }));
+      }
+      return;
+    }
     resetForm();
-    router.push({ pathname: '/tasks', params: { stage: 'pending' } });
+    router.push({ pathname: '/tasks', params: { tab: 'active' } });
   };
 
   const flags = classification?.riskFlags ?? [];
@@ -171,8 +166,8 @@ export function NewRequestScreen() {
               </View>
               <ThemedText type="caption" themeColor="textSecondary">
                 {classification.source === 'LLM'
-                  ? 'Ocena modelu AI – możesz ją zmienić poniżej.'
-                  : 'Ocena na podstawie słów kluczowych – możesz ją zmienić poniżej.'}
+                  ? 'Tak zgłoszenie zostanie oznaczone po wysłaniu (ocena modelu AI).'
+                  : 'Tak zgłoszenie zostanie oznaczone po wysłaniu (ocena na podstawie słów kluczowych).'}
               </ThemedText>
             </Card>
           </Animated.View>
@@ -207,21 +202,7 @@ export function NewRequestScreen() {
         )}
       </Section>
 
-      <Section title="2. Kategoria" error={errors.category}>
-        <View style={styles.row}>
-          {CATEGORIES.map((value) => (
-            <Chip
-              key={value}
-              label={CategoryLabels[value]}
-              selected={category === value}
-              hint={classification?.category === value ? 'AI' : undefined}
-              onPress={() => setCategory(value)}
-            />
-          ))}
-        </View>
-      </Section>
-
-      <Section title="3. Adres">
+      <Section title="2. Adres">
         <ThemedText type="small" themeColor="textSecondary">
           Dokładny adres zobaczy wyłącznie wolontariusz, którego pomoc zaakceptujesz.
         </ThemedText>
@@ -238,36 +219,17 @@ export function NewRequestScreen() {
               label="Numer domu"
               value={building}
               onChangeText={setBuilding}
-              error={errors.building}
+              error={errors.buildingNumber}
             />
           </View>
           <View style={styles.flex}>
             <Input label="Mieszkanie (opcjonalnie)" value={apartment} onChangeText={setApartment} />
           </View>
         </View>
-        <Input label="Miasto" value={city} onChangeText={setCity} />
-      </Section>
-
-      <Section title="4. Dodatkowe informacje">
-        <View style={styles.switchRow}>
-          <View style={styles.flex}>
-            <ThemedText type="defaultBold">Potrzebuję wsparcia w dostępności</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Np. trudności z poruszaniem się, słabszy wzrok lub słuch.
-            </ThemedText>
-          </View>
-          <Switch
-            value={accessibilitySupport}
-            onValueChange={setAccessibilitySupport}
-            trackColor={{ true: theme.primary, false: theme.border }}
-            thumbColor={theme.backgroundElement}
-            accessibilityLabel="Potrzebuję wsparcia w dostępności"
-          />
-        </View>
       </Section>
 
       {createMutation.error && (
-        <ThemedText themeColor="danger">{createMutation.error.message}</ThemedText>
+        <ThemedText themeColor="danger">{errorMessage(createMutation.error)}</ThemedText>
       )}
 
       <Button

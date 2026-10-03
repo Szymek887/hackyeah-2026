@@ -5,5 +5,5 @@ import { ActiveTaskView } from '@/features/handoff/active-task-view';
 export default function ActiveTaskScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  return <ActiveTaskView requestId={id ?? 'r-1'} />;
+  return <ActiveTaskView requestId={Number(id)} />;
 }
