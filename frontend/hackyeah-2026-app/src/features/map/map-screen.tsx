@@ -57,6 +57,17 @@ function sortByNearest(requests: HelpRequestListItem[], center: RouteCoordinate)
   });
 }
 
+function routePlannerParams(center: RouteCoordinate, label: string) {
+  return {
+    pathname: '/route-planner' as const,
+    params: {
+      startLat: String(center.latitude),
+      startLng: String(center.longitude),
+      startLabel: label,
+    },
+  };
+}
+
 export function MapScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -193,6 +204,10 @@ export function MapScreen() {
       },
       260,
     );
+  };
+
+  const openRoutePlanner = () => {
+    router.push(routePlannerParams(mapCenter, locationLabel));
   };
 
   return (
@@ -395,22 +410,65 @@ export function MapScreen() {
         )}
       </View>
 
+      <View style={[styles.leftActions, { top: insets.top + (activeRoute ? 176 : 136) }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Otwórz listę zgłoszeń"
+          onPress={() => router.push('/(tabs)/requests')}
+          style={({ pressed }) => [
+            styles.sideAction,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText type="defaultBold" style={{ color: theme.primary }}>
+            ☰
+          </ThemedText>
+          <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+            Lista
+          </ThemedText>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Zaplanuj trasę"
+          onPress={openRoutePlanner}
+          style={({ pressed }) => [
+            styles.sideAction,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText type="defaultBold" style={{ color: theme.primary }}>
+            ⤴
+          </ThemedText>
+          <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+            Trasa
+          </ThemedText>
+        </Pressable>
+      </View>
+
       {/* Bottom Panel */}
       <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
         {selectedRequest ? (
           <ThemedView type="backgroundElement" style={styles.selectedCard}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Zamknij szczegóły zgłoszenia"
+              onPress={() => setSelectedRequestId(null)}
+              style={({ pressed }) => [
+                styles.closeIconButton,
+                { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                ×
+              </ThemedText>
+            </Pressable>
+
             <View style={styles.selectedHeader}>
               <View style={styles.badges}>
                 <PriorityBadge priority={selectedRequest.priority} />
                 <CategoryBadge category={selectedRequest.category} />
               </View>
-              <Pressable
-                onPress={() => setSelectedRequestId(null)}
-                style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Zamknij
-                </ThemedText>
-              </Pressable>
             </View>
 
             <ThemedText type="defaultBold" numberOfLines={2}>
@@ -596,10 +654,11 @@ export function MapScreen() {
             {/* Quick list of nearby items */}
             {displayRequests.length > 0 && (
               <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.nearbyList}>
-                {displayRequests.slice(0, 6).map((req) => {
+                style={styles.nearbyList}
+                contentContainerStyle={styles.nearbyListContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled>
+                {displayRequests.slice(0, 8).map((req) => {
                   const [lng, lat] = req.approximateLocation.coordinates;
                   return (
                     <Pressable
@@ -621,15 +680,26 @@ export function MapScreen() {
                         { backgroundColor: theme.background, borderColor: theme.border },
                         pressed && styles.pressed,
                       ]}>
-                      <View style={styles.nearbyItemHeader}>
-                        <PriorityBadge priority={req.priority} />
-                        <CategoryBadge category={req.category} />
+                      <View style={styles.nearbyItemText}>
+                        <View style={styles.nearbyItemHeader}>
+                          <PriorityBadge priority={req.priority} />
+                          <CategoryBadge category={req.category} />
+                        </View>
+                        <ThemedText
+                          type="smallBold"
+                          numberOfLines={1}
+                          style={styles.nearbyItemTitle}>
+                          {req.title}
+                        </ThemedText>
+                        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                          {formatDistance(requestDistance(req, mapCenter))} ·{' '}
+                          {timeAgo(req.createdAt)}
+                        </ThemedText>
                       </View>
-                      <ThemedText type="smallBold" numberOfLines={1} style={styles.nearbyItemTitle}>
-                        {req.title}
-                      </ThemedText>
-                      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                        {formatDistance(requestDistance(req, mapCenter))} · {timeAgo(req.createdAt)}
+                      <ThemedText
+                        type="caption"
+                        style={{ color: theme.primary, fontWeight: '700' }}>
+                        Pokaż
                       </ThemedText>
                     </Pressable>
                   );
@@ -639,21 +709,6 @@ export function MapScreen() {
 
             {isPending && <ActivityIndicator color={theme.primary} />}
             {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
-
-            <Button
-              variant="secondary"
-              title="Zaplanuj trasę (pomagaj po drodze)"
-              onPress={() =>
-                router.push({
-                  pathname: '/route-planner',
-                  params: {
-                    startLat: String(mapCenter.latitude),
-                    startLng: String(mapCenter.longitude),
-                    startLabel: locationLabel,
-                  },
-                })
-              }
-            />
           </ThemedView>
         )}
       </View>
@@ -733,6 +788,26 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: Spacing.one,
   },
+  leftActions: {
+    position: 'absolute',
+    left: Spacing.two,
+    zIndex: 10,
+    gap: Spacing.one,
+  },
+  sideAction: {
+    width: 68,
+    minHeight: 64,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   fab: {
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.two,
@@ -764,7 +839,7 @@ const styles = StyleSheet.create({
   summary: {
     padding: Spacing.three,
     borderRadius: Spacing.three,
-    gap: Spacing.two,
+    gap: Spacing.one + 2,
     borderWidth: 1,
     borderColor: '#D5E5F6',
     shadowColor: '#000',
@@ -775,6 +850,7 @@ const styles = StyleSheet.create({
   },
   selectedCard: {
     padding: Spacing.three,
+    paddingRight: Spacing.four,
     borderRadius: Spacing.three,
     gap: Spacing.two,
     borderWidth: 1,
@@ -789,15 +865,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingRight: Spacing.three,
   },
   badges: {
     flexDirection: 'row',
     gap: Spacing.one,
     flexWrap: 'wrap',
   },
-  closeBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: Spacing.one,
+  closeIconButton: {
+    position: 'absolute',
+    top: Spacing.two,
+    right: Spacing.two,
+    zIndex: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clusterMarker: {
     width: 42,
@@ -900,19 +985,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   nearbyList: {
+    maxHeight: 188,
+  },
+  nearbyListContent: {
     gap: Spacing.one,
-    paddingVertical: 2,
+    paddingVertical: 1,
   },
   nearbyItem: {
-    width: 200,
-    padding: Spacing.one + 2,
+    minHeight: 72,
+    paddingVertical: Spacing.one + 2,
+    paddingHorizontal: Spacing.two,
     borderRadius: Spacing.two,
     borderWidth: 1,
-    gap: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.one,
   },
   nearbyItemHeader: {
     flexDirection: 'row',
     gap: 4,
+  },
+  nearbyItemText: {
+    flex: 1,
+    gap: 3,
   },
   nearbyItemTitle: {
     fontSize: 13,
