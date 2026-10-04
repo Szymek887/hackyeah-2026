@@ -60,6 +60,30 @@ const storage = {
   },
 };
 
+/**
+ * Health data on the device (contract §3.6), applied whenever a profile arrives from the server:
+ * a requester's kinds of disability live only on the server (no second copy here), and without the
+ * consent nothing about a disability may stay on the device – also on devices other than the one where
+ * the consent was withdrawn. Returns `current` unchanged when there is nothing to remove.
+ */
+function withoutLocalHealthData(
+  current: Record<number, ProfileDetails>,
+  profile: UserProfile,
+): Record<number, ProfileDetails> {
+  const saved = current[profile.id];
+  if (profile.role !== 'REQUESTER' || !saved) return current;
+  const dropNotes = !profile.specialNeedsConsent && Boolean(saved.accessibilityNotes);
+  if (!saved.disabilities?.length && !dropNotes) return current;
+  return {
+    ...current,
+    [profile.id]: {
+      ...saved,
+      disabilities: [],
+      accessibilityNotes: dropNotes ? '' : saved.accessibilityNotes,
+    },
+  };
+}
+
 /** Mock auth matching the backend: the user is identified by id, sent as `X-User-Id`. */
 export function SessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
@@ -71,13 +95,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
     storage.get() ? 'restoring' : 'signedOut',
   );
 
-  const applyUser = useCallback((signedIn: UserProfile) => {
-    setApiUserId(signedIn.id);
-    storage.set(signedIn.id);
-    setUser(signedIn);
-    setStatus('signedIn');
-    return signedIn;
+  /** Every profile from the server goes through here, so local health data is checked each time. */
+  const receiveUser = useCallback((profile: UserProfile) => {
+    setDetailsByUser((current) => withoutLocalHealthData(current, profile));
+    setUser(profile);
   }, []);
+
+  const applyUser = useCallback(
+    (signedIn: UserProfile) => {
+      setApiUserId(signedIn.id);
+      storage.set(signedIn.id);
+      receiveUser(signedIn);
+      setStatus('signedIn');
+      return signedIn;
+    },
+    [receiveUser],
+  );
 
   const signIn = useCallback((userId: number) => getMe(userId).then(applyUser), [applyUser]);
   const signUp = useCallback(
@@ -110,8 +143,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [queryClient]);
 
   const refreshUser = useCallback(async () => {
-    if (user) setUser(await getMe(user.id));
-  }, [user]);
+    if (user) receiveUser(await getMe(user.id));
+  }, [user, receiveUser]);
 
   const userId = user?.id;
   const updateProfileDetails = useCallback(

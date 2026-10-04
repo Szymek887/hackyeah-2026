@@ -51,7 +51,8 @@ export function ProfileScreen() {
       }
       setSaving(false);
     }
-    updateProfileDetails(details);
+    // A requester's kinds of disability are kept only on the server – no copy on the device.
+    updateProfileDetails(user.role === 'REQUESTER' ? { ...details, disabilities: [] } : details);
     setEditing(false);
   };
 
