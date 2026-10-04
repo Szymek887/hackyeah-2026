@@ -59,15 +59,15 @@ public class UserController {
 
     /**
      * Grants or withdraws the consent to store the caller's special needs and share them with the accepted
-     * volunteer. Withdrawing deletes the consent record and the special-needs information (incl. disabilities);
-     * granting creates the record and stores the special needs again. Takes effect immediately.
+     * volunteer. Granting requires at least one kind of disability (400 otherwise) and stores them together
+     * with the consent record; withdrawing deletes the record and all special-needs information.
      */
     @PutMapping("/me/special-needs-consent")
     public UserProfileResponse updateSpecialNeedsConsent(
             @CurrentUser AppUser user,
             @Valid @RequestBody UpdateSpecialNeedsConsentRequest request
     ) {
-        return specialNeedsService.updateConsent(user.getId(), request.consent());
+        return specialNeedsService.updateConsent(user.getId(), request.consent(), request.disabilities());
     }
 
     /**

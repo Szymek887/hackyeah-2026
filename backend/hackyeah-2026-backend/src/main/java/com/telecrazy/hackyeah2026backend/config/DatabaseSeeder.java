@@ -34,26 +34,26 @@ public class DatabaseSeeder {
 
             GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), WGS84);
 
-            AppUser anna = userRepository.save(withDisabilities(
-                    user("Anna K.", UserRole.REQUESTER, true, true, 72, "pl"),
+            AppUser anna = userRepository.save(withSpecialNeeds(
+                    user("Anna K.", UserRole.REQUESTER, true, 72, "pl"),
                     DisabilityType.CHRONIC));
-            AppUser marek = userRepository.save(user("Marek S.", UserRole.REQUESTER, true, false, 66, "pl", "en"));
-            AppUser ewa = userRepository.save(user("Ewa P.", UserRole.REQUESTER, false, false, 45, "pl"));
-            AppUser zofia = userRepository.save(withDisabilities(
-                    user("Zofia M.", UserRole.REQUESTER, true, true, 81, "pl", "de"),
+            AppUser marek = userRepository.save(user("Marek S.", UserRole.REQUESTER, true, 66, "pl", "en"));
+            AppUser ewa = userRepository.save(user("Ewa P.", UserRole.REQUESTER, false, 45, "pl"));
+            AppUser zofia = userRepository.save(withSpecialNeeds(
+                    user("Zofia M.", UserRole.REQUESTER, true, 81, "pl", "de"),
                     DisabilityType.VISION));
-            AppUser jan = userRepository.save(user("Jan B.", UserRole.REQUESTER, true, false, 58, "pl"));
-            AppUser halina = userRepository.save(withDisabilities(
-                    user("Halina R.", UserRole.REQUESTER, true, true, 77, "pl", "ru"),
+            AppUser jan = userRepository.save(user("Jan B.", UserRole.REQUESTER, true, 58, "pl"));
+            AppUser halina = userRepository.save(withSpecialNeeds(
+                    user("Halina R.", UserRole.REQUESTER, true, 77, "pl", "ru"),
                     DisabilityType.MOBILITY, DisabilityType.HEARING));
-            AppUser piotr = userRepository.save(user("Piotr N.", UserRole.REQUESTER, false, false, 40, "pl", "uk"));
-            AppUser maria = userRepository.save(user("Maria T.", UserRole.REQUESTER, true, false, 69, "pl", "en"));
+            AppUser piotr = userRepository.save(user("Piotr N.", UserRole.REQUESTER, false, 40, "pl", "uk"));
+            AppUser maria = userRepository.save(user("Maria T.", UserRole.REQUESTER, true, 69, "pl", "en"));
 
-            AppUser kuba = userRepository.save(user("Kuba W.", UserRole.VOLUNTEER, true, false, 91, "pl", "en", "uk"));
-            AppUser ola = userRepository.save(user("Ola D.", UserRole.VOLUNTEER, true, false, 88, "pl", "en", "de"));
-            AppUser bartek = userRepository.save(user("Bartek L.", UserRole.VOLUNTEER, true, false, 84, "pl", "en"));
-            userRepository.save(user("Nadia P.", UserRole.VOLUNTEER, false, false, 63, "uk", "ru", "pl"));
-            userRepository.save(user("Miasto Kraków", UserRole.CITY_ADMIN, true, false, 100, "pl", "en"));
+            AppUser kuba = userRepository.save(user("Kuba W.", UserRole.VOLUNTEER, true, 91, "pl", "en", "uk"));
+            AppUser ola = userRepository.save(user("Ola D.", UserRole.VOLUNTEER, true, 88, "pl", "en", "de"));
+            AppUser bartek = userRepository.save(user("Bartek L.", UserRole.VOLUNTEER, true, 84, "pl", "en"));
+            userRepository.save(user("Nadia P.", UserRole.VOLUNTEER, false, 63, "uk", "ru", "pl"));
+            userRepository.save(user("Miasto Kraków", UserRole.CITY_ADMIN, true, 100, "pl", "en"));
 
             AppUser[] requesters = {anna, marek, ewa, zofia, jan, halina, piotr, maria};
             AppUser[] volunteers = {kuba, ola, bartek};
@@ -150,22 +150,17 @@ public class DatabaseSeeder {
             String displayName,
             UserRole role,
             boolean identityVerified,
-            boolean specialNeeds,
             int trustScore,
             String... languages
     ) {
         AppUser user = new AppUser(displayName, role, identityVerified, false, trustScore);
         user.replaceLanguages(List.of(languages));
-        if (specialNeeds) {
-            // Simulates the consent given at sign-up: special needs are stored only with a consent record.
-            user.grantSpecialNeedsConsent(Instant.now());
-        }
         return user;
     }
 
-    /** Declared at sign-up together with the consent (see {@link #user}). */
-    private AppUser withDisabilities(AppUser user, DisabilityType... types) {
-        user.replaceDisabilities(List.of(types));
+    /** Simulates the consent given at sign-up for the declared disabilities (stored only with it). */
+    private AppUser withSpecialNeeds(AppUser user, DisabilityType... types) {
+        user.grantSpecialNeedsConsent(Instant.now(), List.of(types));
         return user;
     }
 

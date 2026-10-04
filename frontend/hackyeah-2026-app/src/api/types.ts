@@ -109,7 +109,7 @@ export type DisabilityType = 'VISION' | 'HEARING' | 'MOBILITY' | 'COGNITIVE' | '
 
 /**
  * `UpdateDisabilitiesRequest` – `PUT /api/users/me/disabilities`, requesters with consent only,
- * replaces the list ([] clears it).
+ * replaces the list; at least one (removing all = withdrawing the consent).
  */
 export type UpdateDisabilitiesDto = {
   disabilities: DisabilityType[];
@@ -126,6 +126,8 @@ export type UpdateLanguagesDto = {
  */
 export type UpdateSpecialNeedsConsentDto = {
   consent: boolean;
+  /** Required with `consent: true`: at least one kind – the consent is given for them (400 otherwise). */
+  disabilities?: DisabilityType[];
 };
 
 /**

@@ -28,12 +28,17 @@ export const updateMyLanguages = (dto: UpdateLanguagesDto) =>
   apiRequest<UserProfile>('/api/users/me/languages', { method: 'PUT', body: dto });
 
 /**
- * `PUT /api/users/me/special-needs-consent` – requesters only. `consent: false` deletes the consent
- * record and the special-needs information; `true` creates the record and stores it again.
- * Takes effect immediately. → 200 UserProfile.
+ * `PUT /api/users/me/special-needs-consent` – requesters only. `consent: true` needs at least one kind
+ * of disability and stores them with a new consent record; `false` deletes the record and all
+ * special-needs information. Takes effect immediately. `userId` is needed right after sign-up.
+ * → 200 UserProfile.
  */
-export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto) =>
-  apiRequest<UserProfile>('/api/users/me/special-needs-consent', { method: 'PUT', body: dto });
+export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto, userId?: number) =>
+  apiRequest<UserProfile>('/api/users/me/special-needs-consent', {
+    method: 'PUT',
+    body: dto,
+    userId,
+  });
 
 /**
  * `PUT /api/users/me/disabilities` – requesters with the special-needs consent only (409 without it).

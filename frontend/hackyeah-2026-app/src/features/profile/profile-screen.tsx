@@ -35,6 +35,13 @@ export function ProfileScreen() {
 
   const handleSave = async (details: ProfileDetails, languages: LanguageCode[]) => {
     setSaveError(null);
+    if (storesDisabilitiesOnServer && details.disabilities.length === 0) {
+      // The consent is given for at least one disability (contract §3.6).
+      setSaveError(
+        'Wybierz co najmniej jedną niepełnosprawność. Aby usunąć wszystkie, wyłącz zgodę w profilu.',
+      );
+      return;
+    }
     const languagesChanged = !sameItems(languages, user.languages);
     const disabilitiesChanged =
       storesDisabilitiesOnServer && !sameItems(details.disabilities, user.disabilities);

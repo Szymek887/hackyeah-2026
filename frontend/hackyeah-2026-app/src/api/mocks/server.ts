@@ -197,16 +197,16 @@ function createUser(body: CreateUserDto): UserProfile {
     errors.role = 'must be REQUESTER or VOLUNTEER';
   if (Object.keys(errors).length) throw new ApiError(400, 'Request validation failed', errors);
 
-  // Sign-up consent is not built yet: declaring special needs here stands in for giving it.
-  const specialNeeds = body.role === 'REQUESTER' && Boolean(body.specialNeeds);
+  // Special needs are stored only with the consent for at least one disability, which the client gives
+  // right after creating the account (PUT /special-needs-consent), so a new account starts without them.
   const user: UserProfile = {
     id: Math.max(...users.map((u) => u.id)) + 1,
     displayName,
     role: body.role,
     identityVerified: false,
-    specialNeeds,
-    specialNeedsConsent: specialNeeds,
-    specialNeedsConsentGrantedAt: specialNeeds ? new Date().toISOString() : null,
+    specialNeeds: false,
+    specialNeedsConsent: false,
+    specialNeedsConsentGrantedAt: null,
     disabilities: [],
     trustScore: NEW_USER_TRUST,
     ratingCount: 0,
@@ -240,17 +240,20 @@ function updateLanguages(user: UserProfile, body: UpdateLanguagesDto) {
   return user;
 }
 
-// UserController.updateSpecialNeedsConsent: requesters only. Withdrawing deletes the consent record
-// and the special needs; granting creates the record and stores the special needs again.
+// SpecialNeedsService.updateConsent: requesters only. Granting needs at least one disability and stores
+// them with the consent; withdrawing deletes the consent record and all special-needs information.
 function updateSpecialNeedsConsent(user: UserProfile, body: UpdateSpecialNeedsConsentDto) {
   if (user.role !== 'REQUESTER')
     throw forbidden('Only requesters can manage special-needs consent');
   if (typeof body?.consent !== 'boolean')
     throw new ApiError(400, 'Request validation failed', { consent: 'must not be null' });
   if (body.consent) {
+    const disabilities = validDisabilities(body.disabilities ?? []);
+    if (disabilities.length === 0) throw badRequest('Choose at least one kind of disability');
     user.specialNeedsConsentGrantedAt ??= new Date().toISOString();
     user.specialNeedsConsent = true;
     user.specialNeeds = true;
+    user.disabilities = disabilities;
   } else {
     user.specialNeedsConsent = false;
     user.specialNeedsConsentGrantedAt = null;
@@ -269,19 +272,29 @@ const DISABILITY_TYPES: DisabilityType[] = [
   'OTHER',
 ];
 
-// SpecialNeedsService.updateDisabilities: requesters with the consent only; replaces the list.
-function updateDisabilities(user: UserProfile, body: UpdateDisabilitiesDto) {
-  if (user.role !== 'REQUESTER') throw forbidden('Only requesters can store disabilities');
-  const disabilities = body?.disabilities;
+/** Known kinds only (400 otherwise), de-duplicated, in enum order like the backend. */
+function validDisabilities(disabilities: DisabilityType[]) {
   if (!Array.isArray(disabilities) || disabilities.length > DISABILITY_TYPES.length)
     throw new ApiError(400, 'Request validation failed', {
       disabilities: 'size must be at most 6',
     });
   if (disabilities.some((d) => !DISABILITY_TYPES.includes(d)))
     throw badRequest('Malformed request body');
+  return DISABILITY_TYPES.filter((d) => disabilities.includes(d));
+}
+
+// SpecialNeedsService.updateDisabilities: requesters with the consent only; replaces the list, which
+// must keep at least one kind (removing all of them = withdrawing the consent).
+function updateDisabilities(user: UserProfile, body: UpdateDisabilitiesDto) {
+  if (user.role !== 'REQUESTER') throw forbidden('Only requesters can store disabilities');
+  const disabilities = validDisabilities(body?.disabilities);
+  if (disabilities.length === 0)
+    throw new ApiError(400, 'Request validation failed', {
+      disabilities: 'size must be between 1 and 6',
+    });
   if (!user.specialNeedsConsent)
     throw conflict('Give the special-needs consent before storing disabilities');
-  user.disabilities = DISABILITY_TYPES.filter((d) => disabilities.includes(d));
+  user.disabilities = disabilities;
   return user;
 }
 

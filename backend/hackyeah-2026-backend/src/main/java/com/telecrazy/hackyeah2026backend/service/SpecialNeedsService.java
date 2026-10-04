@@ -33,19 +33,22 @@ public class SpecialNeedsService {
         this.clock = clock;
     }
 
-    /** {@code true} creates the consent record and stores special needs; {@code false} deletes both. */
+    /**
+     * {@code true} gives the consent for the given disabilities (at least one, otherwise 400) – creates the
+     * consent record, stores them and special needs; {@code false} deletes all of it.
+     */
     @Transactional
-    public UserProfileResponse updateConsent(long userId, boolean consent) {
+    public UserProfileResponse updateConsent(long userId, boolean consent, Collection<DisabilityType> disabilities) {
         AppUser user = requester(userId, "Only requesters can manage special-needs consent");
         if (consent) {
-            user.grantSpecialNeedsConsent(clock.instant());
+            user.grantSpecialNeedsConsent(clock.instant(), disabilities);
         } else {
             user.withdrawSpecialNeedsConsent();
         }
         return UserProfileResponse.from(user);
     }
 
-    /** Replaces the declared disabilities; requires the consent. */
+    /** Replaces the declared disabilities (at least one); requires the consent. */
     @Transactional
     public UserProfileResponse updateDisabilities(long userId, Collection<DisabilityType> disabilities) {
         AppUser user = requester(userId, "Only requesters can store disabilities");

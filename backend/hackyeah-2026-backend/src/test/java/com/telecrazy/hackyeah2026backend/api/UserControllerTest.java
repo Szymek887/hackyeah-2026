@@ -157,18 +157,54 @@ class UserControllerTest {
     }
 
     @Test
-    void grantingConsentAgainRestoresRecordAndSpecialNeeds() throws Exception {
+    void grantingConsentAgainRestoresRecordSpecialNeedsAndDisabilities() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
         anna.withdrawSpecialNeedsConsent();
         given(userRepository.findById(1L)).willReturn(Optional.of(anna));
-        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
 
-        putConsent(true)
+        mockMvc.perform(put("/api/users/me/special-needs-consent")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"consent\": true, \"disabilities\": [\"HEARING\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.specialNeedsConsent").value(true))
                 .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").isNotEmpty())
-                .andExpect(jsonPath("$.specialNeeds").value(true));
+                .andExpect(jsonPath("$.specialNeeds").value(true))
+                .andExpect(jsonPath("$.disabilities").value(contains("HEARING")));
         assertThat(anna.sharesSpecialNeeds()).isTrue();
+    }
+
+    @Test
+    void consentCannotBeGivenWithoutAnyDisability() throws Exception {
+        AppUser marek = user(2L, "Marek S.", UserRole.REQUESTER);
+        given(userRepository.findById(2L)).willReturn(Optional.of(marek));
+
+        for (String body : List.of("{\"consent\": true}", "{\"consent\": true, \"disabilities\": []}")) {
+            mockMvc.perform(put("/api/users/me/special-needs-consent")
+                            .header("X-User-Id", "2")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.detail").value("Choose at least one kind of disability"));
+        }
+        // No priority bump and nothing for the volunteer without a declared disability.
+        assertThat(marek.hasSpecialNeedsConsent()).isFalse();
+        assertThat(marek.isSpecialNeeds()).isFalse();
+    }
+
+    @Test
+    void lastDisabilityCannotBeRemovedWithoutWithdrawingConsent() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": []}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.disabilities").exists());
+        assertThat(anna.getDisabilities()).containsExactly(DisabilityType.CHRONIC);
+        assertThat(anna.isSpecialNeeds()).isTrue();
     }
 
     @Test
@@ -226,9 +262,7 @@ class UserControllerTest {
     @Test
     void withdrawingConsentAlsoDeletesDisabilities() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
-        anna.replaceDisabilities(List.of(DisabilityType.MOBILITY));
         given(userRepository.findById(1L)).willReturn(Optional.of(anna));
-        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         putConsent(false)
                 .andExpect(status().isOk())
@@ -239,7 +273,6 @@ class UserControllerTest {
     @Test
     void demoListNeverExposesDisabilities() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
-        anna.replaceDisabilities(List.of(DisabilityType.CHRONIC));
         given(userRepository.findAll()).willReturn(List.of(anna));
 
         String body = mockMvc.perform(get("/api/users/demo"))
@@ -310,7 +343,7 @@ class UserControllerTest {
     private static AppUser requesterWithSpecialNeeds() {
         AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, false, 72);
         anna.setId(1L);
-        anna.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"));
+        anna.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"), List.of(DisabilityType.CHRONIC));
         return anna;
     }
 

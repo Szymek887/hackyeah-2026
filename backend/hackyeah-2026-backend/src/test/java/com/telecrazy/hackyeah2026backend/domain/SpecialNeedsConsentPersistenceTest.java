@@ -44,8 +44,7 @@ class SpecialNeedsConsentPersistenceTest {
     @BeforeEach
     void requesterWithConsentAndDisabilities() {
         AppUser user = new AppUser("Consent Test", UserRole.REQUESTER, true, false, 50);
-        user.grantSpecialNeedsConsent(GRANTED_AT);
-        user.replaceDisabilities(List.of(DisabilityType.VISION, DisabilityType.MOBILITY));
+        user.grantSpecialNeedsConsent(GRANTED_AT, List.of(DisabilityType.VISION, DisabilityType.MOBILITY));
         userId = userRepository.saveAndFlush(user).getId();
         consentId = user.getSpecialNeedsConsent().getId();
         assertThat(consentRows(consentId)).isEqualTo(1);
@@ -54,7 +53,7 @@ class SpecialNeedsConsentPersistenceTest {
 
     @Test
     void withdrawingConsentDeletesConsentRowSpecialNeedsAndDisabilities() {
-        specialNeedsService.updateConsent(userId, false);
+        specialNeedsService.updateConsent(userId, false, null);
         entityManager.flush();
 
         assertThat(consentRows(consentId)).isZero();
@@ -66,29 +65,26 @@ class SpecialNeedsConsentPersistenceTest {
     }
 
     @Test
-    void disabilitiesAreReplacedAndCanBeCleared() {
+    void disabilitiesAreReplaced() {
         specialNeedsService.updateDisabilities(userId, List.of(DisabilityType.HEARING));
         entityManager.flush();
-        assertThat(disabilities()).containsExactly("HEARING");
 
-        specialNeedsService.updateDisabilities(userId, List.of());
-        entityManager.flush();
-        assertThat(disabilityRows()).isZero();
+        assertThat(disabilities()).containsExactly("HEARING");
     }
 
     @Test
-    void grantingAgainCreatesANewConsentRow() {
-        specialNeedsService.updateConsent(userId, false);
+    void grantingAgainCreatesANewConsentRowWithTheGivenDisabilities() {
+        specialNeedsService.updateConsent(userId, false, null);
         entityManager.flush();
 
-        specialNeedsService.updateConsent(userId, true);
+        specialNeedsService.updateConsent(userId, true, List.of(DisabilityType.COGNITIVE));
         entityManager.flush();
         entityManager.clear();
 
         AppUser reloaded = userRepository.findById(userId).orElseThrow();
         assertThat(reloaded.isSpecialNeeds()).isTrue();
         assertThat(reloaded.getSpecialNeedsConsent().getId()).isNotEqualTo(consentId);
-        assertThat(reloaded.getDisabilities()).isEmpty();
+        assertThat(reloaded.getDisabilities()).containsExactly(DisabilityType.COGNITIVE);
         assertThat(consentRows(consentId)).isZero();
     }
 

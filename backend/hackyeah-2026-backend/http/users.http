@@ -110,7 +110,7 @@ X-User-Id: {{requesterId}}
     });
 %}
 
-### Give the consent again (profile switch on) – new consent record, specialNeeds stored again
+### Consent cannot be given without at least one disability
 PUT {{host}}/api/users/me/special-needs-consent
 Content-Type: application/json
 Accept: application/json
@@ -121,11 +121,46 @@ X-User-Id: {{requesterId}}
 }
 
 > {%
+    client.test("Consent without a disability returns 400", function () {
+        client.assert(response.status === 400, "Expected status 400");
+        client.assert(response.body.detail === "Choose at least one kind of disability", "Expected detail");
+    });
+%}
+
+### Give the consent again for the chosen disabilities – new consent record, specialNeeds stored again
+PUT {{host}}/api/users/me/special-needs-consent
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "consent": true,
+  "disabilities": ["CHRONIC"]
+}
+
+> {%
     client.test("Consent is recorded again", function () {
         client.assert(response.status === 200, "Expected status 200");
         client.assert(response.body.specialNeedsConsent === true, "Expected consent");
         client.assert(response.body.specialNeedsConsentGrantedAt !== null, "Expected consent date");
         client.assert(response.body.specialNeeds === true, "Expected specialNeeds stored");
+        client.assert(JSON.stringify(response.body.disabilities) === JSON.stringify(["CHRONIC"]), "Expected disabilities");
+    });
+%}
+
+### The last disability cannot be removed (withdraw the consent instead)
+PUT {{host}}/api/users/me/disabilities
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "disabilities": []
+}
+
+> {%
+    client.test("Empty list returns 400", function () {
+        client.assert(response.status === 400, "Expected status 400");
     });
 %}
 

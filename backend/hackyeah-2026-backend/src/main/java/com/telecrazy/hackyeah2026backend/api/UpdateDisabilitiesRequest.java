@@ -7,9 +7,10 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * Body of {@code PUT /api/users/me/disabilities}. Replaces the whole list; an empty list clears it.
+ * Body of {@code PUT /api/users/me/disabilities}. Replaces the whole list; at least one kind – removing all of
+ * them means withdrawing the consent.
  */
 public record UpdateDisabilitiesRequest(
-        @NotNull @Size(max = 6) List<@NotNull DisabilityType> disabilities
+        @NotNull @Size(min = 1, max = 6) List<@NotNull DisabilityType> disabilities
 ) {
 }

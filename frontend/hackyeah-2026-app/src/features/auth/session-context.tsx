@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 
-import { createUser, getMe, updateMyDisabilities } from '@/api/auth';
+import { createUser, getMe, updateSpecialNeedsConsent } from '@/api/auth';
 import { setApiUserId } from '@/api/client';
 import type { CreateUserDto, UserProfile, UserRole } from '@/api/types';
 import { commuteStore } from '@/features/commute/commute-store';
@@ -116,9 +116,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const signUp = useCallback(
     async (dto: CreateUserDto, details?: Partial<ProfileDetails>) => {
       let created = await createUser(dto);
-      // A requester who declared special needs consents at sign-up, so the kinds go to the backend.
-      if (created.specialNeedsConsent && details?.disabilities?.length) {
-        created = await updateMyDisabilities({ disabilities: details.disabilities }, created.id);
+      // Stand-in for the sign-up consent (not built yet): a requester who picked at least one disability
+      // consents for it. Notes alone give no consent (contract §3.6).
+      if (created.role === 'REQUESTER' && details?.disabilities?.length) {
+        created = await updateSpecialNeedsConsent(
+          { consent: true, disabilities: details.disabilities },
+          created.id,
+        );
       }
       const createdId = created.id;
       if (details) {

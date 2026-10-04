@@ -158,8 +158,7 @@ class HelpRequestControllerTest {
 
     @Test
     void assignedVolunteerLearnsAboutSpecialNeedsOnlyWhileConsentExists() throws Exception {
-        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
-        requester.replaceDisabilities(List.of(DisabilityType.CHRONIC));
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"), List.of(DisabilityType.CHRONIC));
         HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
         request.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
@@ -192,7 +191,7 @@ class HelpRequestControllerTest {
 
     @Test
     void specialNeedsNeverReachPublicViewsOrVolunteerBeforeAcceptance() throws Exception {
-        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"), List.of(DisabilityType.MOBILITY));
         HelpRequest offered = storedRequest(HelpRequestStatus.OFFERED);
         offered.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(offered));

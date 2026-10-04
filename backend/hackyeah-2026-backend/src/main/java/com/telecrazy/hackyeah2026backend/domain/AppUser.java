@@ -118,11 +118,25 @@ public class AppUser {
         languages.addAll(normalized);
     }
 
-    /** Creates the consent record (if missing) and stores that the user has special needs. Idempotent. */
-    public void grantSpecialNeedsConsent(Instant now) {
+    /*
+     * Invariant (contract §3.6): consent record, at least one disability and specialNeeds = true exist together
+     * or not at all. The consent is given for declared disabilities, so it cannot be given without one, and
+     * the last disability cannot be removed except by withdrawing the consent.
+     */
+
+    /**
+     * Gives the consent for the declared disabilities: creates the consent record (if missing), stores the
+     * disabilities and that the user has special needs. Repeating it replaces the disabilities.
+     *
+     * @throws IllegalArgumentException when no disability is given
+     */
+    public void grantSpecialNeedsConsent(Instant now, Collection<DisabilityType> types) {
+        requireAtLeastOne(types);
         if (specialNeedsConsent == null) {
             specialNeedsConsent = new SpecialNeedsConsent(now);
         }
+        disabilities.clear();
+        disabilities.addAll(types);
         specialNeeds = true;
     }
 
@@ -134,15 +148,24 @@ public class AppUser {
     }
 
     /**
-     * Replaces the declared disabilities. Allowed only while the consent exists – without it no
-     * disability information may be stored.
+     * Replaces the declared disabilities while the consent exists.
+     *
+     * @throws IllegalStateException    without the consent – no disability information may be stored then
+     * @throws IllegalArgumentException when empty – removing all of them means withdrawing the consent
      */
     public void replaceDisabilities(Collection<DisabilityType> types) {
         if (!hasSpecialNeedsConsent()) {
             throw new IllegalStateException("Disabilities can be stored only with special-needs consent");
         }
+        requireAtLeastOne(types);
         disabilities.clear();
         disabilities.addAll(types);
+    }
+
+    private static void requireAtLeastOne(Collection<DisabilityType> types) {
+        if (types == null || types.isEmpty()) {
+            throw new IllegalArgumentException("Choose at least one kind of disability");
+        }
     }
 
     public boolean hasSpecialNeedsConsent() {

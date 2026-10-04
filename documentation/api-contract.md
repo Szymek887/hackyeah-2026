@@ -265,12 +265,13 @@ Disability is **health data** (GDPR art. 9, special category). Rules:
 
 | Rule | How |
 |---|---|
+| **The rule** | **The consent is given for declared disabilities: consent record, at least one `disabilities` entry and `specialNeeds = true` exist together or not at all.** `specialNeeds` is never set on its own – it follows the consent with its disabilities. |
 | One consent covers storing **and** sharing | A **consent record** (table `special_needs_consents`, with `grantedAt`) exists while the consent is in force. Profile: `specialNeedsConsent`, `specialNeedsConsentGrantedAt`. |
-| Given at sign-up | The user consents when creating the account (🔵 sign-up flow not built yet; the seeder gives the consent to the demo users with special needs). |
-| Stored only with consent | `specialNeeds` is stored only while the consent record exists. It raises request priority (§6.6 of the backend plan). |
-| Kinds of disability | `disabilities` (`DisabilityType[]`, table `app_user_disabilities`) – set with `PUT /api/users/me/disabilities`, **only while the consent exists** (409 otherwise), requesters only. Returned **only to the user themselves** (`/users/me`); never to the volunteer (who learns only the fact) and always `[]` in the public `/users/demo`. Free-text notes stay on the device. |
-| Withdrawal deletes data | Switch off (`PUT /api/users/me/special-needs-consent` `{ "consent": false }`) **deletes the consent record, the `disabilities` rows** and sets `specialNeeds = false` (no more priority bump). The app also clears the notes kept on the device. |
-| Can be given again | Switch on (`{ "consent": true }`) creates a **new** consent record (new `grantedAt`) and stores `specialNeeds = true`; the user can describe the disability again. |
+| Given at sign-up | The user consents when creating the account, for the disabilities picked there (🔵 sign-up flow not built yet; the seeder gives the consent to the demo users with disabilities). Notes alone give no consent. |
+| Effect | `specialNeeds` raises request priority (§6.6 of the backend plan) and makes `requesterSpecialNeeds` `true` for the accepted volunteer. Without a declared disability there is no consent, hence neither. |
+| Kinds of disability | `disabilities` (`DisabilityType[]`, table `app_user_disabilities`) – given with the consent, changed with `PUT /api/users/me/disabilities` (**at least one**; 409 without consent), requesters only. Returned **only to the user themselves** (`/users/me`); never to the volunteer (who learns only the fact) and always `[]` in the public `/users/demo`. Free-text notes stay on the device. |
+| Withdrawal deletes data | Switch off (`PUT /api/users/me/special-needs-consent` `{ "consent": false }`) **deletes the consent record, the `disabilities` rows** and sets `specialNeeds = false` (no more priority bump). This is also the only way to remove the last disability. The app also clears the notes kept on the device. |
+| Can be given again | Switch on opens a choice of disabilities; confirming sends `{ "consent": true, "disabilities": [...] }` (at least one, otherwise 400). It creates a **new** consent record (new `grantedAt`), stores the disabilities and `specialNeeds = true`. |
 | Only the accepted volunteer learns it | `requesterSpecialNeeds` exists **only in `FULL`** (requester always, assigned volunteer from `ACCEPTED`). `true` only when `specialNeeds` **and** a consent record exist. |
 | Never public | Not in list items, `PUBLIC` details (also for a volunteer in `OFFERED`), `UserSummary`, analytics. Covered by the "no leak" test. |
 | No inference from a refusal | `false` means "no special needs **or** no consent" – the volunteer cannot tell which. |
@@ -335,16 +336,18 @@ Auth required, **requesters only** (others → 403). Grants or withdraws the con
 
 Request (`UpdateSpecialNeedsConsentRequest`):
 ```json
+{ "consent": true, "disabilities": ["MOBILITY", "HEARING"] }
 { "consent": false }
 ```
 | Field | Rules |
 |---|---|
-| `consent` | required boolean. `false` deletes the consent record and sets `specialNeeds = false`; `true` creates a new consent record and sets `specialNeeds = true`. |
+| `consent` | required boolean. `false` deletes the consent record, the `disabilities` and sets `specialNeeds = false`. `true` creates the consent record (if missing), stores the `disabilities` and `specialNeeds = true`. |
+| `disabilities` | **required with `consent: true`**: 1–6 `DisabilityType` values (the consent is given for them; repeating replaces them). Ignored with `false`. |
 
-→ `200 UserProfileResponse` (with `specialNeeds`, `specialNeedsConsent`, `specialNeedsConsentGrantedAt`, `disabilities` updated). 400 `errors.consent` when missing, 403 for volunteers and city admins.
+→ `200 UserProfileResponse` (with `specialNeeds`, `specialNeedsConsent`, `specialNeedsConsentGrantedAt`, `disabilities` updated). 400 `errors.consent` when missing, 400 `detail: "Choose at least one kind of disability"` for `consent: true` without disabilities, 403 for volunteers and city admins.
 
 #### `PUT /api/users/me/disabilities` — ✅ `LIVE`
-Auth required, **requesters only** (others → 403), **only with the special-needs consent** (otherwise 409). Replaces the declared kinds of disability (profile edit, sign-up right after `POST /api/users`).
+Auth required, **requesters only** (others → 403), **only with the special-needs consent** (otherwise 409). Replaces the declared kinds of disability (profile edit). To give the consent use `special-needs-consent` with `consent: true` instead.
 
 Request (`UpdateDisabilitiesRequest`):
 ```json
@@ -352,7 +355,7 @@ Request (`UpdateDisabilitiesRequest`):
 ```
 | Field | Rules |
 |---|---|
-| `disabilities` | required, 0–6 `DisabilityType` values; duplicates ignored; `[]` clears the list. Unknown value → 400. |
+| `disabilities` | required, **1–6** `DisabilityType` values; duplicates ignored. `[]` → 400 `errors.disabilities` (removing all = withdrawing the consent). Unknown value → 400. |
 
 → `200 UserProfileResponse` with `disabilities` sorted (`VISION, HEARING, MOBILITY, COGNITIVE, CHRONIC, OTHER` order). Seeded demo users: Anna K. `CHRONIC`, Zofia M. `VISION`, Halina R. `HEARING, MOBILITY`.
 
@@ -623,6 +626,7 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-04 | **Breaking (§3.6, §4.2):** the consent is given for at least one disability. `{ "consent": true }` now needs `disabilities` (1–6, otherwise 400) and no longer sets `specialNeeds` without them; `PUT /me/disabilities` needs at least one (`[]` → 400). Invariant: consent ⇔ ≥ 1 disability ⇔ `specialNeeds`. Frontend: switch on opens a choice of disabilities; mock sign-up consents only with a picked disability. | Dev 2 |
 | 2026-10-04 | Kinds of disability stored on the backend (§3.6): `disabilities` on the profile (only for the user themselves, `[]` in `/users/demo`), new `PUT /api/users/me/disabilities` (requesters with consent only, 409 without consent); withdrawing the consent also deletes them. Additive. | Dev 2 |
 | 2026-10-04 | **Breaking (§3.3, §3.6, §4.2):** consent is now a record covering storing and sharing. Profile `shareSpecialNeeds` → `specialNeedsConsent` + `specialNeedsConsentGrantedAt`; consent body `{ "shareWithVolunteer" }` → `{ "consent" }`; requesters only (403 otherwise). Withdrawing deletes the consent record and `specialNeeds`; granting creates a new record and stores `specialNeeds`. Seeded users with special needs have a consent. Frontend updated in the same PR. | Dev 2 |
 | 2026-10-03 | Special needs shared only with consent (§3.6): `shareSpecialNeeds` on the profile, new `PUT /api/users/me/special-needs-consent`, `requesterSpecialNeeds` in `FULL` only (live, additive). Dropped proposals: `accessibilitySupport` (list, details, create) and the `category` override on create – the category stays AI-only. | Dev 2 |
