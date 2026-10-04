@@ -25,7 +25,7 @@ class AnalyticsServiceTest {
     private static final AnalyticsFilter NO_FILTER = new AnalyticsFilter(null, null, null, null);
 
     private final AnalyticsRepository repository = mock(AnalyticsRepository.class);
-    private final AnalyticsService service = new AnalyticsService(repository, JsonMapper.builder().build());
+    private final AnalyticsService service = new AnalyticsService(repository, JsonMapper.builder().build(), 3);
 
     @Test
     void mergesCategoryRowsOfSameHexagonIntoOneFeature() {
@@ -39,6 +39,7 @@ class AnalyticsServiceTest {
 
         assertThat(response.type()).isEqualTo("FeatureCollection");
         assertThat(response.totalRequests()).isEqualTo(7);
+        assertThat(response.suppressedCells()).isZero();
         assertThat(response.features()).hasSize(2);
 
         HeatmapResponse.Feature first = response.features().getFirst();
@@ -52,6 +53,30 @@ class AnalyticsServiceTest {
                 .hasSize(HelpCategory.values().length);
         assertThat(first.properties().area().type()).isEqualTo("Polygon");
         assertThat(first.properties().area().coordinates().getFirst()).hasSize(4);
+    }
+
+    @Test
+    void heatmapHidesHexagonsWithFewerRequestsThanThreshold() {
+        given(repository.heatmap(any(), anyDouble())).willReturn(List.of(
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 1, 4),
+                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.MEDICINE, 2, 8),
+                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.MEDICINE, 2, 8),
+                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.SOCIAL, 1, 1)
+        ));
+
+        HeatmapResponse response = service.heatmap(NO_FILTER, 500);
+
+        // Only the hexagon with 3 requests (2 + 1 across categories) is shown.
+        assertThat(response.features()).hasSize(1);
+        assertThat(response.features().getFirst().properties().count()).isEqualTo(3);
+        assertThat(response.totalRequests()).isEqualTo(3);
+        assertThat(response.suppressedCells()).isEqualTo(2);
+    }
+
+    @Test
+    void rejectsThresholdBelowOne() {
+        assertThatThrownBy(() -> new AnalyticsService(repository, JsonMapper.builder().build(), 0))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -97,7 +122,7 @@ class AnalyticsServiceTest {
 
     @Test
     void rejectsCellSizeOutOfRange() {
-        assertThatThrownBy(() -> service.heatmap(NO_FILTER, 99)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.heatmap(NO_FILTER, 499)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.heatmap(NO_FILTER, 5001)).isInstanceOf(IllegalArgumentException.class);
     }
 

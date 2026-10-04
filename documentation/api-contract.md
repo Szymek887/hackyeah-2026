@@ -581,7 +581,7 @@ Public, aggregated data only.
 | `category` | optional `HelpCategory` |
 | `status` | optional, repeatable (`?status=OPEN&status=ACCEPTED`); default: all except `CANCELLED`, `UNDER_REVIEW` |
 | `from`, `to` | optional ISO-8601 instants, `from < to` |
-| `cellSizeMeters` | hexagon side, 100–5000, default 500 |
+| `cellSizeMeters` | hexagon side, 500–5000, default 500 (never finer than the ~300 m public location masking) |
 
 → `200`
 ```json
@@ -589,6 +589,7 @@ Public, aggregated data only.
   "type": "FeatureCollection",
   "cellSizeMeters": 500,
   "totalRequests": 86,
+  "suppressedCells": 4,
   "features": [
     {
       "type": "Feature",
@@ -604,6 +605,8 @@ Public, aggregated data only.
 }
 ```
 `weight` = priority-weighted count (P1 = 3, P2 = 2, P3 = 1).
+
+**Privacy (k-anonymity):** hexagons with fewer than 3 requests (`app.analytics.min-cell-count`) are left out, after all filters are applied. `suppressedCells` is the number of hexagons left out; `totalRequests` counts only the requests in the hexagons returned.
 
 #### `GET /api/analytics/summary` — ✅ `LIVE` (🔵 extra fields proposed)
 

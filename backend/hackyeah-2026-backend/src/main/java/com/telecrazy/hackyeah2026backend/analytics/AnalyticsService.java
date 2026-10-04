@@ -4,6 +4,7 @@ import com.telecrazy.hackyeah2026backend.api.GeoJsonPoint;
 import com.telecrazy.hackyeah2026backend.api.GeoJsonPolygon;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -20,7 +21,11 @@ import java.util.stream.Collectors;
 public class AnalyticsService {
 
     public static final int DEFAULT_CELL_SIZE_METERS = 500;
-    static final int MIN_CELL_SIZE_METERS = 100;
+    /**
+     * Not smaller than the ~300 m area the public map masks locations to
+     * ({@code LocationObfuscationService}), so the heatmap never locates a request more precisely.
+     */
+    static final int MIN_CELL_SIZE_METERS = 500;
     static final int MAX_CELL_SIZE_METERS = 5_000;
 
     /** Cancelled requests are not real deficits, so the heatmap leaves them out unless asked for. */
@@ -39,10 +44,23 @@ public class AnalyticsService {
 
     private final AnalyticsRepository repository;
     private final JsonMapper jsonMapper;
+    /**
+     * k-anonymity threshold: hexagons with fewer requests are left out of the heatmap, so a filter
+     * (e.g. one category) cannot single out one person's request.
+     */
+    private final int minCellCount;
 
-    public AnalyticsService(AnalyticsRepository repository, JsonMapper jsonMapper) {
+    public AnalyticsService(
+            AnalyticsRepository repository,
+            JsonMapper jsonMapper,
+            @Value("${app.analytics.min-cell-count:3}") int minCellCount
+    ) {
+        if (minCellCount < 1) {
+            throw new IllegalArgumentException("app.analytics.min-cell-count must be at least 1");
+        }
         this.repository = repository;
         this.jsonMapper = jsonMapper;
+        this.minCellCount = minCellCount;
     }
 
     public HeatmapResponse heatmap(AnalyticsFilter filter, int cellSizeMeters) {
@@ -56,10 +74,15 @@ public class AnalyticsService {
                 .filter(status -> !status.isHiddenFromPublic())
                 .collect(Collectors.toUnmodifiableSet());
         if (statuses.isEmpty()) {
-            return HeatmapResponse.of(cellSizeMeters, List.of());
+            return HeatmapResponse.of(cellSizeMeters, List.of(), 0);
         }
         filter = new AnalyticsFilter(filter.category(), statuses, filter.from(), filter.to());
-        return HeatmapResponse.of(cellSizeMeters, toFeatures(repository.heatmap(filter, cellSizeMeters)));
+        List<HeatmapResponse.Feature> features = toFeatures(repository.heatmap(filter, cellSizeMeters));
+        // Applied after all filters: the threshold holds for exactly what the caller gets back.
+        List<HeatmapResponse.Feature> visible = features.stream()
+                .filter(feature -> feature.properties().count() >= minCellCount)
+                .toList();
+        return HeatmapResponse.of(cellSizeMeters, visible, features.size() - visible.size());
     }
 
     public SummaryResponse summary(AnalyticsFilter filter) {

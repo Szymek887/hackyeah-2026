@@ -30,7 +30,8 @@ public class AnalyticsController {
      *
      * @param status         repeatable; defaults to statuses visible on the public map (excluding
      *                       {@code CANCELLED} and {@code UNDER_REVIEW})
-     * @param cellSizeMeters hexagon side length, 100–5000
+     * @param cellSizeMeters hexagon side length, 500–5000; hexagons with fewer requests than
+     *                       {@code app.analytics.min-cell-count} are left out
      */
     @GetMapping("/heatmap")
     public HeatmapResponse heatmap(

@@ -38,31 +38,32 @@ class AnalyticsControllerTest {
 
     @Test
     void heatmapBindsFiltersAndReturnsGeoJson() throws Exception {
-        given(repository.heatmap(any(), eq(300.0))).willReturn(List.of(new HeatmapRow(
+        given(repository.heatmap(any(), eq(500.0))).willReturn(List.of(new HeatmapRow(
                 1, 1, 21.0, 52.2,
                 "{\"type\":\"Polygon\",\"coordinates\":[[[21.0,52.2],[21.1,52.2],[21.0,52.3],[21.0,52.2]]]}",
-                HelpCategory.MEDICINE, 2, 6)));
+                HelpCategory.MEDICINE, 3, 9)));
 
         mockMvc.perform(get("/api/analytics/heatmap")
                         .param("category", "MEDICINE")
                         .param("status", "OPEN", "COMPLETED")
                         .param("from", "2026-10-01T00:00:00Z")
                         .param("to", "2026-10-05T00:00:00Z")
-                        .param("cellSizeMeters", "300"))
+                        .param("cellSizeMeters", "500"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.type").value("FeatureCollection"))
-                .andExpect(jsonPath("$.cellSizeMeters").value(300))
-                .andExpect(jsonPath("$.totalRequests").value(2))
+                .andExpect(jsonPath("$.cellSizeMeters").value(500))
+                .andExpect(jsonPath("$.totalRequests").value(3))
+                .andExpect(jsonPath("$.suppressedCells").value(0))
                 .andExpect(jsonPath("$.features[0].type").value("Feature"))
                 .andExpect(jsonPath("$.features[0].geometry.type").value("Point"))
                 .andExpect(jsonPath("$.features[0].geometry.coordinates[0]").value(21.0))
-                .andExpect(jsonPath("$.features[0].properties.count").value(2))
-                .andExpect(jsonPath("$.features[0].properties.weight").value(6))
-                .andExpect(jsonPath("$.features[0].properties.byCategory.MEDICINE").value(2))
+                .andExpect(jsonPath("$.features[0].properties.count").value(3))
+                .andExpect(jsonPath("$.features[0].properties.weight").value(9))
+                .andExpect(jsonPath("$.features[0].properties.byCategory.MEDICINE").value(3))
                 .andExpect(jsonPath("$.features[0].properties.area.type").value("Polygon"));
 
         ArgumentCaptor<AnalyticsFilter> filter = ArgumentCaptor.forClass(AnalyticsFilter.class);
-        verify(repository).heatmap(filter.capture(), eq(300.0));
+        verify(repository).heatmap(filter.capture(), eq(500.0));
         assertThat(filter.getValue().category()).isEqualTo(HelpCategory.MEDICINE);
         assertThat(filter.getValue().statuses())
                 .containsExactlyInAnyOrder(HelpRequestStatus.OPEN, HelpRequestStatus.COMPLETED);
@@ -87,6 +88,9 @@ class AnalyticsControllerTest {
     @Test
     void rejectsInvalidParameters() throws Exception {
         mockMvc.perform(get("/api/analytics/heatmap").param("cellSizeMeters", "50"))
+                .andExpect(status().isBadRequest());
+        // Smaller than the public map's ~300 m location masking would locate requests too precisely.
+        mockMvc.perform(get("/api/analytics/heatmap").param("cellSizeMeters", "100"))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/analytics/heatmap").param("category", "PETS"))
                 .andExpect(status().isBadRequest());

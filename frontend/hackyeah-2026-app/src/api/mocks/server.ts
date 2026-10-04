@@ -740,10 +740,14 @@ const countBy = <K extends string>(keys: K[], values: K[]) =>
     number
   >;
 
+/** Same rules as `AnalyticsService`: cells not smaller than the ~300 m public masking, k-anonymity. */
+const HEATMAP_MIN_CELL_SIZE_METERS = 500;
+const HEATMAP_MIN_CELL_COUNT = 3;
+
 function heatmap(query: Record<string, string>): HeatmapResponse {
   const cellSizeMeters = query.cellSizeMeters ? Number(query.cellSizeMeters) : 500;
-  if (!(cellSizeMeters >= 100 && cellSizeMeters <= 5000)) {
-    throw badRequest('cellSizeMeters must be between 100 and 5000');
+  if (!(cellSizeMeters >= HEATMAP_MIN_CELL_SIZE_METERS && cellSizeMeters <= 5000)) {
+    throw badRequest(`cellSizeMeters must be between ${HEATMAP_MIN_CELL_SIZE_METERS} and 5000`);
   }
   // Backend uses hexagons; the mock uses square cells of the same size – same response shape.
   const visible = filtered(query, ['OPEN', 'OFFERED', 'ACCEPTED', 'COMPLETED', 'RATED']);
@@ -754,7 +758,10 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
     const key = `${Math.floor(r.lat / latSize)}:${Math.floor(r.lng / lngSize)}`;
     cells.set(key, [...(cells.get(key) ?? []), r]);
   }
-  const features = [...cells.entries()].map(([key, items]) => {
+  const shownCells = [...cells.entries()].filter(
+    ([, items]) => items.length >= HEATMAP_MIN_CELL_COUNT,
+  );
+  const features = shownCells.map(([key, items]) => {
     const [row, col] = key.split(':').map(Number);
     const south = row * latSize;
     const west = col * lngSize;
@@ -772,7 +779,13 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
       },
     };
   });
-  return { type: 'FeatureCollection', cellSizeMeters, totalRequests: visible.length, features };
+  return {
+    type: 'FeatureCollection',
+    cellSizeMeters,
+    totalRequests: features.reduce((sum, f) => sum + f.properties.count, 0),
+    suppressedCells: cells.size - shownCells.length,
+    features,
+  };
 }
 
 function summary(query: Record<string, string>): AnalyticsSummary {

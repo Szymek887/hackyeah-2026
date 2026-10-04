@@ -165,6 +165,12 @@ export function CityDashboard() {
               Zagęszczenie potrzeb w korytarzach miejskich ({heatmap?.totalRequests ?? 0} zgłoszeń w{' '}
               {cells.length} obszarach)
             </ThemedText>
+            {!!heatmap?.suppressedCells && (
+              <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                Ukryto obszary z mniej niż 3 zgłoszeniami ({heatmap.suppressedCells}), aby chronić
+                prywatność mieszkańców.
+              </ThemedText>
+            )}
           </View>
         </View>
 

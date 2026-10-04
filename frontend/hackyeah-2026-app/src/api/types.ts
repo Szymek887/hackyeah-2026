@@ -320,7 +320,10 @@ export type RatingResult = {
 export type HeatmapResponse = {
   type: 'FeatureCollection';
   cellSizeMeters: number;
+  /** requests in the cells shown (suppressed cells not included) */
   totalRequests: number;
+  /** cells hidden because they have fewer than 3 requests (k-anonymity) */
+  suppressedCells: number;
   features: {
     type: 'Feature';
     geometry: GeoPoint;

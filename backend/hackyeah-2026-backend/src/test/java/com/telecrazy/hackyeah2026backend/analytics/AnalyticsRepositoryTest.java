@@ -27,9 +27,10 @@ import static org.assertj.core.api.Assertions.offset;
 /**
  * Runs the analytics SQL against the development PostGIS database (docker compose).
  * Test data is dated in 2030 and filtered by that window, so seeded data does not interfere;
- * every test rolls back.
+ * every test rolls back. The k-anonymity threshold is off here so single requests can be checked;
+ * it is covered in {@link AnalyticsServiceTest}.
  */
-@SpringBootTest
+@SpringBootTest(properties = "app.analytics.min-cell-count=1")
 @Transactional
 class AnalyticsRepositoryTest {
 

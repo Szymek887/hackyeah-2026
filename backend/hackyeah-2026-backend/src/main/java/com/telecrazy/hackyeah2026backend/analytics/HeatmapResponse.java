@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * GeoJSON FeatureCollection with one Point feature per non-empty hexagon.
+ * GeoJSON FeatureCollection with one Point feature per hexagon that has enough requests to be shown
+ * (see {@code app.analytics.min-cell-count}).
  * The point is the hexagon centre (for heatmap layers weighted by {@code count} or {@code weight});
  * {@code properties.area} is the hexagon outline (for hexbin/choropleth layers).
  */
@@ -16,12 +17,17 @@ public record HeatmapResponse(
         String type,
         int cellSizeMeters,
         long totalRequests,
+        int suppressedCells,
         List<Feature> features
 ) {
 
-    public static HeatmapResponse of(int cellSizeMeters, List<Feature> features) {
+    /**
+     * @param suppressedCells hexagons left out because they have too few requests; their requests
+     *                        are not included in {@code totalRequests}
+     */
+    public static HeatmapResponse of(int cellSizeMeters, List<Feature> features, int suppressedCells) {
         long total = features.stream().mapToLong(feature -> feature.properties().count()).sum();
-        return new HeatmapResponse("FeatureCollection", cellSizeMeters, total, features);
+        return new HeatmapResponse("FeatureCollection", cellSizeMeters, total, suppressedCells, features);
     }
 
     public record Feature(String type, GeoJsonPoint geometry, Properties properties) {
