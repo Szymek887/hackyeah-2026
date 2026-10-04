@@ -19,7 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Rewrites a dictated request (speech-to-text, often from seniors) into a short title and a clear description
- * with a local LLM served by Ollama. Output is validated: a blank or suspiciously long reply is rejected,
+ * with an LLM served by OpenRouter. Output is validated: a blank or suspiciously long reply is rejected,
  * so the caller falls back to {@link SimpleTranscriptFormatter}. Sentences the model left with a phone or PESEL
  * number are dropped, since the description is shown publicly.
  */
@@ -43,26 +43,27 @@ public class LlmTranscriptFormatter {
                     "title", Map.of("type", "string"),
                     "description", Map.of("type", "string")
             ),
-            "required", List.of("title", "description")
+            "required", List.of("title", "description"),
+            "additionalProperties", false
     );
 
-    private final OllamaClient ollamaClient;
+    private final OpenRouterClient openRouterClient;
     private final JsonMapper jsonMapper;
     private final String systemPrompt;
 
     public LlmTranscriptFormatter(
-            OllamaClient ollamaClient,
+            OpenRouterClient openRouterClient,
             JsonMapper jsonMapper,
             @Value("classpath:prompts/format-transcript.txt") Resource systemPrompt
     ) {
-        this.ollamaClient = ollamaClient;
+        this.openRouterClient = openRouterClient;
         this.jsonMapper = jsonMapper;
         this.systemPrompt = read(systemPrompt);
     }
 
     public FormattedRequest format(TranscriptInput input) {
         String userMessage = "Transcript: " + input.transcript();
-        String content = ollamaClient.chat(systemPrompt, userMessage, RESPONSE_SCHEMA);
+        String content = openRouterClient.chat(systemPrompt, userMessage, RESPONSE_SCHEMA);
         return normalize(input, jsonMapper.readValue(content, LlmOutput.class));
     }
 

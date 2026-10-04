@@ -63,7 +63,7 @@ flowchart LR
     HR --> DB[("🐘 PostgreSQL 17<br/>+ PostGIS 3.5")]
     GEO --> DB
     AN --> DB
-    AI --> LLM["🦙 Ollama<br/>qwen2.5:7b (local)"]
+    AI --> LLM["🤖 OpenRouter<br/>Gemma 4 31B (free)"]
 ```
 
 ### Tech stack
@@ -73,7 +73,7 @@ flowchart LR
 | **Mobile & web** | Expo SDK 57, React Native 0.86, Expo Router, TypeScript (strict), TanStack Query, `react-native-maps` (native) / Leaflet (web), `expo-camera`, `react-native-qrcode-svg` |
 | **Backend** | Java 25, Spring Boot 4.1, Spring Data JPA, Hibernate Spatial (JTS), Bean Validation, RFC 9457 `ProblemDetail` errors |
 | **Data** | PostgreSQL 17 + PostGIS 3.5 (Docker): `ST_DWithin` on `geography` for distances in metres, `ST_HexagonGrid` for the heatmap |
-| **AI** | Ollama with `qwen2.5:7b`, JSON-schema constrained output, runs locally so no personal data leaves the server, keyword-based fallback |
+| **AI** | OpenRouter free models (`google/gemma-4-31b-it:free`, falling back to `qwen/qwen3.8-27b:free`), JSON-schema constrained output, keyword-based fallback |
 
 ---
 
@@ -85,7 +85,7 @@ flowchart LR
 │   ├── src/main/java/.../
 │   │   ├── api/          # REST controllers + DTOs
 │   │   ├── service/      # business logic: workflow, visibility, masking, reputation
-│   │   ├── ai/           # LLM classifier, Ollama client, fallback
+│   │   ├── ai/           # LLM classifier, OpenRouter client, fallback
 │   │   ├── analytics/    # heatmap + summary
 │   │   ├── domain/       # JPA entities
 │   │   └── config/       # Kraków demo data seeder, Jackson, schema helpers
@@ -113,7 +113,7 @@ flowchart LR
 - **Docker** (for PostgreSQL + PostGIS)
 - **Java 25** (the Maven wrapper is included)
 - **Node.js 20+** and npm
-- *Optional:* **[Ollama](https://ollama.com)**, for real AI classification. Without it, the backend uses the keyword-based fallback.
+- *Optional:* an **[OpenRouter](https://openrouter.ai/keys)** API key, for real AI classification. Without it, the backend uses the keyword-based fallback.
 - *For the phone:* the **Expo Go** app
 
 ### 1. Backend
@@ -124,14 +124,34 @@ cd backend/hackyeah-2026-backend
 # Database (PostgreSQL 17 + PostGIS)
 docker compose up -d
 
-# Optional: local LLM
-ollama pull qwen2.5:7b
+# Optional: LLM via OpenRouter (secrets.properties is git-ignored)
+cp secrets.properties.example secrets.properties   # then paste your key
 
 # Run the API on http://localhost:8080
 ./mvnw spring-boot:run
 # ...or without the LLM:
 AI_ENABLED=false ./mvnw spring-boot:run
 ```
+
+#### OpenRouter API key
+
+The AI features (rewriting dictated requests and classifying them) call free models on [OpenRouter](https://openrouter.ai). Each developer brings their own key, and **the key must never be committed**.
+
+1. Sign in at [openrouter.ai](https://openrouter.ai) and create a key at [openrouter.ai/keys](https://openrouter.ai/keys). Free models need no credits.
+2. Give the key to the backend in one of two ways:
+   - **File (recommended):** copy the template and paste your key:
+     ```bash
+     cp secrets.properties.example secrets.properties
+     ```
+     ```properties
+     # secrets.properties
+     app.ai.api-key=sk-or-v1-...
+     ```
+     `secrets.properties` is git-ignored and loaded automatically when the API is started from `backend/hackyeah-2026-backend`.
+   - **Environment variable:** `OPENROUTER_API_KEY=sk-or-v1-... ./mvnw spring-boot:run`
+3. Restart the API. If the key is missing or wrong, or OpenRouter is down, the backend logs a warning and uses the keyword-based fallback, so the app keeps working.
+
+Free models are rate-limited: about 20 requests per minute and, on an account without credits, about 50 requests per day (1000 per day once you have bought $10 of credits). A voice request uses two calls (format + classify), so for a demo consider topping up or sharing one key that has credits.
 
 On the first start with an empty database, the **Kraków demo data** is created automatically: 13 users and ~54 requests clustered in real districts and along a demo commute route, in every state of the lifecycle. To reset the demo data, run `docker compose down -v && docker compose up -d` and restart the API.
 
@@ -145,8 +165,8 @@ Check that it works: `curl http://localhost:8080/api/health` returns `{"status":
 | `DB_HOST` / `DB_PORT` / `DB_NAME` | `localhost` / `5432` / `hackyeah` | Database connection |
 | `DB_USER` / `DB_PASSWORD` | `hackyeah` / `hackyeah` | Database credentials |
 | `AI_ENABLED` | `true` | `false` = keyword fallback only |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Model used for classification |
+| `OPENROUTER_API_KEY` | *(empty)* | OpenRouter key; or set `app.ai.api-key` in `secrets.properties` |
+| `OPENROUTER_MODELS` | `google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free` | Models in order of preference |
 
 </details>
 
