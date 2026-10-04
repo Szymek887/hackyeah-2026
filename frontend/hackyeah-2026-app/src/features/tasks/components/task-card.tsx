@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import type { HelpRequestView, RequestStatus } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -9,8 +9,15 @@ import { Radius, Spacing } from '@/constants/theme';
 import { CategoryBadge } from '@/features/requests/components/request-badges';
 import { timeAgo } from '@/features/requests/labels';
 import { isFull } from '@/features/requests/view-helpers';
+import { useSavedCommuteRoute } from '@/features/commute/commute-store';
 import { turnLabel, turnOf, type Turn } from '@/features/tasks/hooks';
 import { useTheme } from '@/hooks/use-theme';
+import {
+  appleDirectionsToStopUrl,
+  googlePointUrl,
+  googleRouteViaStopUrl,
+  requestMapCoordinate,
+} from '@/lib/map-links';
 
 type Step = 'waiting' | 'inProgress' | 'done';
 
@@ -140,13 +147,41 @@ function peopleHint(task: HelpRequestView, isVolunteer: boolean): string | null 
 }
 
 function TaskAction({ task, isVolunteer }: { task: HelpRequestView; isVolunteer: boolean }) {
+  const { savedRoute } = useSavedCommuteRoute();
+  const activeRoute = savedRoute?.isActive ? savedRoute : null;
+
+  const openInMaps = () => {
+    const target = requestMapCoordinate(task);
+    const url =
+      Platform.OS === 'ios'
+        ? appleDirectionsToStopUrl(activeRoute?.start ?? target, target)
+        : activeRoute
+          ? googleRouteViaStopUrl(activeRoute.start, activeRoute.end, target)
+          : googlePointUrl(target);
+
+    Linking.openURL(url).catch(() => {
+      const message = 'Nie udało się otworzyć map na tym urządzeniu.';
+      if (Platform.OS === 'web') alert(message);
+      else Alert.alert('Mapy', message);
+    });
+  };
+
+  if (isVolunteer && (task.status === 'OFFERED' || task.status === 'ACCEPTED')) {
+    return (
+      <View style={styles.actions}>
+        <Button title="Otwórz trasę w mapach" variant="secondary" onPress={openInMaps} />
+        {task.status === 'ACCEPTED' && (
+          <Button
+            title="Zakończ – zeskanuj kod QR"
+            onPress={() => router.push({ pathname: '/scan', params: { requestId: task.id } })}
+          />
+        )}
+      </View>
+    );
+  }
+
   if (task.status === 'ACCEPTED') {
-    return isVolunteer ? (
-      <Button
-        title="Zakończ – zeskanuj kod QR"
-        onPress={() => router.push({ pathname: '/scan', params: { requestId: task.id } })}
-      />
-    ) : (
+    return (
       <Button
         title="Pokaż kod QR dla wolontariusza"
         onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
@@ -223,6 +258,9 @@ const styles = StyleSheet.create({
   step: {
     flex: 1,
     gap: Spacing.half,
+  },
+  actions: {
+    gap: Spacing.one,
   },
   bar: {
     height: 4,

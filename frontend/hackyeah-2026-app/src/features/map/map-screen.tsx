@@ -37,6 +37,12 @@ import {
   toRouteLineString,
 } from '@/features/commute/route-geometry';
 import { distanceMeters } from '@/lib/geo';
+import {
+  appleDirectionsToStopUrl,
+  googlePointUrl,
+  googleRouteViaStopUrl,
+  requestMapCoordinate,
+} from '@/lib/map-links';
 import type { RouteCoordinate } from '@/lib/route-matching';
 import { useUserLocation } from '@/features/map/use-user-location';
 import { USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
@@ -71,36 +77,6 @@ function sortByNearest(requests: HelpRequestListItem[], center: RouteCoordinate)
     if (a.priority !== b.priority) return a.priority - b.priority;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-}
-
-function coordParam(coordinate: RouteCoordinate) {
-  return `${coordinate.latitude},${coordinate.longitude}`;
-}
-
-function googleRouteViaStopUrl(
-  start: RouteCoordinate,
-  end: RouteCoordinate,
-  stop: RouteCoordinate,
-) {
-  return [
-    'https://www.google.com/maps/dir/?api=1',
-    `origin=${encodeURIComponent(coordParam(start))}`,
-    `destination=${encodeURIComponent(coordParam(end))}`,
-    `waypoints=${encodeURIComponent(coordParam(stop))}`,
-    'travelmode=driving',
-  ].join('&');
-}
-
-function googlePointUrl(point: RouteCoordinate) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordParam(point))}`;
-}
-
-function appleDirectionsToStopUrl(start: RouteCoordinate, stop: RouteCoordinate) {
-  return [
-    'https://maps.apple.com/?dirflg=d',
-    `saddr=${encodeURIComponent(coordParam(start))}`,
-    `daddr=${encodeURIComponent(coordParam(stop))}`,
-  ].join('&');
 }
 
 function routePlannerParams(center: RouteCoordinate, label: string) {
@@ -264,6 +240,9 @@ export function MapScreen() {
   const selectedRequestCenter = selectedRequest
     ? toLatLng(selectedRequest.approximateLocation.coordinates)
     : null;
+  const activeTaskCenter =
+    activeTask && activeTask.viewerRole === 'VOLUNTEER' ? requestMapCoordinate(activeTask) : null;
+  const navigationTarget = selectedRequestCenter ?? activeTaskCenter;
   const activeRouteUpdatedAt = activeRoute?.updatedAt;
 
   useEffect(() => {
@@ -403,7 +382,7 @@ export function MapScreen() {
   };
 
   const openSelectedStopInMaps = () => {
-    if (!selectedRequestCenter) {
+    if (!navigationTarget) {
       setOnlyAlongRoute(true);
       setIsSummaryOpen(true);
       return;
@@ -411,10 +390,10 @@ export function MapScreen() {
 
     const url =
       Platform.OS === 'ios'
-        ? appleDirectionsToStopUrl(activeRoute?.start ?? mapCenter, selectedRequestCenter)
+        ? appleDirectionsToStopUrl(activeRoute?.start ?? mapCenter, navigationTarget)
         : activeRoute
-          ? googleRouteViaStopUrl(activeRoute.start, activeRoute.end, selectedRequestCenter)
-          : googlePointUrl(selectedRequestCenter);
+          ? googleRouteViaStopUrl(activeRoute.start, activeRoute.end, navigationTarget)
+          : googlePointUrl(navigationTarget);
 
     Linking.openURL(url).catch(() => {
       const message = 'Nie udało się otworzyć map na tym urządzeniu.';
@@ -490,7 +469,7 @@ export function MapScreen() {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel={
-                selectedRequest
+                navigationTarget
                   ? 'Otwórz trasę przez wybrany punkt w mapach'
                   : 'Wybierz punkt z trasy'
               }
@@ -510,7 +489,11 @@ export function MapScreen() {
                 type="caption"
                 numberOfLines={1}
                 style={{ color: theme.onPrimary, fontWeight: '800' }}>
-                {selectedRequest ? 'Nawiguj przez wybrany punkt' : 'Wybierz punkt z listy'}
+                {selectedRequest
+                  ? 'Nawiguj przez wybrany punkt'
+                  : activeTaskCenter
+                    ? 'Nawiguj do aktywnego zadania'
+                    : 'Wybierz punkt z listy'}
               </ThemedText>
             </Pressable>
           </>
