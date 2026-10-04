@@ -75,6 +75,7 @@ export function MapScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const locationErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { savedRoute } = useSavedCommuteRoute();
   const sharedLocation = useSharedLocation();
   const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
@@ -84,8 +85,12 @@ export function MapScreen() {
 
   const [mapCenter, setMapCenter] = useState<RouteCoordinate>(sharedLocation.coordinate);
   const [locationLabel, setLocationLabel] = useState<string>(sharedLocation.label);
+  const [locationSource, setLocationSource] = useState<'gps' | 'manual'>(
+    sharedLocation.label.includes('(GPS)') ? 'gps' : 'manual',
+  );
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(true);
+  const [showLocationError, setShowLocationError] = useState(false);
   const [radiusKm, setRadiusKm] = useState<number>(2.5);
 
   const [mapZoom, setMapZoom] = useState(() =>
@@ -112,6 +117,8 @@ export function MapScreen() {
     setIsPermissionModalOpen(false);
     setMapCenter(coords);
     setLocationLabel('Moja lokalizacja (GPS)');
+    setLocationSource('gps');
+    hideLocationError();
     setSharedLocation({ label: 'Moja lokalizacja (GPS)', coordinate: coords });
     setSelectedRequestId(null);
     mapRef.current?.animateToRegion(
@@ -164,9 +171,28 @@ export function MapScreen() {
     ? toLatLng(selectedRequest.approximateLocation.coordinates)
     : null;
 
+  const hideLocationError = () => {
+    if (locationErrorTimeoutRef.current) {
+      clearTimeout(locationErrorTimeoutRef.current);
+      locationErrorTimeoutRef.current = null;
+    }
+    setShowLocationError(false);
+  };
+
+  const showLocationErrorTemporarily = () => {
+    if (locationErrorTimeoutRef.current) clearTimeout(locationErrorTimeoutRef.current);
+    setShowLocationError(true);
+    locationErrorTimeoutRef.current = setTimeout(() => {
+      setShowLocationError(false);
+      locationErrorTimeoutRef.current = null;
+    }, 4000);
+  };
+
   const handleSelectLocation = (name: string, coordinate: RouteCoordinate) => {
     setMapCenter(coordinate);
     setLocationLabel(name);
+    setLocationSource('manual');
+    hideLocationError();
     setSharedLocation({ label: name, coordinate });
     setSelectedRequestId(null);
     mapRef.current?.animateToRegion(
@@ -181,10 +207,26 @@ export function MapScreen() {
   };
 
   const centerOnMyLocation = async () => {
+    if (locationSource === 'manual') {
+      hideLocationError();
+      mapRef.current?.animateToRegion(
+        {
+          latitude: mapCenter.latitude,
+          longitude: mapCenter.longitude,
+          latitudeDelta: 0.006,
+          longitudeDelta: 0.006,
+        },
+        300,
+      );
+      return;
+    }
+
     const loc = await locate();
     if (loc) {
       setMapCenter(loc);
       setLocationLabel('Moja lokalizacja (GPS)');
+      setLocationSource('gps');
+      hideLocationError();
       setSharedLocation({ label: 'Moja lokalizacja (GPS)', coordinate: loc });
       mapRef.current?.animateToRegion(
         {
@@ -195,6 +237,8 @@ export function MapScreen() {
         },
         300,
       );
+    } else {
+      showLocationErrorTemporarily();
     }
   };
 
@@ -406,7 +450,7 @@ export function MapScreen() {
             </ThemedText>
           )}
         </Pressable>
-        {locationError && (
+        {locationError && showLocationError && (
           <ThemedView type="backgroundElement" style={styles.errorToast}>
             <ThemedText type="caption" themeColor="warning">
               {locationError}
@@ -416,7 +460,7 @@ export function MapScreen() {
       </View>
 
       {!selectedRequest && !isSummaryOpen && (
-        <View style={[styles.leftActions, { bottom: insets.bottom + 118 }]}>
+        <View style={[styles.leftActions, { bottom: insets.bottom + 82 }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Otwórz listę zgłoszeń"
@@ -461,7 +505,7 @@ export function MapScreen() {
 
       {/* Bottom Panel */}
       {(selectedRequest || isSummaryOpen) && (
-        <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
+        <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.two }]}>
           {selectedRequest ? (
             <ThemedView type="backgroundElement" style={styles.selectedCard}>
               <Pressable
