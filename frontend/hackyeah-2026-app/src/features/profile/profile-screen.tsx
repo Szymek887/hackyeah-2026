@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { updateMyDisabilities, updateMyLanguages } from '@/api/auth';
@@ -98,7 +98,8 @@ export function ProfileScreen() {
       </Animated.View>
 
       <View style={styles.actions}>
-        {user.role === 'REQUESTER' && (
+        {/* Phones show the start screen only once after login (see start-screen-store). */}
+        {user.role === 'REQUESTER' && Platform.OS === 'web' && (
           <Button
             title="Prosty ekran startowy"
             variant="secondary"

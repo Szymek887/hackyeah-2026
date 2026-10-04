@@ -24,8 +24,6 @@ import {
   useMyTasks,
   type TaskTab,
 } from '@/features/tasks/hooks';
-import { toDraftParams } from '@/features/voice/voice-draft';
-import { VoiceRequestFlow } from '@/features/voice/voice-request-flow';
 import { useRefresh } from '@/hooks/use-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { enterItem, exitItem, layoutTransition } from '@/lib/motion';
@@ -108,13 +106,6 @@ export function TasksScreen() {
             : 'Twoje zgłoszenia. Pokaż kod QR wolontariuszowi, aby potwierdzić otrzymaną pomoc.'}
         </ThemedText>
       </View>
-
-      {role !== 'VOLUNTEER' && (
-        <VoiceRequestFlow
-          label="Nowa prośba głosem"
-          onAccept={(draft) => router.push({ pathname: '/new', params: toDraftParams(draft) })}
-        />
-      )}
 
       {role === 'VOLUNTEER' && (
         <Card

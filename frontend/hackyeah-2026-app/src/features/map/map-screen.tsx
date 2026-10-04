@@ -1,10 +1,9 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Circle, Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SvgXml } from 'react-native-svg';
 
 import { errorMessage } from '@/api/errors';
 import type { Category, HelpRequestListItem, Priority } from '@/api/types';
@@ -27,7 +26,8 @@ import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
 import { distanceMeters } from '@/lib/geo';
 import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
 import { useUserLocation } from '@/features/map/use-user-location';
-import { PERSON_SVG, USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
+import { USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
+import { OsmMapView, type MapHandle, type OsmMarker } from '@/features/map/osm-map-view';
 import { useTheme } from '@/hooks/use-theme';
 import { KRAKOW_INITIAL_REGION, toLatLng } from '@/features/map/krakow-map-data';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
@@ -71,10 +71,39 @@ function routePlannerParams(center: RouteCoordinate, label: string) {
   };
 }
 
+/**
+ * Android draws custom marker views as bitmaps. Redrawing them on every frame
+ * (`tracksViewChanges`, on by default) with dozens of markers makes the map stutter or stay
+ * blank, while switching it off from the start can leave markers empty. So markers are redrawn
+ * only for a moment after their look changes (`signature`), then frozen.
+ */
+function useMarkerRedraw(signature: string) {
+  const [tracking, setTracking] = useState(true);
+  const [lastSignature, setLastSignature] = useState(signature);
+  if (lastSignature !== signature) {
+    setLastSignature(signature);
+    setTracking(true);
+  }
+  useEffect(() => {
+    if (!tracking) return;
+    const timer = setTimeout(() => setTracking(false), MARKER_REDRAW_MS);
+    return () => clearTimeout(timer);
+  }, [tracking]);
+  return tracking;
+}
+
+const MARKER_REDRAW_MS = 700;
+
+/**
+ * Android uses the OpenStreetMap WebView: in Expo Go (SDK 57) the Google map of react-native-maps
+ * renders black with only the Google logo (expo/expo#49323). iOS keeps the native Apple map.
+ */
+const USE_OSM_MAP = Platform.OS === 'android';
+
 export function MapScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapHandle | null>(null);
   const locationErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { savedRoute } = useSavedCommuteRoute();
   const sharedLocation = useSharedLocation();
@@ -166,10 +195,49 @@ export function MapScreen() {
   );
 
   const showLabels = mapZoom >= NO_CLUSTER_ZOOM;
+  const redrawMarkers = useMarkerRedraw(
+    [
+      showLabels,
+      theme.primary,
+      selectedRequestId,
+      requestClusters.map((cluster) => cluster.id).join(','),
+    ].join('|'),
+  );
   const selectedRequest = displayRequests.find((request) => request.id === selectedRequestId);
   const selectedRequestCenter = selectedRequest
     ? toLatLng(selectedRequest.approximateLocation.coordinates)
     : null;
+
+  /** The same points as the native markers below, for the OpenStreetMap view (Android). */
+  const osmMarkers = useMemo(
+    (): OsmMarker[] =>
+      requestClusters.map((cluster) =>
+        cluster.requests.length > 1
+          ? {
+              id: `c:${cluster.id}`,
+              ...cluster.coordinate,
+              kind: 'cluster',
+              fill: theme.primaryStrong,
+              count: cluster.requests.length,
+            }
+          : {
+              id: `r:${cluster.requests[0].id}`,
+              ...cluster.coordinate,
+              kind: 'request',
+              fill: CategoryColors[cluster.requests[0].category].color,
+              ring: PriorityColors[cluster.requests[0].priority].color,
+              label: showLabels ? cluster.requests[0].title : undefined,
+            },
+      ),
+    [requestClusters, showLabels, theme.primaryStrong],
+  );
+
+  const mapPadding = {
+    top: insets.top + (activeRoute ? 110 : 70),
+    right: 12,
+    bottom: selectedRequest || isSummaryOpen ? 260 : 90,
+    left: 12,
+  };
 
   const hideLocationError = () => {
     if (locationErrorTimeoutRef.current) {
@@ -308,130 +376,177 @@ export function MapScreen() {
       </View>
 
       {/* Main Interactive Map */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        initialRegion={KRAKOW_INITIAL_REGION}
-        // Our own "you are here" marker below covers GPS and manually picked places alike.
-        showsUserLocation={false}
-        showsCompass
-        showsScale
-        onRegionChangeComplete={(region) => {
-          setMapRegion(region);
-          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
-        }}
-        mapPadding={{
-          top: insets.top + (activeRoute ? 110 : 70),
-          right: 12,
-          bottom: selectedRequest || isSummaryOpen ? 260 : 90,
-          left: 12,
-        }}>
-        <Marker
-          coordinate={mapCenter}
-          anchor={{ x: 0.5, y: 0.5 }}
-          zIndex={1000}
-          tracksViewChanges={false}
-          title="Tu jesteś"
-          description={locationLabel}
-          accessibilityLabel={`Tu jesteś: ${locationLabel}`}>
-          <View style={styles.meHalo}>
-            <View
-              style={[
-                styles.meDot,
-                { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
-              ]}>
-              <SvgXml xml={PERSON_SVG} width={20} height={20} />
+      {USE_OSM_MAP ? (
+        <OsmMapView
+          ref={mapRef}
+          initialRegion={KRAKOW_INITIAL_REGION}
+          markers={osmMarkers}
+          onMarkerPress={(id) => {
+            const [kind, key] = [id.slice(0, 1), id.slice(2)];
+            if (kind === 'r') {
+              setSelectedRequestId(Number(key));
+              return;
+            }
+            const cluster = requestClusters.find((c) => c.id === key);
+            if (cluster) zoomToCluster(cluster.coordinate);
+          }}
+          onRegionChangeComplete={(region) => {
+            setMapRegion(region);
+            setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
+          }}
+          userLocation={mapCenter}
+          route={activeRoute?.coordinates}
+          area={
+            selectedRequest && selectedRequestCenter
+              ? {
+                  center: selectedRequestCenter,
+                  radiusMeters: MASKED_AREA_RADIUS_METERS,
+                  fill: CategoryColors[selectedRequest.category].color,
+                  stroke: PriorityColors[selectedRequest.priority].color,
+                }
+              : undefined
+          }
+          padding={mapPadding}
+          colors={{
+            primary: theme.primary,
+            onPrimary: theme.onPrimary,
+            surface: theme.backgroundElement,
+            text: theme.text,
+            border: theme.border,
+            success: theme.success,
+            danger: theme.danger,
+          }}
+        />
+      ) : (
+        <MapView
+          ref={(map) => {
+            mapRef.current = map;
+          }}
+          style={styles.map}
+          initialRegion={KRAKOW_INITIAL_REGION}
+          // Our own "you are here" marker below covers GPS and manually picked places alike.
+          showsUserLocation={false}
+          showsCompass
+          showsScale
+          onRegionChangeComplete={(region) => {
+            setMapRegion(region);
+            setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
+          }}
+          mapPadding={mapPadding}>
+          <Marker
+            coordinate={mapCenter}
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={1000}
+            tracksViewChanges={redrawMarkers}
+            title="Tu jesteś"
+            description={locationLabel}
+            accessibilityLabel={`Tu jesteś: ${locationLabel}`}>
+            <View style={styles.meHalo}>
+              <View
+                style={[
+                  styles.meDot,
+                  { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
+                ]}>
+                {/* Person figure from plain views: SVG inside markers renders empty on Android. */}
+                <View style={styles.meHead} />
+                <View style={styles.meBody} />
+              </View>
             </View>
-          </View>
-        </Marker>
+          </Marker>
 
-        {activeRoute && activeRoute.coordinates.length >= 2 && (
-          <>
-            <Polyline
-              coordinates={activeRoute.coordinates}
-              strokeColor={`${theme.primary}24`}
-              strokeWidth={22}
+          {activeRoute && activeRoute.coordinates.length >= 2 && (
+            <>
+              <Polyline
+                coordinates={activeRoute.coordinates}
+                strokeColor={`${theme.primary}24`}
+                strokeWidth={22}
+              />
+              <Polyline
+                coordinates={activeRoute.coordinates}
+                strokeColor={theme.primary}
+                strokeWidth={5}
+              />
+              <Marker coordinate={activeRoute.start} pinColor={theme.success} title="Start trasy" />
+              <Marker coordinate={activeRoute.end} pinColor={theme.danger} title="Cel trasy" />
+            </>
+          )}
+
+          {selectedRequest && selectedRequestCenter && (
+            <Circle
+              center={selectedRequestCenter}
+              radius={MASKED_AREA_RADIUS_METERS}
+              fillColor={`${CategoryColors[selectedRequest.category].color}1F`}
+              strokeColor={PriorityColors[selectedRequest.priority].color}
+              strokeWidth={3}
             />
-            <Polyline
-              coordinates={activeRoute.coordinates}
-              strokeColor={theme.primary}
-              strokeWidth={5}
-            />
-            <Marker coordinate={activeRoute.start} pinColor={theme.success} title="Start trasy" />
-            <Marker coordinate={activeRoute.end} pinColor={theme.danger} title="Cel trasy" />
-          </>
-        )}
+          )}
 
-        {selectedRequest && selectedRequestCenter && (
-          <Circle
-            center={selectedRequestCenter}
-            radius={MASKED_AREA_RADIUS_METERS}
-            fillColor={`${CategoryColors[selectedRequest.category].color}1F`}
-            strokeColor={PriorityColors[selectedRequest.priority].color}
-            strokeWidth={3}
-          />
-        )}
+          {requestClusters.map((cluster) => {
+            if (cluster.requests.length > 1) {
+              return (
+                <Marker
+                  key={cluster.id}
+                  coordinate={cluster.coordinate}
+                  tracksViewChanges={redrawMarkers}
+                  onPress={() => zoomToCluster(cluster.coordinate)}>
+                  <View
+                    style={[
+                      styles.clusterMarker,
+                      {
+                        backgroundColor: theme.primaryStrong,
+                        borderColor: theme.backgroundElement,
+                      },
+                    ]}>
+                    <ThemedText type="smallBold" style={{ color: theme.onPrimary }}>
+                      {cluster.requests.length}
+                    </ThemedText>
+                  </View>
+                </Marker>
+              );
+            }
 
-        {requestClusters.map((cluster) => {
-          if (cluster.requests.length > 1) {
+            const request = cluster.requests[0];
             return (
               <Marker
-                key={cluster.id}
+                key={request.id}
                 coordinate={cluster.coordinate}
-                onPress={() => zoomToCluster(cluster.coordinate)}>
-                <View
-                  style={[
-                    styles.clusterMarker,
-                    {
-                      backgroundColor: theme.primaryStrong,
-                      borderColor: theme.backgroundElement,
-                    },
-                  ]}>
-                  <ThemedText type="smallBold" style={{ color: theme.onPrimary }}>
-                    {cluster.requests.length}
-                  </ThemedText>
+                anchor={showLabels ? { x: 0.5, y: 1 } : { x: 0.5, y: 0.5 }}
+                accessibilityLabel={request.title}
+                tracksViewChanges={redrawMarkers}
+                onPress={() => setSelectedRequestId(request.id)}>
+                <View style={styles.markerColumn}>
+                  {showLabels && (
+                    <View
+                      style={[
+                        styles.markerLabel,
+                        { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                      ]}>
+                      <ThemedText type="caption" numberOfLines={2}>
+                        {request.title}
+                      </ThemedText>
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.requestMarkerHalo,
+                      { backgroundColor: theme.backgroundElement },
+                    ]}>
+                    <View
+                      style={[
+                        styles.requestMarker,
+                        {
+                          backgroundColor: CategoryColors[request.category].color,
+                          borderColor: PriorityColors[request.priority].color,
+                        },
+                      ]}
+                    />
+                  </View>
                 </View>
               </Marker>
             );
-          }
-
-          const request = cluster.requests[0];
-          return (
-            <Marker
-              key={request.id}
-              coordinate={cluster.coordinate}
-              anchor={showLabels ? { x: 0.5, y: 1 } : { x: 0.5, y: 0.5 }}
-              accessibilityLabel={request.title}
-              onPress={() => setSelectedRequestId(request.id)}>
-              <View style={styles.markerColumn}>
-                {showLabels && (
-                  <View
-                    style={[
-                      styles.markerLabel,
-                      { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-                    ]}>
-                    <ThemedText type="caption" numberOfLines={2}>
-                      {request.title}
-                    </ThemedText>
-                  </View>
-                )}
-                <View
-                  style={[styles.requestMarkerHalo, { backgroundColor: theme.backgroundElement }]}>
-                  <View
-                    style={[
-                      styles.requestMarker,
-                      {
-                        backgroundColor: CategoryColors[request.category].color,
-                        borderColor: PriorityColors[request.priority].color,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            </Marker>
-          );
-        })}
-      </MapView>
+          })}
+        </MapView>
+      )}
 
       {/* Floating GPS Button */}
       <View style={[styles.floatingActions, { top: insets.top + (activeRoute ? 120 : 80) }]}>
@@ -1002,6 +1117,21 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 1,
+    overflow: 'hidden',
+  },
+  meHead: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  meBody: {
+    width: 15,
+    height: 7,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    backgroundColor: '#FFFFFF',
   },
   requestMarkerHalo: {
     width: 34,

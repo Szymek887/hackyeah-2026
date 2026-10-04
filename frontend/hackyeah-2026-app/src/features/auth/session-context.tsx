@@ -14,6 +14,7 @@ import { createUser, getMe, updateMyDisabilities } from '@/api/auth';
 import { setApiUserId } from '@/api/client';
 import type { CreateUserDto, UserProfile, UserRole } from '@/api/types';
 import { commuteStore } from '@/features/commute/commute-store';
+import { startScreen } from '@/features/home/start-screen-store';
 import { emptyProfileDetails, type ProfileDetails } from '@/features/profile/profile-details';
 import { webStorage } from '@/lib/web-storage';
 
@@ -107,6 +108,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
     // Cached lists and the commute route belong to the previous user.
     queryClient.clear();
     commuteStore.clearRoute();
+    // The next login shows the start screen again.
+    startScreen.reset();
   }, [queryClient]);
 
   const refreshUser = useCallback(async () => {
