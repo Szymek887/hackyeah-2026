@@ -10,6 +10,13 @@ export type PlaceSuggestion = {
 
 export const KRAKOW_PRESET_PLACES: PlaceSuggestion[] = [
   {
+    id: 'tauron-arena',
+    name: 'Tauron Arena Kraków',
+    address: 'ul. Stanisława Lema 7, Kraków',
+    coordinate: { latitude: 50.0681, longitude: 19.9942 },
+    type: 'preset',
+  },
+  {
     id: 'cinema-bonarka',
     name: 'Cinema City Bonarka',
     address: 'ul. Henryka Kamieńskiego 11, Kraków (Bonarka City Center)',
@@ -112,13 +119,6 @@ export const KRAKOW_PRESET_PLACES: PlaceSuggestion[] = [
     name: 'Nowa Huta – Plac Centralny',
     address: 'Plac Centralny im. Ronalda Reagana, Kraków',
     coordinate: { latitude: 50.0712, longitude: 20.0368 },
-    type: 'preset',
-  },
-  {
-    id: 'tauron-arena',
-    name: 'Tauron Arena Kraków',
-    address: 'ul. Stanisława Lema 7, Kraków',
-    coordinate: { latitude: 50.0681, longitude: 19.9942 },
     type: 'preset',
   },
   {
