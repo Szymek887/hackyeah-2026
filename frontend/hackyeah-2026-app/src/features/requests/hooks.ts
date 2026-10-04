@@ -12,13 +12,14 @@ import {
   rejectOffer,
 } from '@/api/requests';
 import type { AlongRouteQuery, HelpRequestView, NearbyQuery, RequestStatus } from '@/api/types';
+import { useSession } from '@/features/auth/session-context';
 
 export const requestKeys = {
   all: ['requests'] as const,
   nearby: (query: NearbyQuery) => [...requestKeys.all, 'nearby', query] as const,
   alongRoute: (query: AlongRouteQuery) => [...requestKeys.all, 'along-route', query] as const,
   mine: (userId: number) => [...requestKeys.all, 'mine', userId] as const,
-  detail: (id: number) => [...requestKeys.all, 'detail', id] as const,
+  detail: (id: number, userId: number) => [...requestKeys.all, 'detail', id, userId] as const,
 };
 
 export function useNearbyRequests(
@@ -32,10 +33,14 @@ export function useNearbyRequests(
   });
 }
 
-export function useRequestsAlongRoute(query: AlongRouteQuery) {
+export function useRequestsAlongRoute(
+  query: AlongRouteQuery,
+  options: { enabled?: boolean; refetchInterval?: number } = {},
+) {
   return useQuery({
     queryKey: requestKeys.alongRoute(query),
     queryFn: () => getRequestsAlongRoute(query),
+    ...options,
   });
 }
 
@@ -49,8 +54,9 @@ const WAITING_STATUSES: RequestStatus[] = ['OPEN', 'OFFERED', 'ACCEPTED'];
 const isWaiting = (view: HelpRequestView) => WAITING_STATUSES.includes(view.status);
 
 export function useRequest(id: number) {
+  const { user } = useSession();
   return useQuery({
-    queryKey: requestKeys.detail(id),
+    queryKey: requestKeys.detail(id, user.id),
     queryFn: () => getRequest(id),
     enabled: Number.isInteger(id),
     refetchInterval: (query) =>
@@ -81,10 +87,11 @@ export function useCreateRequest() {
  */
 function useWorkflowAction(mutationFn: (id: number) => Promise<HelpRequestView>) {
   const queryClient = useQueryClient();
+  const { user } = useSession();
   return useMutation({
     mutationFn,
     onSuccess: (view) => {
-      queryClient.setQueryData(requestKeys.detail(view.id), view);
+      queryClient.setQueryData(requestKeys.detail(view.id, user.id), view);
       queryClient.invalidateQueries({ queryKey: requestKeys.all });
     },
   });

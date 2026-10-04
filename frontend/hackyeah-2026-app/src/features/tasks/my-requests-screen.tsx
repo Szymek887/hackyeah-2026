@@ -51,7 +51,7 @@ export function MyRequestsScreen() {
       </View>
 
       {isPending && <ActivityIndicator color={theme.primary} />}
-      {error && (
+      {error && data.length === 0 && (
         <ThemedText themeColor="danger" accessibilityRole="alert">
           {errorMessage(error)}
         </ThemedText>

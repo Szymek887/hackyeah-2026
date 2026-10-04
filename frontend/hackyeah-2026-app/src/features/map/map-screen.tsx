@@ -1,7 +1,16 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import MapView, { Circle, Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,15 +25,19 @@ import {
   NO_CLUSTER_ZOOM,
   zoomFromLongitudeDelta,
 } from '@/features/map/map-clustering';
-import { useNearbyRequests, useOfferHelp } from '@/features/requests/hooks';
+import { useNearbyRequests, useOfferHelp, useRequestsAlongRoute } from '@/features/requests/hooks';
 import { ActiveTaskNotice } from '@/features/tasks/components/active-task-notice';
 import { useActiveVolunteerTask } from '@/features/tasks/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import { CategoryLabels, PriorityLabels, timeAgo } from '@/features/requests/labels';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
-import { ROUTE_BUFFER_METERS } from '@/features/commute/route-geometry';
+import {
+  ROUTE_BUFFER_METERS,
+  simplifyRoute,
+  toRouteLineString,
+} from '@/features/commute/route-geometry';
 import { distanceMeters } from '@/lib/geo';
-import { filterRequestsAlongRoute, type RouteCoordinate } from '@/lib/route-matching';
+import type { RouteCoordinate } from '@/lib/route-matching';
 import { useUserLocation } from '@/features/map/use-user-location';
 import { USER_LOCATION_SIZE } from '@/features/map/user-location-icon';
 import { OsmMapView, type MapHandle, type OsmMarker } from '@/features/map/osm-map-view';
@@ -58,6 +71,36 @@ function sortByNearest(requests: HelpRequestListItem[], center: RouteCoordinate)
     if (a.priority !== b.priority) return a.priority - b.priority;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
+}
+
+function coordParam(coordinate: RouteCoordinate) {
+  return `${coordinate.latitude},${coordinate.longitude}`;
+}
+
+function googleRouteViaStopUrl(
+  start: RouteCoordinate,
+  end: RouteCoordinate,
+  stop: RouteCoordinate,
+) {
+  return [
+    'https://www.google.com/maps/dir/?api=1',
+    `origin=${encodeURIComponent(coordParam(start))}`,
+    `destination=${encodeURIComponent(coordParam(end))}`,
+    `waypoints=${encodeURIComponent(coordParam(stop))}`,
+    'travelmode=driving',
+  ].join('&');
+}
+
+function googlePointUrl(point: RouteCoordinate) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordParam(point))}`;
+}
+
+function appleDirectionsToStopUrl(start: RouteCoordinate, stop: RouteCoordinate) {
+  return [
+    'https://maps.apple.com/?dirflg=d',
+    `saddr=${encodeURIComponent(coordParam(start))}`,
+    `daddr=${encodeURIComponent(coordParam(stop))}`,
+  ].join('&');
 }
 
 function routePlannerParams(center: RouteCoordinate, label: string) {
@@ -128,9 +171,18 @@ export function MapScreen() {
   const [mapRegion, setMapRegion] = useState<Region>(KRAKOW_INITIAL_REGION);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(true);
-  const [onlyAlongRoute, setOnlyAlongRoute] = useState(false);
+  const [onlyAlongRoute, setOnlyAlongRoute] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('ALL');
+
+  const activeRoute = savedRoute?.isActive ? savedRoute : null;
+  const routeLine = useMemo(
+    () =>
+      toRouteLineString(
+        activeRoute ? simplifyRoute(activeRoute.coordinates) : [mapCenter, mapCenter],
+      ),
+    [activeRoute, mapCenter],
+  );
 
   const {
     data: allRequests = [],
@@ -141,6 +193,18 @@ export function MapScreen() {
     lng: mapCenter.longitude,
     radiusKm,
   });
+
+  const {
+    data: routeRequests = [],
+    isPending: isRoutePending,
+    error: routeError,
+  } = useRequestsAlongRoute(
+    {
+      route: routeLine,
+      bufferMeters: ROUTE_BUFFER_METERS,
+    },
+    { enabled: Boolean(activeRoute) },
+  );
 
   const handleLocationGranted = (coords: RouteCoordinate) => {
     setIsPermissionModalOpen(false);
@@ -160,16 +224,6 @@ export function MapScreen() {
       500,
     );
   };
-
-  const activeRoute = savedRoute?.isActive ? savedRoute : null;
-
-  const routeRequests = useMemo(
-    () =>
-      activeRoute
-        ? filterRequestsAlongRoute(allRequests, activeRoute.coordinates, ROUTE_BUFFER_METERS)
-        : [],
-    [activeRoute, allRequests],
-  );
 
   const displayRequests = useMemo(() => {
     const base = activeRoute && onlyAlongRoute ? routeRequests : allRequests;
@@ -203,10 +257,24 @@ export function MapScreen() {
       requestClusters.map((cluster) => cluster.id).join(','),
     ].join('|'),
   );
-  const selectedRequest = displayRequests.find((request) => request.id === selectedRequestId);
+  const selectedRequest =
+    displayRequests.find((request) => request.id === selectedRequestId) ??
+    routeRequests.find((request) => request.id === selectedRequestId) ??
+    allRequests.find((request) => request.id === selectedRequestId);
   const selectedRequestCenter = selectedRequest
     ? toLatLng(selectedRequest.approximateLocation.coordinates)
     : null;
+  const activeRouteUpdatedAt = activeRoute?.updatedAt;
+
+  useEffect(() => {
+    if (!activeRouteUpdatedAt) return;
+    const timer = setTimeout(() => {
+      setOnlyAlongRoute(true);
+      setIsSummaryOpen(true);
+      setSelectedRequestId(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [activeRouteUpdatedAt]);
 
   /** The same points as the native markers below, for the OpenStreetMap view (Android). */
   const osmMarkers = useMemo(
@@ -234,7 +302,7 @@ export function MapScreen() {
 
   const isBottomPanelVisible = Boolean(selectedRequest || isSummaryOpen);
   const mapPadding = {
-    top: insets.top + (activeRoute ? 110 : 70),
+    top: insets.top + (activeRoute ? 166 : 70),
     right: 12,
     bottom: isBottomPanelVisible ? 260 : 90,
     left: 12,
@@ -334,6 +402,40 @@ export function MapScreen() {
     router.push(routePlannerParams(mapCenter, locationLabel));
   };
 
+  const openSelectedStopInMaps = () => {
+    if (!selectedRequestCenter) {
+      setOnlyAlongRoute(true);
+      setIsSummaryOpen(true);
+      return;
+    }
+
+    const url =
+      Platform.OS === 'ios'
+        ? appleDirectionsToStopUrl(activeRoute?.start ?? mapCenter, selectedRequestCenter)
+        : activeRoute
+          ? googleRouteViaStopUrl(activeRoute.start, activeRoute.end, selectedRequestCenter)
+          : googlePointUrl(selectedRequestCenter);
+
+    Linking.openURL(url).catch(() => {
+      const message = 'Nie udało się otworzyć map na tym urządzeniu.';
+      if (Platform.OS === 'web') alert(message);
+      else Alert.alert('Mapy', message);
+    });
+  };
+
+  const isRouteList = Boolean(activeRoute && onlyAlongRoute);
+  const listRequests = isRouteList ? displayRequests : displayRequests.slice(0, 8);
+  const listIsPending = isRouteList ? isRoutePending : isPending;
+  const listError = isRouteList ? routeError : error;
+  const summaryTitle = isRouteList
+    ? `Punkty na trasie (${displayRequests.length})`
+    : `Najbliżej Ciebie (${displayRequests.length} ${
+        displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'
+      })`;
+  const summarySubtitle = isRouteList
+    ? `Zgłoszenia zgodne z aktywną trasą: ${routeRequests.length}`
+    : 'Promień wyszukiwania i filtry:';
+
   return (
     <ThemedView style={styles.root}>
       {/* Top Location Search & Picker Bar */}
@@ -359,26 +461,59 @@ export function MapScreen() {
         </Pressable>
 
         {activeRoute && (
-          <View
-            style={[
-              styles.activeRouteBadge,
-              { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-            ]}>
-            <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-              Trasa aktywna ({routeRequests.length} po drodze)
-            </ThemedText>
-            <Pressable onPress={() => setOnlyAlongRoute(!onlyAlongRoute)}>
+          <>
+            <View
+              style={[
+                styles.activeRouteBadge,
+                { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+              ]}>
+              <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+                Trasa aktywna ({isRoutePending ? '...' : routeRequests.length} po drodze)
+              </ThemedText>
+              <Pressable
+                onPress={() => {
+                  setOnlyAlongRoute(!onlyAlongRoute);
+                  setIsSummaryOpen(true);
+                }}>
+                <ThemedText
+                  type="caption"
+                  style={{
+                    color: theme.primary,
+                    textDecorationLine: 'underline',
+                    fontWeight: '600',
+                  }}>
+                  {onlyAlongRoute ? 'Pokaż wszystkie' : 'Tylko na trasie'}
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={
+                selectedRequest
+                  ? 'Otwórz trasę przez wybrany punkt w mapach'
+                  : 'Wybierz punkt z trasy'
+              }
+              onPress={openSelectedStopInMaps}
+              style={({ pressed }) => [
+                styles.routeMapLink,
+                { backgroundColor: theme.primary, borderColor: theme.primaryStrong },
+                pressed && styles.pressed,
+              ]}>
+              <SymbolView
+                name={{ ios: 'location.north.line', android: 'navigation' }}
+                size={19}
+                tintColor={theme.onPrimary}
+                weight="bold"
+              />
               <ThemedText
                 type="caption"
-                style={{
-                  color: theme.primary,
-                  textDecorationLine: 'underline',
-                  fontWeight: '600',
-                }}>
-                {onlyAlongRoute ? 'Pokaż wszystkie' : 'Tylko na trasie'}
+                numberOfLines={1}
+                style={{ color: theme.onPrimary, fontWeight: '800' }}>
+                {selectedRequest ? 'Nawiguj przez wybrany punkt' : 'Wybierz punkt z listy'}
               </ThemedText>
             </Pressable>
-          </View>
+          </>
         )}
       </View>
 
@@ -558,7 +693,7 @@ export function MapScreen() {
       )}
 
       {/* Floating GPS Button */}
-      <View style={[styles.floatingActions, { top: insets.top + (activeRoute ? 120 : 80) }]}>
+      <View style={[styles.floatingActions, { top: insets.top + (activeRoute ? 176 : 80) }]}>
         <Pressable
           style={({ pressed }) => [
             styles.fab,
@@ -664,6 +799,14 @@ export function MapScreen() {
                 Zgłoszono: {timeAgo(selectedRequest.createdAt)} · Strefa przybliżona ~300 m
               </ThemedText>
 
+              {activeRoute && selectedRequestCenter && (
+                <Button
+                  variant="secondary"
+                  title="Otwórz trasę przez ten punkt"
+                  onPress={openSelectedStopInMaps}
+                />
+              )}
+
               {offeredIds.includes(selectedRequest.id) ? (
                 <View
                   style={[
@@ -718,12 +861,9 @@ export function MapScreen() {
             <ThemedView type="backgroundElement" style={styles.summary}>
               <View style={styles.summaryHeader}>
                 <View style={styles.summaryTitleWrapper}>
-                  <ThemedText type="smallBold">
-                    Najbliżej Ciebie ({displayRequests.length}{' '}
-                    {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'})
-                  </ThemedText>
+                  <ThemedText type="smallBold">{summaryTitle}</ThemedText>
                   <ThemedText type="caption" themeColor="textSecondary">
-                    Promień wyszukiwania i filtry:
+                    {summarySubtitle}
                   </ThemedText>
                 </View>
                 <Pressable
@@ -750,35 +890,37 @@ export function MapScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.summaryControls}>
-                <View style={styles.radiusChips}>
-                  {[1.5, 2.5, 5.0].map((r) => {
-                    const isSelected = radiusKm === r;
-                    return (
-                      <Pressable
-                        key={r}
-                        onPress={() => setRadiusKm(r)}
-                        style={({ pressed }) => [
-                          styles.radiusChip,
-                          {
-                            backgroundColor: isSelected ? theme.primary : theme.background,
-                            borderColor: isSelected ? theme.primary : theme.border,
-                          },
-                          pressed && styles.pressed,
-                        ]}>
-                        <ThemedText
-                          type="caption"
-                          style={{
-                            color: isSelected ? theme.onPrimary : theme.text,
-                            fontWeight: '700',
-                          }}>
-                          {r} km
-                        </ThemedText>
-                      </Pressable>
-                    );
-                  })}
+              {!isRouteList && (
+                <View style={styles.summaryControls}>
+                  <View style={styles.radiusChips}>
+                    {[1.5, 2.5, 5.0].map((r) => {
+                      const isSelected = radiusKm === r;
+                      return (
+                        <Pressable
+                          key={r}
+                          onPress={() => setRadiusKm(r)}
+                          style={({ pressed }) => [
+                            styles.radiusChip,
+                            {
+                              backgroundColor: isSelected ? theme.primary : theme.background,
+                              borderColor: isSelected ? theme.primary : theme.border,
+                            },
+                            pressed && styles.pressed,
+                          ]}>
+                          <ThemedText
+                            type="caption"
+                            style={{
+                              color: isSelected ? theme.onPrimary : theme.text,
+                              fontWeight: '700',
+                            }}>
+                            {r} km
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
+              )}
 
               <ScrollView
                 horizontal
@@ -865,13 +1007,13 @@ export function MapScreen() {
               </ScrollView>
 
               {/* Quick list of nearby items */}
-              {displayRequests.length > 0 && (
+              {listRequests.length > 0 && (
                 <ScrollView
                   style={styles.nearbyList}
                   contentContainerStyle={styles.nearbyListContent}
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled>
-                  {displayRequests.slice(0, 8).map((req) => {
+                  {listRequests.map((req) => {
                     const [lng, lat] = req.approximateLocation.coordinates;
                     return (
                       <Pressable
@@ -920,8 +1062,23 @@ export function MapScreen() {
                 </ScrollView>
               )}
 
-              {isPending && <ActivityIndicator color={theme.primary} />}
-              {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
+              {!listIsPending && !listError && listRequests.length === 0 && (
+                <ThemedView
+                  type="backgroundMuted"
+                  style={[styles.emptyListState, { borderColor: theme.border }]}>
+                  <ThemedText type="smallBold">
+                    {isRouteList ? 'Brak punktów na tej trasie' : 'Brak zgłoszeń w tym widoku'}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {isRouteList
+                      ? 'Możesz pokazać wszystkie zgłoszenia albo zmienić trasę.'
+                      : 'Zmień promień lub filtry, żeby poszerzyć wyniki.'}
+                  </ThemedText>
+                </ThemedView>
+              )}
+
+              {listIsPending && <ActivityIndicator color={theme.primary} />}
+              {listError && <ThemedText themeColor="danger">{errorMessage(listError)}</ThemedText>}
             </ThemedView>
           )}
         </View>
@@ -994,6 +1151,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
+  },
+  routeMapLink: {
+    minHeight: 42,
+    paddingVertical: 7,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.one,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
   floatingActions: {
     position: 'absolute',
@@ -1233,6 +1406,12 @@ const styles = StyleSheet.create({
   nearbyListContent: {
     gap: Spacing.one,
     paddingVertical: 1,
+  },
+  emptyListState: {
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    gap: 3,
   },
   nearbyItem: {
     minHeight: 72,
