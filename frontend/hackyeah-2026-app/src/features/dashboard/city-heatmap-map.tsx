@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polygon } from 'react-native-maps';
 
 import { HeatmapCellBorder, Radius } from '@/constants/theme';
 import { HeatmapCellCard } from '@/features/dashboard/heatmap-cell-card';
+import { HeatmapOsmView } from '@/features/dashboard/heatmap-osm-view';
 import {
   HEATMAP_FILL_OPACITY,
   HEATMAP_FILL_OPACITY_ACTIVE,
@@ -26,6 +27,9 @@ const withOpacity = (hex: string, opacity: number) =>
     .toString(16)
     .padStart(2, '0');
 
+/** Same switch as the volunteer map: Google Maps renders blank on Android in Expo Go (SDK 57). */
+const USE_OSM_MAP = Platform.OS === 'android';
+
 const DISTRICT_CENTERS = [
   { name: 'Stare Miasto', latitude: 50.0619, longitude: 19.9367 },
   { name: 'Krowodrza', latitude: 50.0715, longitude: 19.923 },
@@ -44,37 +48,48 @@ export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
 
   return (
     <View style={[styles.mapFrame, { borderColor: theme.border }]}>
-      <MapView style={styles.map} initialRegion={KRAKOW_INITIAL_REGION} showsCompass showsScale>
-        {/* District reference markers */}
-        {DISTRICT_CENTERS.map((district) => (
-          <Marker
-            key={district.name}
-            coordinate={{ latitude: district.latitude, longitude: district.longitude }}
-            title={district.name}
-            description="Dzielnica Krakowa"
-          />
-        ))}
-
-        {/* One hexagon per cell, drawn from the outline the backend computed (`properties.area`) */}
-        {cells.map((cell) => {
-          const [outer, ...holes] = getAreaPolygonRings(cell.area);
-          if (!outer) return null;
-          const key = cellKey(cell);
-          const opacity = key === selectedKey ? HEATMAP_FILL_OPACITY_ACTIVE : HEATMAP_FILL_OPACITY;
-          return (
-            <Polygon
-              key={key}
-              coordinates={outer}
-              holes={holes}
-              tappable
-              onPress={() => setSelectedKey(key)}
-              fillColor={withOpacity(heatmapColor(cell.count), opacity)}
-              strokeColor={HeatmapCellBorder}
-              strokeWidth={2}
+      {USE_OSM_MAP ? (
+        <HeatmapOsmView
+          initialRegion={KRAKOW_INITIAL_REGION}
+          cells={cells}
+          districts={DISTRICT_CENTERS}
+          selectedKey={selectedKey}
+          onCellPress={setSelectedKey}
+        />
+      ) : (
+        <MapView style={styles.map} initialRegion={KRAKOW_INITIAL_REGION} showsCompass showsScale>
+          {/* District reference markers */}
+          {DISTRICT_CENTERS.map((district) => (
+            <Marker
+              key={district.name}
+              coordinate={{ latitude: district.latitude, longitude: district.longitude }}
+              title={district.name}
+              description="Dzielnica Krakowa"
             />
-          );
-        })}
-      </MapView>
+          ))}
+
+          {/* One hexagon per cell, drawn from the outline the backend computed (`properties.area`) */}
+          {cells.map((cell) => {
+            const [outer, ...holes] = getAreaPolygonRings(cell.area);
+            if (!outer) return null;
+            const key = cellKey(cell);
+            const opacity =
+              key === selectedKey ? HEATMAP_FILL_OPACITY_ACTIVE : HEATMAP_FILL_OPACITY;
+            return (
+              <Polygon
+                key={key}
+                coordinates={outer}
+                holes={holes}
+                tappable
+                onPress={() => setSelectedKey(key)}
+                fillColor={withOpacity(heatmapColor(cell.count), opacity)}
+                strokeColor={HeatmapCellBorder}
+                strokeWidth={2}
+              />
+            );
+          })}
+        </MapView>
+      )}
       {selected && <HeatmapCellCard cell={selected} onClose={() => setSelectedKey(null)} />}
     </View>
   );
