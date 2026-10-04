@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorMessage } from '@/api/errors';
@@ -28,9 +28,34 @@ import {
 } from '@/features/map/krakow-map-data';
 import { clusterRequests, zoomFromLongitudeDelta } from '@/features/map/map-clustering';
 import { useSharedLocation } from '@/features/map/location-store';
+import { OsmMapView, type MapHandle, type OsmMarker } from '@/features/map/osm-map-view';
 import type { RouteCoordinate } from '@/lib/route-matching';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 import { KRAKOW_PRESET_PLACES } from '@/features/commute/krakow-places';
+
+/**
+ * Same switch as the map screen: on Android react-native-maps renders a blank map with only the
+ * Google logo in Expo Go (SDK 57, expo/expo#49323), so Android uses OpenStreetMap in a WebView.
+ */
+const USE_OSM_MAP = Platform.OS === 'android';
+
+/** Smallest region that contains every point; the OSM view fits it inside the map padding. */
+function regionAround(points: RouteCoordinate[]): Region {
+  const lats = points.map((p) => p.latitude);
+  const lngs = points.map((p) => p.longitude);
+  const [south, north, west, east] = [
+    Math.min(...lats),
+    Math.max(...lats),
+    Math.min(...lngs),
+    Math.max(...lngs),
+  ];
+  return {
+    latitude: (south + north) / 2,
+    longitude: (west + east) / 2,
+    latitudeDelta: Math.max(north - south, 0.002),
+    longitudeDelta: Math.max(east - west, 0.002),
+  };
+}
 
 const DEFAULT_START_COORDS = KRAKOW_COMMUTE_ROUTE[0];
 const DEFAULT_END_COORDS = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1];
@@ -38,7 +63,10 @@ const DEFAULT_END_COORDS = KRAKOW_COMMUTE_ROUTE[KRAKOW_COMMUTE_ROUTE.length - 1]
 export function RoutePlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapViewRef = useRef<MapView>(null);
+  const osmMapRef = useRef<MapHandle>(null);
+  /** Whichever map is shown; both can `animateToRegion`. */
+  const map = () => (USE_OSM_MAP ? osmMapRef.current : mapViewRef.current);
   const params = useLocalSearchParams<{
     startLat?: string;
     startLng?: string;
@@ -103,9 +131,34 @@ export function RoutePlannerScreen() {
     [mapZoom, matchingRequests],
   );
 
+  /** The same points as the native markers below, for the OpenStreetMap view (Android). */
+  const osmMarkers = useMemo(
+    (): OsmMarker[] =>
+      requestClusters.map((cluster) => {
+        if (cluster.requests.length > 1) {
+          return {
+            id: `c:${cluster.id}`,
+            ...cluster.coordinate,
+            kind: 'cluster',
+            fill: theme.primary,
+            count: cluster.requests.length,
+          };
+        }
+        const request = cluster.requests[0];
+        return {
+          id: `r:${request.id}`,
+          ...toLatLng(request.approximateLocation.coordinates),
+          kind: 'request',
+          fill: CategoryColors[request.category].color,
+          ring: PriorityColors[request.priority].color,
+        };
+      }),
+    [requestClusters, theme.primary],
+  );
+
   useEffect(() => {
     if (!drivingRoute || route.length === 0) return;
-    mapRef.current?.animateToRegion(
+    map()?.animateToRegion(
       {
         latitude: start.latitude,
         longitude: start.longitude,
@@ -136,7 +189,7 @@ export function RoutePlannerScreen() {
   };
 
   const centerOnStart = () => {
-    mapRef.current?.animateToRegion(
+    map()?.animateToRegion(
       {
         latitude: start.latitude,
         longitude: start.longitude,
@@ -148,12 +201,16 @@ export function RoutePlannerScreen() {
   };
 
   const fitFullRoute = () => {
-    if (route.length > 0) {
-      mapRef.current?.fitToCoordinates(route, {
-        animated: true,
-        edgePadding: { top: insets.top + 140, right: 36, bottom: 200, left: 36 },
-      });
+    if (route.length === 0) return;
+    if (USE_OSM_MAP) {
+      // The OSM view keeps the floating panels' padding free when it fits the region.
+      osmMapRef.current?.animateToRegion(regionAround(route), 300);
+      return;
     }
+    mapViewRef.current?.fitToCoordinates(route, {
+      animated: true,
+      edgePadding: { top: insets.top + 140, right: 36, bottom: 200, left: 36 },
+    });
   };
 
   const handleConfirmRoute = () => {
@@ -170,7 +227,7 @@ export function RoutePlannerScreen() {
   };
 
   const zoomToCluster = (coordinate: { latitude: number; longitude: number }) => {
-    mapRef.current?.animateToRegion(
+    map()?.animateToRegion(
       {
         latitude: coordinate.latitude,
         longitude: coordinate.longitude,
@@ -179,6 +236,19 @@ export function RoutePlannerScreen() {
       },
       260,
     );
+  };
+
+  const onRegionChangeComplete = (region: Region) => {
+    setMapRegion(region);
+    setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
+  };
+
+  /** Space under the floating panels, kept free by both maps. */
+  const mapPadding = {
+    top: insets.top + 130,
+    right: 12,
+    bottom: isListExpanded ? 320 : 150,
+    left: 12,
   };
 
   return (
@@ -239,70 +309,93 @@ export function RoutePlannerScreen() {
       </View>
 
       {/* Interactive Map */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        initialRegion={KRAKOW_INITIAL_REGION}
-        showsUserLocation={false}
-        showsCompass
-        onRegionChangeComplete={(region) => {
-          setMapRegion(region);
-          setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
-        }}
-        mapPadding={{
-          top: insets.top + 130,
-          right: 12,
-          bottom: isListExpanded ? 320 : 150,
-          left: 12,
-        }}>
-        <Polyline coordinates={route} strokeColor={`${theme.primary}28`} strokeWidth={24} />
-        <Polyline coordinates={route} strokeColor={theme.primary} strokeWidth={5} />
+      {USE_OSM_MAP ? (
+        <OsmMapView
+          ref={osmMapRef}
+          initialRegion={KRAKOW_INITIAL_REGION}
+          markers={osmMarkers}
+          onMarkerPress={(id) => {
+            const [kind, key] = [id.slice(0, 1), id.slice(2)];
+            if (kind === 'r') {
+              setSelectedRequestId(Number(key));
+              setIsListExpanded(true);
+              return;
+            }
+            const cluster = requestClusters.find((c) => c.id === key);
+            if (cluster) zoomToCluster(cluster.coordinate);
+          }}
+          onRegionChangeComplete={onRegionChangeComplete}
+          // Start (A) and destination (B) are drawn at the route's ends.
+          route={route}
+          padding={mapPadding}
+          colors={{
+            primary: theme.primary,
+            onPrimary: theme.onPrimary,
+            surface: theme.backgroundElement,
+            text: theme.text,
+            border: theme.border,
+            success: theme.success,
+            danger: theme.danger,
+          }}
+        />
+      ) : (
+        <MapView
+          ref={mapViewRef}
+          style={styles.map}
+          initialRegion={KRAKOW_INITIAL_REGION}
+          showsUserLocation={false}
+          showsCompass
+          onRegionChangeComplete={onRegionChangeComplete}
+          mapPadding={mapPadding}>
+          <Polyline coordinates={route} strokeColor={`${theme.primary}28`} strokeWidth={24} />
+          <Polyline coordinates={route} strokeColor={theme.primary} strokeWidth={5} />
 
-        <Marker coordinate={start} pinColor={theme.success} title={`Start: ${startLabel}`} />
-        <Marker coordinate={end} pinColor={theme.danger} title={`Cel: ${endLabel}`} />
+          <Marker coordinate={start} pinColor={theme.success} title={`Start: ${startLabel}`} />
+          <Marker coordinate={end} pinColor={theme.danger} title={`Cel: ${endLabel}`} />
 
-        {requestClusters.map((cluster) => {
-          if (cluster.requests.length > 1) {
+          {requestClusters.map((cluster) => {
+            if (cluster.requests.length > 1) {
+              return (
+                <Marker
+                  key={cluster.id}
+                  coordinate={cluster.coordinate}
+                  onPress={() => zoomToCluster(cluster.coordinate)}>
+                  <View
+                    style={[
+                      styles.clusterMarker,
+                      { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
+                    ]}>
+                    <ThemedText type="caption" style={{ color: theme.onPrimary }}>
+                      {cluster.requests.length}
+                    </ThemedText>
+                  </View>
+                </Marker>
+              );
+            }
+
+            const request = cluster.requests[0];
             return (
               <Marker
-                key={cluster.id}
-                coordinate={cluster.coordinate}
-                onPress={() => zoomToCluster(cluster.coordinate)}>
+                key={request.id}
+                coordinate={toLatLng(request.approximateLocation.coordinates)}
+                onPress={() => {
+                  setSelectedRequestId(request.id);
+                  setIsListExpanded(true);
+                }}>
                 <View
                   style={[
-                    styles.clusterMarker,
-                    { backgroundColor: theme.primary, borderColor: theme.backgroundElement },
-                  ]}>
-                  <ThemedText type="caption" style={{ color: theme.onPrimary }}>
-                    {cluster.requests.length}
-                  </ThemedText>
-                </View>
+                    styles.requestMarker,
+                    {
+                      backgroundColor: CategoryColors[request.category].color,
+                      borderColor: PriorityColors[request.priority].color,
+                    },
+                  ]}
+                />
               </Marker>
             );
-          }
-
-          const request = cluster.requests[0];
-          return (
-            <Marker
-              key={request.id}
-              coordinate={toLatLng(request.approximateLocation.coordinates)}
-              onPress={() => {
-                setSelectedRequestId(request.id);
-                setIsListExpanded(true);
-              }}>
-              <View
-                style={[
-                  styles.requestMarker,
-                  {
-                    backgroundColor: CategoryColors[request.category].color,
-                    borderColor: PriorityColors[request.priority].color,
-                  },
-                ]}
-              />
-            </Marker>
-          );
-        })}
-      </MapView>
+          })}
+        </MapView>
+      )}
 
       {/* Floating Action Buttons */}
       <View style={[styles.floatingControls, { top: insets.top + 134 }]}>
