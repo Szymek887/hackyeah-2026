@@ -186,6 +186,18 @@ npx expo start        # scan the QR code with Expo Go, or press "w" for the web 
 
 Before committing, run `npm run check` (typecheck + lint).
 
+### 3. Deploying to a server (Docker Compose)
+
+The root `docker-compose.yml` builds and runs the whole stack: PostgreSQL + PostGIS, the API, and the Expo web app served by nginx. nginx also forwards `/api` to the backend, so **one public URL serves both the web app and the API**.
+
+```bash
+cp .env.example .env      # set POSTGRES_PASSWORD and OPENROUTER_API_KEY
+docker compose up -d --build
+curl http://localhost/api/health
+```
+
+Then build the mobile app against the server with `EXPO_PUBLIC_USE_MOCKS=false` and `EXPO_PUBLIC_API_URL=https://<your-domain>`, with no `/api` suffix. The web app is on the same port (`WEB_PORT`, default 80). For HTTPS, put your TLS proxy (Caddy, Traefik, nginx) in front of that port. The backend port is bound to `127.0.0.1` only.
+
 ### Demo accounts
 
 Authentication is mocked for the hackathon: the user is chosen on the login screen, and API calls identify them with the `X-User-Id` header. Users in the Kraków seed:
