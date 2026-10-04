@@ -29,7 +29,11 @@ export function CityDashboard() {
   const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
 
-  const { data: summary, isPending: summaryLoading } = useCitySummary();
+  const {
+    data: summary,
+    isPending: summaryLoading,
+    isPlaceholderData: summaryUpdating,
+  } = useCitySummary(selectedCategory);
   const {
     data: heatmap,
     isPending: heatmapLoading,
@@ -77,8 +81,41 @@ export function CityDashboard() {
         </View>
       </View>
 
-      {/* KPI Cards */}
-      <View style={styles.kpiGrid}>
+      {/* Category filter pills */}
+      <ThemedView type="backgroundElement" style={styles.filterSection}>
+        <ThemedText type="smallBold">Filtruj cały panel wg kategorii zgłoszeń:</ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterPills}>
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategory === cat.value;
+            return (
+              <Pressable
+                key={cat.label}
+                onPress={() => setSelectedCategory(cat.value)}
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: active ? theme.primary : theme.background,
+                    borderColor: theme.border,
+                  },
+                ]}>
+                <ThemedText
+                  type="smallBold"
+                  style={{
+                    color: active ? '#ffffff' : theme.text,
+                  }}>
+                  {cat.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
+      {/* KPI Cards (follow the category filter) */}
+      <View style={[styles.kpiGrid, summaryUpdating && styles.updating]}>
         <ThemedView type="backgroundElement" style={styles.kpiCard}>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
             Zgłoszone potrzeby
@@ -123,43 +160,10 @@ export function CityDashboard() {
             {summary?.open ?? 0}
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Pilnych: {summary?.byPriority['1'] ?? 0}
+            W tym pilnych: {summary?.openUrgent ?? 0}
           </ThemedText>
         </ThemedView>
       </View>
-
-      {/* Category filter pills */}
-      <ThemedView type="backgroundElement" style={styles.filterSection}>
-        <ThemedText type="smallBold">Filtruj wg kategorii zgłoszeń:</ThemedText>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterPills}>
-          {CATEGORIES.map((cat) => {
-            const active = selectedCategory === cat.value;
-            return (
-              <Pressable
-                key={cat.label}
-                onPress={() => setSelectedCategory(cat.value)}
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: active ? theme.primary : theme.background,
-                    borderColor: theme.border,
-                  },
-                ]}>
-                <ThemedText
-                  type="smallBold"
-                  style={{
-                    color: active ? '#ffffff' : theme.text,
-                  }}>
-                  {cat.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </ThemedView>
 
       {/* Heatmap visualization container */}
       <ThemedView type="backgroundElement" style={styles.heatmapCard}>
@@ -202,38 +206,40 @@ export function CityDashboard() {
         </View>
       </ThemedView>
 
-      {/* Requests by category (backend summary.byCategory) */}
-      <ThemedView type="backgroundElement" style={styles.sectionCard}>
-        <ThemedText type="subtitle">Zgłoszenia według kategorii</ThemedText>
-        <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          Gdzie mieszkańcy najczęściej potrzebują wsparcia
-        </ThemedText>
+      {/* Requests by category (backend summary.byCategory); one category selected would be a single 100% bar */}
+      {!selectedCategory && (
+        <ThemedView type="backgroundElement" style={styles.sectionCard}>
+          <ThemedText type="subtitle">Zgłoszenia według kategorii</ThemedText>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Gdzie mieszkańcy najczęściej potrzebują wsparcia
+          </ThemedText>
 
-        <View style={styles.districtList}>
-          {CATEGORY_KEYS.map((key) => {
-            const count = summary?.byCategory[key] ?? 0;
-            const pct = summary?.total ? Math.round((count / summary.total) * 100) : 0;
-            return (
-              <ThemedView key={key} type="background" style={styles.districtItem}>
-                <View style={styles.districtHeader}>
-                  <ThemedText type="subtitle">{CategoryLabels[key]}</ThemedText>
-                  <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                    {count} ({pct}%)
-                  </ThemedText>
-                </View>
-                <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${pct}%`, backgroundColor: CategoryColors[key].color },
-                    ]}
-                  />
-                </View>
-              </ThemedView>
-            );
-          })}
-        </View>
-      </ThemedView>
+          <View style={styles.districtList}>
+            {CATEGORY_KEYS.map((key) => {
+              const count = summary?.byCategory[key] ?? 0;
+              const pct = summary?.total ? Math.round((count / summary.total) * 100) : 0;
+              return (
+                <ThemedView key={key} type="background" style={styles.districtItem}>
+                  <View style={styles.districtHeader}>
+                    <ThemedText type="subtitle">{CategoryLabels[key]}</ThemedText>
+                    <ThemedText type="smallBold" style={{ color: theme.primary }}>
+                      {count} ({pct}%)
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${pct}%`, backgroundColor: CategoryColors[key].color },
+                      ]}
+                    />
+                  </View>
+                </ThemedView>
+              );
+            })}
+          </View>
+        </ThemedView>
+      )}
     </Screen>
   );
 }

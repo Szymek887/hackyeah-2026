@@ -122,6 +122,7 @@ class AnalyticsRepositoryTest {
 
         assertThat(summary.total()).isEqualTo(5);
         assertThat(summary.open()).isEqualTo(2);
+        assertThat(summary.openUrgent()).isEqualTo(1);
         assertThat(summary.inProgress()).isEqualTo(1);
         assertThat(summary.fulfilled()).isEqualTo(1);
         assertThat(summary.cancelled()).isEqualTo(1);

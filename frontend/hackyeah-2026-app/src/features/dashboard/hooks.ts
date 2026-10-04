@@ -6,7 +6,7 @@ import type { Category } from '@/api/types';
 export const dashboardKeys = {
   all: ['dashboard'] as const,
   heatmap: (category?: Category) => [...dashboardKeys.all, 'heatmap', category] as const,
-  summary: () => [...dashboardKeys.all, 'summary'] as const,
+  summary: (category?: Category) => [...dashboardKeys.all, 'summary', category] as const,
 };
 
 export function useHeatmapData(category?: Category) {
@@ -19,10 +19,10 @@ export function useHeatmapData(category?: Category) {
   });
 }
 
-export function useCitySummary() {
+export function useCitySummary(category?: Category) {
   return useQuery({
-    queryKey: dashboardKeys.summary(),
-    queryFn: () => getAnalyticsSummary(),
+    queryKey: dashboardKeys.summary(category),
+    queryFn: () => getAnalyticsSummary({ category }),
     staleTime: 1000 * 60 * 2,
     // Keep the current numbers on screen while a new filter loads, instead of a blank spinner.
     placeholderData: keepPreviousData,

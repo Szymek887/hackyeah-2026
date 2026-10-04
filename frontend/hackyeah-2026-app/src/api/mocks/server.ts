@@ -803,6 +803,7 @@ function summary(query: Record<string, string>): AnalyticsSummary {
   return {
     total: all.length,
     open: byStatus.OPEN,
+    openUrgent: all.filter((r) => r.status === 'OPEN' && r.priority <= 1).length,
     inProgress: byStatus.OFFERED + byStatus.ACCEPTED,
     fulfilled,
     cancelled: byStatus.CANCELLED,

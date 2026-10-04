@@ -80,6 +80,7 @@ class AnalyticsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(3))
                 .andExpect(jsonPath("$.open").value(3))
+                .andExpect(jsonPath("$.openUrgent").value(3))
                 .andExpect(jsonPath("$.byCategory.MEDICINE").value(3))
                 .andExpect(jsonPath("$.byCategory.SOCIAL").value(0))
                 .andExpect(jsonPath("$.byPriority.1").value(3));

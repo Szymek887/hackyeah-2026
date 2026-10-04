@@ -341,6 +341,8 @@ export type HeatmapResponse = {
 export type AnalyticsSummary = {
   total: number;
   open: number;
+  /** OPEN requests with priority 0 (special, medicine) or 1 (critical) */
+  openUrgent: number;
   inProgress: number;
   fulfilled: number;
   cancelled: number;

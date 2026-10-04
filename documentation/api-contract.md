@@ -619,6 +619,7 @@ Public, aggregated data only.
 {
   "total": 86,
   "open": 6,
+  "openUrgent": 2,
   "inProgress": 9,
   "fulfilled": 71,
   "cancelled": 0,
@@ -631,6 +632,7 @@ Public, aggregated data only.
 }
 ```
 - `fulfillmentRate` is a **fraction 0–1** (multiply by 100 for %).
+- `openUrgent` – `OPEN` requests with priority 0 (special, medicine) or 1 (critical).
 - `byPriority` keys are JSON strings `"1"`, `"2"`, `"3"`.
 - **[+] `activeVolunteers`** – distinct volunteers on non-cancelled requests in the range. **[+] `averageStars`** – average rating, `null` when no ratings. Both proposed; until then the dashboard hides those tiles.
 - Not provided by the backend (frontend must hide or label as "demo"): per-district stats, average response time, CO₂ saved.

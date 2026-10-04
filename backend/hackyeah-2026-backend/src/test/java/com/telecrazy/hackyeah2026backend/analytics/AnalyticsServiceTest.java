@@ -145,6 +145,7 @@ class AnalyticsServiceTest {
 
         assertThat(summary.total()).isEqualTo(10);
         assertThat(summary.open()).isEqualTo(3);
+        assertThat(summary.openUrgent()).isEqualTo(3);
         assertThat(summary.inProgress()).isEqualTo(1);
         assertThat(summary.fulfilled()).isEqualTo(4);
         assertThat(summary.cancelled()).isEqualTo(2);
@@ -156,6 +157,20 @@ class AnalyticsServiceTest {
                 .containsEntry(HelpCategory.MEDICINE, 4L)
                 .containsEntry(HelpCategory.EQUIPMENT_LOAN, 0L);
         assertThat(summary.byPriority()).containsEntry(1, 4L).containsEntry(2, 2L).containsEntry(3, 4L);
+    }
+
+    @Test
+    void openUrgentCountsOnlyOpenRequestsWithSpecialOrCriticalPriority() {
+        SummaryResponse summary = AnalyticsService.toSummary(List.of(
+                new SummaryRow(HelpCategory.MEDICINE, HelpRequestStatus.OPEN, 0, 2),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.OPEN, 1, 3),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.OPEN, 2, 4),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.ACCEPTED, 1, 5),
+                new SummaryRow(HelpCategory.MEDICINE, HelpRequestStatus.COMPLETED, 0, 6)
+        ));
+
+        assertThat(summary.open()).isEqualTo(9);
+        assertThat(summary.openUrgent()).isEqualTo(5);
     }
 
     @Test

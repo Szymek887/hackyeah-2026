@@ -16,7 +16,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 | # | Task | Priority | Area | Estimate |
 |---|---|---|---|---|
 | 1 | ✅ Close the heatmap privacy leak (min cell size + k-anonymity) | P0 | BE + mock | 45 min |
-| 2 | Fix misleading KPIs and make the category filter apply to the whole dashboard | P0 | FE | 30 min |
+| 2 | ✅ Fix misleading KPIs and make the category filter apply to the whole dashboard | P0 | FE | 30 min |
 | 3 | ✅ Stop the full-screen spinner on every filter change | P0 | FE | 10 min |
 | 4 | Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
 | 5 | Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
@@ -50,7 +50,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 **Done when** no combination of parameters returns a cell with fewer than 3 requests or a cell smaller than 500 m.
 
-### 2. Fix misleading KPIs and the category filter
+### 2. Fix misleading KPIs and the category filter — ✅ Done (2026-10-04)
+
+> **Implemented.** `SummaryResponse.openUrgent` (backend + mock) feeds the "Czeka na pomoc" card as "W tym pilnych". `useCitySummary(category)` sends the selected category, so the KPI cards follow the filter (dimmed while loading). The filter pills moved above the KPI cards and say they filter the whole panel. The "by category" bars are hidden while one category is selected.
 
 **Problems** (`city-dashboard.tsx`):
 - The "Czeka na pomoc" card shows `Pilnych: byPriority['1']`: urgent requests across **all** statuses, without priority 0 (medicine).
