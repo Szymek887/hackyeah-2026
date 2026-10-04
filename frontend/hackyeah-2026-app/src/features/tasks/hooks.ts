@@ -46,3 +46,70 @@ export function useMyReputation() {
     placeholderData: user,
   });
 }
+
+/**
+ * A volunteer works on one request at a time (backend `VOLUNTEER_ACTIVE_STATUSES`): an offer
+ * waiting for acceptance or an accepted request.
+ */
+export const VOLUNTEER_ACTIVE_STATUSES: RequestStatus[] = ['OFFERED', 'ACCEPTED'];
+
+/** The volunteer's current task, if any – while it exists they cannot offer help elsewhere. */
+export function useActiveVolunteerTask(): HelpRequestView | null {
+  const { data } = useMyTasks();
+  return (
+    data?.find(
+      (task) => task.viewerRole === 'VOLUNTEER' && VOLUNTEER_ACTIVE_STATUSES.includes(task.status),
+    ) ?? null
+  );
+}
+
+/**
+ * Whose move it is: `you` – the logged-in user has something to do; `other` – waiting for the
+ * other side (or for the review); `none` – nothing left to do.
+ */
+export type Turn = 'you' | 'other' | 'none';
+
+export function turnOf(task: HelpRequestView): Turn {
+  const volunteer = task.viewerRole === 'VOLUNTEER';
+  switch (task.status) {
+    case 'OPEN':
+    case 'UNDER_REVIEW':
+      return 'other';
+    case 'OFFERED':
+      // The volunteer waits for the requester to accept.
+      return volunteer ? 'other' : 'you';
+    case 'ACCEPTED':
+      // The volunteer goes to help and scans the QR code; the requester waits for them.
+      return volunteer ? 'you' : 'other';
+    case 'COMPLETED':
+      // Either side may still have to rate (RATED once both did).
+      return 'you';
+    default:
+      return 'none';
+  }
+}
+
+/** Short call to action / waiting reason shown on the task card. */
+export function turnLabel(task: HelpRequestView): string {
+  const volunteer = task.viewerRole === 'VOLUNTEER';
+  switch (task.status) {
+    case 'OPEN':
+      return 'Czekasz, aż zgłosi się wolontariusz';
+    case 'UNDER_REVIEW':
+      return 'Czekasz na sprawdzenie zgłoszenia';
+    case 'OFFERED':
+      return volunteer
+        ? 'Czekasz, aż osoba potrzebująca przyjmie Twoją pomoc'
+        : 'Ktoś chce Ci pomóc – przyjmij lub odrzuć';
+    case 'ACCEPTED':
+      return volunteer
+        ? 'Pojedź z pomocą i zeskanuj kod QR na miejscu'
+        : 'Wolontariusz jest w drodze – przygotuj kod QR';
+    case 'COMPLETED':
+      return 'Oceń, jak przebiegła pomoc';
+    case 'RATED':
+      return 'Zakończone i ocenione';
+    case 'CANCELLED':
+      return 'Zgłoszenie anulowane';
+  }
+}

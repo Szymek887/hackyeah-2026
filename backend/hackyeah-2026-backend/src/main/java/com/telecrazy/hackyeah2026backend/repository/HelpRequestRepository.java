@@ -2,6 +2,7 @@ package com.telecrazy.hackyeah2026backend.repository;
 
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
+import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +20,9 @@ public interface HelpRequestRepository extends JpaRepository<HelpRequest, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM HelpRequest r WHERE r.id = :id")
     Optional<HelpRequest> findByIdForUpdate(@Param("id") long id);
+
+    /** Whether the volunteer already takes part in a request in one of these statuses. */
+    boolean existsByVolunteerAndStatusIn(AppUser volunteer, Collection<HelpRequestStatus> statuses);
 
     /** Requests the user created or volunteers on, newest first. */
     @EntityGraph(attributePaths = {"requester", "volunteer"})

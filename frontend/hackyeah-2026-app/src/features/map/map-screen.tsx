@@ -18,6 +18,8 @@ import {
   zoomFromLongitudeDelta,
 } from '@/features/map/map-clustering';
 import { useNearbyRequests, useOfferHelp } from '@/features/requests/hooks';
+import { ActiveTaskNotice } from '@/features/tasks/components/active-task-notice';
+import { useActiveVolunteerTask } from '@/features/tasks/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import { CategoryLabels, PriorityLabels, timeAgo } from '@/features/requests/labels';
 import { useSavedCommuteRoute } from '@/features/commute/commute-store';
@@ -78,6 +80,7 @@ export function MapScreen() {
   const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
   const offerHelpMutation = useOfferHelp();
   const [offeredIds, setOfferedIds] = useState<number[]>([]);
+  const activeTask = useActiveVolunteerTask();
 
   const [mapCenter, setMapCenter] = useState<RouteCoordinate>(sharedLocation.coordinate);
   const [locationLabel, setLocationLabel] = useState<string>(sharedLocation.label);
@@ -513,6 +516,9 @@ export function MapScreen() {
                     }
                   />
                 </View>
+              ) : activeTask ? (
+                // One active task per volunteer: show it instead of "Chcę pomóc".
+                <ActiveTaskNotice task={activeTask} />
               ) : (
                 <View style={styles.actionButtonsCol}>
                   <Button

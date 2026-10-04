@@ -13,6 +13,8 @@ export class ApiError extends Error {
 /** Backend `detail` messages (English) the user may see, translated for the UI. */
 const KNOWN_MESSAGES: Record<string, string> = {
   'Help request is no longer open': 'Ktoś inny zgłosił się już do pomocy.',
+  'Volunteer already has an active help request':
+    'Masz już aktywne zadanie. Zakończ je, zanim zgłosisz się do kolejnego.',
   'Help request has no pending offer': 'Ta oferta pomocy nie jest już aktualna.',
   'Help request is not in progress': 'To zadanie nie jest już w toku.',
   'QR code was already used': 'Ten kod QR został już użyty.',

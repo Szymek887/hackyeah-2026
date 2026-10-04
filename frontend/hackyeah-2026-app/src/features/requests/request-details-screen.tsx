@@ -11,6 +11,8 @@ import { RatingStars } from '@/components/ui/rating-stars';
 import { Screen } from '@/components/ui/screen';
 import { Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/features/auth/session-context';
+import { ActiveTaskNotice } from '@/features/tasks/components/active-task-notice';
+import { useActiveVolunteerTask } from '@/features/tasks/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
 import {
   useAcceptOffer,
@@ -159,6 +161,7 @@ function Person({ title, person }: { title: string; person: UserSummary }) {
 /** Buttons follow the backend rules: who may do what in which status (else 403 / 409). */
 function RequestActions({ request }: { request: HelpRequestView }) {
   const { role } = useSession();
+  const activeTask = useActiveVolunteerTask();
   const offer = useOfferHelp();
   const accept = useAcceptOffer();
   const reject = useRejectOffer();
@@ -174,7 +177,9 @@ function RequestActions({ request }: { request: HelpRequestView }) {
 
   const buttons: React.ReactNode[] = [];
 
-  if (status === 'OPEN' && request.viewerRole === 'NONE' && role === 'VOLUNTEER') {
+  if (status === 'OPEN' && request.viewerRole === 'NONE' && role === 'VOLUNTEER' && activeTask) {
+    buttons.push(<ActiveTaskNotice key="busy" task={activeTask} />);
+  } else if (status === 'OPEN' && request.viewerRole === 'NONE' && role === 'VOLUNTEER') {
     buttons.push(
       <Button
         key="offer"

@@ -18,7 +18,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Configuration
 public class DatabaseSeeder {
@@ -57,13 +59,20 @@ public class DatabaseSeeder {
 
             AppUser[] requesters = {anna, marek, ewa, zofia, jan, halina, piotr, maria};
             AppUser[] volunteers = {kuba, ola, bartek};
+            // A volunteer has at most one active request (offered / accepted), like the API enforces.
+            // Kuba W. stays free, so the demo can show offering help right away.
+            AppUser[] activeVolunteers = {ola, bartek};
+            Set<AppUser> busyVolunteers = new HashSet<>();
 
-            seedRouteDemoRequests(helpRequestRepository, geometryFactory, anna, marek, zofia, kuba);
+            seedRouteDemoRequests(helpRequestRepository, geometryFactory, anna, marek, zofia, ola);
+            busyVolunteers.add(ola);
             seedCluster(
                     helpRequestRepository,
                     geometryFactory,
                     requesters,
                     volunteers,
+                    activeVolunteers,
+                    busyVolunteers,
                     "Stare Miasto",
                     19.9372,
                     50.0616,
@@ -81,6 +90,8 @@ public class DatabaseSeeder {
                     geometryFactory,
                     requesters,
                     volunteers,
+                    activeVolunteers,
+                    busyVolunteers,
                     "Kazimierz",
                     19.9446,
                     50.0511,
@@ -98,6 +109,8 @@ public class DatabaseSeeder {
                     geometryFactory,
                     requesters,
                     volunteers,
+                    activeVolunteers,
+                    busyVolunteers,
                     "Krowodrza",
                     19.9244,
                     50.0702,
@@ -115,6 +128,8 @@ public class DatabaseSeeder {
                     geometryFactory,
                     requesters,
                     volunteers,
+                    activeVolunteers,
+                    busyVolunteers,
                     "Podgorze",
                     19.9521,
                     50.0436,
@@ -132,6 +147,8 @@ public class DatabaseSeeder {
                     geometryFactory,
                     requesters,
                     volunteers,
+                    activeVolunteers,
+                    busyVolunteers,
                     "Tauron Arena",
                     19.9942,
                     50.0681,
@@ -175,7 +192,7 @@ public class DatabaseSeeder {
             AppUser anna,
             AppUser marek,
             AppUser zofia,
-            AppUser kuba
+            AppUser offeringVolunteer
     ) {
         HelpRequest medicine = request(
                 geometryFactory,
@@ -220,7 +237,7 @@ public class DatabaseSeeder {
                 "15"
         );
         offered.setStatus(HelpRequestStatus.OFFERED);
-        offered.setVolunteer(kuba);
+        offered.setVolunteer(offeringVolunteer);
         helpRequestRepository.save(offered);
     }
 
@@ -229,6 +246,8 @@ public class DatabaseSeeder {
             GeometryFactory geometryFactory,
             AppUser[] requesters,
             AppUser[] volunteers,
+            AppUser[] activeVolunteers,
+            Set<AppUser> busyVolunteers,
             String district,
             double centerLng,
             double centerLat,
@@ -255,19 +274,30 @@ public class DatabaseSeeder {
                     i % 4 == 0 ? null : String.valueOf((i * 3) % 28 + 1)
             );
 
-            if (i % 13 == 5) {
-                request.setStatus(HelpRequestStatus.ACCEPTED);
-                request.setVolunteer(volunteers[i % volunteers.length]);
-            } else if (i % 11 == 4) {
+            if (i % 11 == 4) {
                 request.setStatus(HelpRequestStatus.COMPLETED);
                 request.setVolunteer(volunteers[i % volunteers.length]);
-            } else if (i % 7 == 3) {
-                request.setStatus(HelpRequestStatus.OFFERED);
-                request.setVolunteer(volunteers[i % volunteers.length]);
+            } else if (i % 13 == 5) {
+                // Accepted only while a volunteer is still free; otherwise the request stays open.
+                AppUser free = firstFree(activeVolunteers, busyVolunteers);
+                if (free != null) {
+                    request.setStatus(HelpRequestStatus.ACCEPTED);
+                    request.setVolunteer(free);
+                    busyVolunteers.add(free);
+                }
             }
 
             helpRequestRepository.save(request);
         }
+    }
+
+    private static AppUser firstFree(AppUser[] volunteers, Set<AppUser> busy) {
+        for (AppUser volunteer : volunteers) {
+            if (!busy.contains(volunteer)) {
+                return volunteer;
+            }
+        }
+        return null;
     }
 
     private HelpRequest request(
