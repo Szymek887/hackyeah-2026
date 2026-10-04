@@ -117,7 +117,8 @@ export function MapScreen() {
   };
 
   return (
-    <Screen scroll>
+    // Wider than other screens: the map and the nearest-requests list sit side by side.
+    <Screen scroll style={styles.wide}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <ThemedText type="subtitle" accessibilityRole="header">
@@ -488,17 +489,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
+  wide: {
+    maxWidth: 1120,
+  },
   mapWithList: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'stretch',
     gap: Spacing.three,
   },
   mapPane: {
-    flex: 1,
-    minWidth: 420,
+    flexGrow: 2,
+    flexShrink: 1,
+    flexBasis: 420,
+    minWidth: 0,
   },
   sidePanel: {
-    width: 360,
+    // Next to the map on wide screens, below it on narrow ones.
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 320,
     borderWidth: 1,
     borderRadius: Spacing.two,
     padding: Spacing.two,

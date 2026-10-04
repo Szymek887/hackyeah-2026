@@ -32,7 +32,7 @@ type PlaceSearchModalProps = {
 export function PlaceSearchModal({ visible, title, onClose, onSelect }: PlaceSearchModalProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { locate, isLoading: isLocating } = useUserLocation();
+  const { locate, isLoading: isLocating, error: locationError } = useUserLocation();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlaceSuggestion[]>(() => KRAKOW_PRESET_PLACES.slice(0, 8));
@@ -126,6 +126,15 @@ export function PlaceSearchModal({ visible, title, onClose, onSelect }: PlaceSea
           </View>
           {isLocating && <ActivityIndicator size="small" color={theme.primary} />}
         </Pressable>
+        {locationError && (
+          <ThemedText
+            type="small"
+            themeColor="danger"
+            accessibilityRole="alert"
+            style={styles.locationError}>
+            {locationError}
+          </ThemedText>
+        )}
 
         {/* Results List */}
         <View style={styles.listHeader}>
@@ -178,6 +187,10 @@ export function PlaceSearchModal({ visible, title, onClose, onSelect }: PlaceSea
 }
 
 const styles = StyleSheet.create({
+  locationError: {
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+  },
   container: {
     flex: 1,
     paddingHorizontal: Spacing.three,
