@@ -112,6 +112,13 @@ public class HelpRequest {
 
     private Instant handoffTokenUsedAt;
 
+    /** City admin who approved or dismissed the request after the AI held it for review. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewed_by_id")
+    private AppUser reviewedBy;
+
+    private Instant reviewedAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

@@ -138,6 +138,15 @@ export const CategoryColors = {
   SOCIAL: { color: '#7B5CC4', soft: '#F0EBFA' },
 } as const;
 
+/**
+ * City heatmap: one blue hue, light -> dark = fewer -> more requests. Used on OpenStreetMap
+ * tiles, which stay light in dark mode, so one scale serves both themes. Validated as an
+ * ordinal ramp (monotone lightness, lightest step 2:1 against a light surface).
+ */
+export const HeatmapScaleColors = ['#86B6EF', '#5598E7', '#2A78D6', '#1C5CAB', '#0D366B'] as const;
+/** Gap between neighbouring hexagons, in the colour of the light map tiles. */
+export const HeatmapCellBorder = '#FFFFFF';
+
 /** 0 = special (medicine), 1 = critical, 3 = low. */
 export const PriorityColors = {
   0: { color: '#0E7C86', soft: '#E0F3F4' },

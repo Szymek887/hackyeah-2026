@@ -37,7 +37,8 @@ public class AnalyticsRepository {
                    ST_AsGeoJSON(ST_Transform(h.geom, 4326), 6)   AS area,
                    r.category,
                    count(*)                                      AS cnt,
-                   sum(4 - r.priority)                           AS weight
+                   sum(4 - r.priority)                           AS weight,
+                   count(*) FILTER (WHERE r.status = 'OPEN')     AS open_cnt
             FROM help_requests r
             CROSS JOIN LATERAL (
                 SELECT g.i, g.j, g.geom
@@ -75,7 +76,8 @@ public class AnalyticsRepository {
                 rs.getString("area"),
                 HelpCategory.valueOf(rs.getString("category")),
                 rs.getLong("cnt"),
-                rs.getLong("weight")
+                rs.getLong("weight"),
+                rs.getLong("open_cnt")
         ));
     }
 

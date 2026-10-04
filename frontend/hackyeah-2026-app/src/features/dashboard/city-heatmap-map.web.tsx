@@ -4,24 +4,44 @@ import { createElement, useEffect, useRef, type CSSProperties } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { LayerGroup, Map as LeafletMapInstance } from 'leaflet';
 
-import type { Category, GeoPolygon } from '@/api/types';
-import { CategoryColors, Radius } from '@/constants/theme';
-import { CategoryLabels } from '@/features/requests/labels';
+import { Colors, HeatmapCellBorder, Radius } from '@/constants/theme';
+import {
+  HEATMAP_FILL_OPACITY,
+  HEATMAP_FILL_OPACITY_ACTIVE,
+  categoryBreakdown,
+  heatmapColor,
+  requestsLabel,
+  type HeatmapCell,
+} from '@/features/dashboard/heatmap-scale';
 import { useTheme } from '@/hooks/use-theme';
 
-export type HeatmapPointItem = {
-  lat: number;
-  lng: number;
-  weight: number;
-  category: Category;
-  byCategory?: Record<Category, number>;
-  totalInCell?: number;
-  area?: GeoPolygon;
+type CityHeatmapMapProps = {
+  cells: HeatmapCell[];
 };
 
-type CityHeatmapMapProps = {
-  points: HeatmapPointItem[];
-};
+/**
+ * Hover details of a hexagon. Leaflet tooltips are always white, so the light text tokens are
+ * used in both themes; category names come from fixed labels, never from user input.
+ */
+function tooltipHtml(cell: HeatmapCell): string {
+  const { text, textSecondary } = Colors.light;
+  const rows = categoryBreakdown(cell)
+    .map(
+      ({ label, color, count }) => `
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="width: 8px; height: 8px; border-radius: 4px; background: ${color};"></span>
+          <span style="flex: 1;">${label}</span>
+          <strong>${count}</strong>
+        </div>`,
+    )
+    .join('');
+  return `
+    <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: ${text}; min-width: 160px; display: grid; gap: 4px;">
+      <strong style="font-size: 13px;">${requestsLabel(cell.count)} w tym obszarze</strong>
+      <span style="color: ${textSecondary};">Czeka na pomoc: ${cell.open}</span>
+      ${rows}
+    </div>`;
+}
 
 const leafletElementStyle: CSSProperties = {
   height: '100%',
@@ -39,7 +59,7 @@ const DISTRICT_CENTERS = [
   { name: 'Prądnik Czerwony', lat: 50.086, lng: 19.952 },
 ];
 
-export function CityHeatmapMap({ points }: CityHeatmapMapProps) {
+export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
   const theme = useTheme();
   const elementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMapInstance | null>(null);
@@ -82,57 +102,28 @@ export function CityHeatmapMap({ points }: CityHeatmapMapProps) {
         L.marker([district.lat, district.lng], { icon, interactive: false }).addTo(overlays);
       });
 
-      // Render heat diffusion halos and core point markers
-      points.forEach((pt) => {
-        const catConfig = CategoryColors[pt.category] ?? {
-          color: theme.primary,
-          soft: theme.primarySoft,
-        };
-        const catLabel = CategoryLabels[pt.category] ?? pt.category;
-        const intensity = Math.round(pt.weight * 100);
-
-        // Outer diffused heat aura
-        L.circle([pt.lat, pt.lng], {
-          radius: 170 + pt.weight * 260,
-          color: 'transparent',
-          fillColor: catConfig.color,
-          fillOpacity: 0.16 + pt.weight * 0.18,
-          interactive: false,
-        }).addTo(overlays);
-
-        // Mid intensity ring
-        L.circle([pt.lat, pt.lng], {
-          radius: 80 + pt.weight * 120,
-          color: 'transparent',
-          fillColor: catConfig.color,
-          fillOpacity: 0.3 + pt.weight * 0.2,
-          interactive: false,
-        }).addTo(overlays);
-
-        // Core marker with white stroke and popup
-        const marker = L.circleMarker([pt.lat, pt.lng], {
-          radius: 8 + pt.weight * 8,
-          color: '#ffffff',
-          weight: 2,
-          fillColor: catConfig.color,
-          fillOpacity: 0.9,
-        });
-
-        marker.bindPopup(`
-          <div style="font-family: system-ui, -apple-system, sans-serif; padding: 4px; min-width: 150px;">
-            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: ${catConfig.color}; margin-bottom: 4px;">
-              ${catLabel}
-            </div>
-            <div style="font-size: 13px; font-weight: 600; color: #0F172A; margin-bottom: 2px;">
-              Wskaźnik zapotrzebowania: ${intensity}%
-            </div>
-            <div style="font-size: 11px; color: #64748B;">
-              Korytarz zgłoszeń sąsiedzkich
-            </div>
-          </div>
-        `);
-
-        marker.addTo(overlays);
+      // One hexagon per cell, drawn from the outline the backend computed (`properties.area`).
+      // District labels are markers, so Leaflet keeps them above the hexagons.
+      cells.forEach((cell) => {
+        const hexagon = L.polygon(
+          cell.area.coordinates.map((ring) =>
+            ring.map(([lng, lat]) => [lat, lng] as [number, number]),
+          ),
+          {
+            color: HeatmapCellBorder,
+            weight: 2,
+            fillColor: heatmapColor(cell.count),
+            fillOpacity: HEATMAP_FILL_OPACITY,
+          },
+        );
+        hexagon.bindTooltip(tooltipHtml(cell), { sticky: true, direction: 'top' });
+        hexagon.on('mouseover', () =>
+          hexagon.setStyle({ fillOpacity: HEATMAP_FILL_OPACITY_ACTIVE, weight: 3 }),
+        );
+        hexagon.on('mouseout', () =>
+          hexagon.setStyle({ fillOpacity: HEATMAP_FILL_OPACITY, weight: 2 }),
+        );
+        hexagon.addTo(overlays);
       });
 
       mapRef.current.invalidateSize();
@@ -145,7 +136,7 @@ export function CityHeatmapMap({ points }: CityHeatmapMapProps) {
       overlayRef.current?.remove();
       overlayRef.current = null;
     };
-  }, [points, theme.primary, theme.primarySoft]);
+  }, [cells]);
 
   useEffect(
     () => () => {

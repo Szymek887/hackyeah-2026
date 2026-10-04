@@ -31,15 +31,16 @@ import type {
   HelpRequestFull,
   HelpRequestListItem,
   HelpRequestView,
+  ModerationItem,
   Priority,
   RatingDto,
   RatingResult,
   RequestStatus,
-  UserProfile,
   UpdateDisabilitiesDto,
-  UpdateSpecialNeedNotesDto,
   UpdateLanguagesDto,
+  UpdateSpecialNeedNotesDto,
   UpdateSpecialNeedsConsentDto,
+  UserProfile,
   UserSummary,
   ViewerRole,
 } from '@/api/types';
@@ -156,8 +157,33 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     /^\/api\/requests\/format-transcript$/,
     ({ req }) => formatTranscriptRequest(req.body as FormatTranscriptDto),
   ],
-  ['GET', /^\/api\/analytics\/heatmap$/, ({ req }) => heatmap(req.query)],
-  ['GET', /^\/api\/analytics\/summary$/, ({ req }) => summary(req.query)],
+  ['GET', /^\/api\/admin\/review-queue$/, ({ req }) => reviewQueue(currentUser(req))],
+  [
+    'POST',
+    /^\/api\/admin\/help-requests\/(\d+)\/approve$/,
+    ({ params, req }) => decide(Number(params[0]), currentUser(req), 'OPEN'),
+  ],
+  [
+    'POST',
+    /^\/api\/admin\/help-requests\/(\d+)\/dismiss$/,
+    ({ params, req }) => decide(Number(params[0]), currentUser(req), 'CANCELLED'),
+  ],
+  [
+    'GET',
+    /^\/api\/analytics\/heatmap$/,
+    ({ req }) => {
+      requireCityAdmin(currentUser(req), ANALYTICS_FORBIDDEN);
+      return heatmap(req.query);
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/analytics\/summary$/,
+    ({ req }) => {
+      requireCityAdmin(currentUser(req), ANALYTICS_FORBIDDEN);
+      return summary(req.query);
+    },
+  ],
 ];
 
 export async function handleMockRequest<T>(req: ApiRequest): Promise<T> {
@@ -564,6 +590,8 @@ function create(body: CreateHelpRequestDto, user: UserProfile) {
     handoffToken: null,
     handoffTokenExpiresAt: null,
     handoffTokenUsedAt: null,
+    reviewedById: null,
+    reviewedAt: null,
   };
   requests.push(request);
   return toFull(request, user);
@@ -718,6 +746,57 @@ function rate(id: number, body: RatingDto, user: UserProfile): RatingResult {
   return { requestStatus: r.status, ratedUser: summaryOf(rated.id)!, cityPointsAwarded };
 }
 
+// ---------- Moderation (ModerationService) ----------
+
+/** CityAdminPolicy: the city panel (analytics, moderation) is for city administrators only. */
+function requireCityAdmin(user: UserProfile, detail: string) {
+  if (user.role !== 'CITY_ADMIN') throw forbidden(detail);
+}
+
+const ANALYTICS_FORBIDDEN = 'Only city administrators can see city analytics';
+const requireAdmin = (user: UserProfile) =>
+  requireCityAdmin(user, 'Only city administrators can review help requests');
+
+function toModerationItem(r: MockHelpRequest): ModerationItem {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    category: r.category,
+    priority: r.priority,
+    status: r.status,
+    riskFlags: r.riskFlags,
+    tags: r.tags,
+    classificationSource: r.classificationSource,
+    requester: summaryOf(r.requesterId)!,
+    approximateLocation: approximate(r),
+    maskedArea: maskedArea(r),
+    createdAt: r.createdAt,
+    reviewedAt: r.reviewedAt,
+  };
+}
+
+function reviewQueue(user: UserProfile): ModerationItem[] {
+  requireAdmin(user);
+  return requests
+    .filter((r) => r.status === 'UNDER_REVIEW')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map(toModerationItem);
+}
+
+/** UNDER_REVIEW -> OPEN (approve) or CANCELLED (dismiss). */
+function decide(id: number, user: UserProfile, decision: 'OPEN' | 'CANCELLED') {
+  requireAdmin(user);
+  const r = requests.find((candidate) => candidate.id === id);
+  if (!r) throw notFound(`Help request ${id} not found`);
+  requireStatus(r, 'UNDER_REVIEW', 'Help request is not waiting for review');
+  r.status = decision;
+  r.reviewedById = user.id;
+  r.reviewedAt = new Date().toISOString();
+  r.updatedAt = r.reviewedAt;
+  return toModerationItem(r);
+}
+
 // ---------- Analytics (AnalyticsService) ----------
 
 function filtered(query: Record<string, string>, statuses: RequestStatus[]) {
@@ -740,13 +819,21 @@ const countBy = <K extends string>(keys: K[], values: K[]) =>
     number
   >;
 
+/** Same rules as `AnalyticsService`: cells not smaller than the ~300 m public masking, k-anonymity. */
+const HEATMAP_MIN_CELL_SIZE_METERS = 500;
+const HEATMAP_MIN_CELL_COUNT = 3;
+
 function heatmap(query: Record<string, string>): HeatmapResponse {
   const cellSizeMeters = query.cellSizeMeters ? Number(query.cellSizeMeters) : 500;
-  if (!(cellSizeMeters >= 100 && cellSizeMeters <= 5000)) {
-    throw badRequest('cellSizeMeters must be between 100 and 5000');
+  if (!(cellSizeMeters >= HEATMAP_MIN_CELL_SIZE_METERS && cellSizeMeters <= 5000)) {
+    throw badRequest(`cellSizeMeters must be between ${HEATMAP_MIN_CELL_SIZE_METERS} and 5000`);
   }
   // Backend uses hexagons; the mock uses square cells of the same size – same response shape.
-  const visible = filtered(query, ['OPEN', 'OFFERED', 'ACCEPTED', 'COMPLETED', 'RATED']);
+  // Like AnalyticsService: explicit statuses (comma-separated) minus hidden ones, else the default.
+  const statuses = query.status
+    ? (query.status.split(',') as RequestStatus[]).filter((s) => s !== 'UNDER_REVIEW')
+    : (['OPEN', 'OFFERED', 'ACCEPTED', 'COMPLETED', 'RATED'] as RequestStatus[]);
+  const visible = filtered(query, statuses);
   const cells = new Map<string, MockHelpRequest[]>();
   const latSize = cellSizeMeters / METERS_PER_LAT_DEGREE;
   const lngSize = cellSizeMeters / (METERS_PER_LAT_DEGREE * Math.cos((50.06 * Math.PI) / 180));
@@ -754,7 +841,10 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
     const key = `${Math.floor(r.lat / latSize)}:${Math.floor(r.lng / lngSize)}`;
     cells.set(key, [...(cells.get(key) ?? []), r]);
   }
-  const features = [...cells.entries()].map(([key, items]) => {
+  const shownCells = [...cells.entries()].filter(
+    ([, items]) => items.length >= HEATMAP_MIN_CELL_COUNT,
+  );
+  const features = shownCells.map(([key, items]) => {
     const [row, col] = key.split(':').map(Number);
     const south = row * latSize;
     const west = col * lngSize;
@@ -764,6 +854,7 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
       properties: {
         count: items.length,
         weight: items.reduce((sum, r) => sum + (4 - r.priority), 0),
+        open: items.filter((r) => r.status === 'OPEN').length,
         byCategory: countBy(
           CATEGORIES,
           items.map((r) => r.category),
@@ -772,7 +863,13 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
       },
     };
   });
-  return { type: 'FeatureCollection', cellSizeMeters, totalRequests: visible.length, features };
+  return {
+    type: 'FeatureCollection',
+    cellSizeMeters,
+    totalRequests: features.reduce((sum, f) => sum + f.properties.count, 0),
+    suppressedCells: cells.size - shownCells.length,
+    features,
+  };
 }
 
 function summary(query: Record<string, string>): AnalyticsSummary {
@@ -790,6 +887,7 @@ function summary(query: Record<string, string>): AnalyticsSummary {
   return {
     total: all.length,
     open: byStatus.OPEN,
+    openUrgent: all.filter((r) => r.status === 'OPEN' && r.priority <= 1).length,
     inProgress: byStatus.OFFERED + byStatus.ACCEPTED,
     fulfilled,
     cancelled: byStatus.CANCELLED,

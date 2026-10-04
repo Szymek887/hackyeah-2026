@@ -9,6 +9,7 @@ import java.util.Map;
  * Totals for the city dashboard. Every map contains all keys, with zero for missing values.
  *
  * @param open            requests waiting for a volunteer ({@code OPEN})
+ * @param openUrgent      open requests with priority 0 (special, medicine) or 1 (critical)
  * @param inProgress      requests being handled ({@code OFFERED}, {@code ACCEPTED})
  * @param fulfilled       requests where help was delivered ({@code COMPLETED}, {@code RATED})
  * @param cancelled       cancelled requests
@@ -18,6 +19,7 @@ import java.util.Map;
 public record SummaryResponse(
         long total,
         long open,
+        long openUrgent,
         long inProgress,
         long fulfilled,
         long cancelled,

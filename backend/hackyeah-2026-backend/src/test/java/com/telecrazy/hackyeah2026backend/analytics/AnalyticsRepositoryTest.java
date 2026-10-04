@@ -27,9 +27,10 @@ import static org.assertj.core.api.Assertions.offset;
 /**
  * Runs the analytics SQL against the development PostGIS database (docker compose).
  * Test data is dated in 2030 and filtered by that window, so seeded data does not interfere;
- * every test rolls back.
+ * every test rolls back. The k-anonymity threshold is off here so single requests can be checked;
+ * it is covered in {@link AnalyticsServiceTest}.
  */
-@SpringBootTest
+@SpringBootTest(properties = "app.analytics.min-cell-count=1")
 @Transactional
 class AnalyticsRepositoryTest {
 
@@ -77,6 +78,7 @@ class AnalyticsRepositoryTest {
         HeatmapResponse.Properties oldTown = byCount.getFirst().properties();
         assertThat(oldTown.count()).isEqualTo(3);
         assertThat(oldTown.weight()).isEqualTo(3 + 3 + 1);
+        assertThat(oldTown.open()).isEqualTo(1);
         assertThat(oldTown.byCategory())
                 .containsEntry(HelpCategory.MEDICINE, 2L)
                 .containsEntry(HelpCategory.GROCERIES, 1L);
@@ -121,6 +123,7 @@ class AnalyticsRepositoryTest {
 
         assertThat(summary.total()).isEqualTo(5);
         assertThat(summary.open()).isEqualTo(2);
+        assertThat(summary.openUrgent()).isEqualTo(1);
         assertThat(summary.inProgress()).isEqualTo(1);
         assertThat(summary.fulfilled()).isEqualTo(1);
         assertThat(summary.cancelled()).isEqualTo(1);

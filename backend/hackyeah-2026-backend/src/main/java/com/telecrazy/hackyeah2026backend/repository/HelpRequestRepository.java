@@ -21,6 +21,10 @@ public interface HelpRequestRepository extends JpaRepository<HelpRequest, Long> 
     @Query("SELECT r FROM HelpRequest r WHERE r.id = :id")
     Optional<HelpRequest> findByIdForUpdate(@Param("id") long id);
 
+    /** Moderation queue: requests in one status, oldest first, with their requester. */
+    @EntityGraph(attributePaths = "requester")
+    List<HelpRequest> findByStatusOrderByCreatedAtAsc(HelpRequestStatus status);
+
     /** Whether the volunteer already takes part in a request in one of these statuses. */
     boolean existsByVolunteerAndStatusIn(AppUser volunteer, Collection<HelpRequestStatus> statuses);
 

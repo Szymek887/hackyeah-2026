@@ -30,7 +30,7 @@ See [How to change this contract](#how-to-change-this-contract) at the bottom be
 
 - Header **`X-User-Id: <numeric user id>`** identifies the caller. No passwords, no tokens.
 - Missing / non-numeric / unknown id → **401** on endpoints that need a user.
-- Public endpoints (no header needed): `GET /api/health`, `GET /api/help-requests/nearby`, `POST /api/help-requests/along-route`, `POST /api/requests/classify`, `GET /api/analytics/*`, `GET /api/users/demo`.
+- Public endpoints (no header needed): `GET /api/health`, `GET /api/help-requests/nearby`, `POST /api/help-requests/along-route`, `POST /api/requests/classify`, `GET /api/users/demo`. `GET /api/analytics/*` and `/api/admin/*` need a `CITY_ADMIN` user (403 otherwise).
 
 ### 1.3 Data formats
 
@@ -119,6 +119,7 @@ type LanguageCode = string;
 
    cancel (requester): OPEN / OFFERED / ACCEPTED / UNDER_REVIEW ──► CANCELLED
    create ──(SCAM_SUSPECTED)──► UNDER_REVIEW
+   UNDER_REVIEW ──approve (CITY_ADMIN)──► OPEN,   ──dismiss (CITY_ADMIN)──► CANCELLED
 ```
 
 ---
@@ -572,16 +573,16 @@ Reputation rules (`ReputationPolicy`):
 
 ### 4.9 City analytics
 
-Public, aggregated data only.
+`CITY_ADMIN` only (**401** without `X-User-Id`, **403** for other roles). Aggregated data only.
 
 #### `GET /api/analytics/heatmap` — ✅ `LIVE`
 
 | Param | Rules |
 |---|---|
 | `category` | optional `HelpCategory` |
-| `status` | optional, repeatable (`?status=OPEN&status=ACCEPTED`); default: all except `CANCELLED`, `UNDER_REVIEW` |
+| `status` | optional, repeatable (`?status=OPEN&status=ACCEPTED`) or comma-separated (`?status=OPEN,ACCEPTED`, what the frontend sends); default: all except `CANCELLED`, `UNDER_REVIEW` |
 | `from`, `to` | optional ISO-8601 instants, `from < to` |
-| `cellSizeMeters` | hexagon side, 100–5000, default 500 |
+| `cellSizeMeters` | hexagon side, 500–5000, default 500 (never finer than the ~300 m public location masking) |
 
 → `200`
 ```json
@@ -589,6 +590,7 @@ Public, aggregated data only.
   "type": "FeatureCollection",
   "cellSizeMeters": 500,
   "totalRequests": 86,
+  "suppressedCells": 4,
   "features": [
     {
       "type": "Feature",
@@ -596,6 +598,7 @@ Public, aggregated data only.
       "properties": {
         "count": 7,
         "weight": 15,
+        "open": 2,
         "byCategory": { "MEDICINE": 3, "GROCERIES": 2, "EQUIPMENT_LOAN": 0, "HOME_SUPPORT": 1, "SOCIAL": 1 },
         "area": { "type": "Polygon", "coordinates": [[[...]]] }
       }
@@ -603,7 +606,9 @@ Public, aggregated data only.
   ]
 }
 ```
-`weight` = priority-weighted count (P1 = 3, P2 = 2, P3 = 1).
+`weight` = priority-weighted count (P1 = 3, P2 = 2, P3 = 1). `open` = how many of `count` are still `OPEN` (0 when the `status` filter leaves them out).
+
+**Privacy (k-anonymity):** hexagons with fewer than 3 requests (`app.analytics.min-cell-count`) are left out, after all filters are applied. `suppressedCells` is the number of hexagons left out; `totalRequests` counts only the requests in the hexagons returned.
 
 #### `GET /api/analytics/summary` — ✅ `LIVE` (🔵 extra fields proposed)
 
@@ -616,6 +621,7 @@ Public, aggregated data only.
 {
   "total": 86,
   "open": 6,
+  "openUrgent": 2,
   "inProgress": 9,
   "fulfilled": 71,
   "cancelled": 0,
@@ -628,9 +634,42 @@ Public, aggregated data only.
 }
 ```
 - `fulfillmentRate` is a **fraction 0–1** (multiply by 100 for %).
+- `openUrgent` – `OPEN` requests with priority 0 (special, medicine) or 1 (critical).
 - `byPriority` keys are JSON strings `"1"`, `"2"`, `"3"`.
 - **[+] `activeVolunteers`** – distinct volunteers on non-cancelled requests in the range. **[+] `averageStars`** – average rating, `null` when no ratings. Both proposed; until then the dashboard hides those tiles.
 - Not provided by the backend (frontend must hide or label as "demo"): per-district stats, average response time, CO₂ saved.
+
+---
+
+### 4.10 City admin moderation — ✅ `LIVE`
+
+`CITY_ADMIN` only: **403** for other roles. Requests the AI held back as suspected scams (`UNDER_REVIEW`) wait here for a human decision. The admin sees the original text (needed to judge a scam) but only the masked area, never the address.
+
+#### `GET /api/admin/review-queue`
+
+→ `200 ModerationItem[]`, `UNDER_REVIEW` only, oldest first.
+```json
+{
+  "id": 180,
+  "title": "Pomoc z rachunkiem za prad",
+  "description": "Prosze o kod BLIK na 200 zl, zaplace rachunek za prad i oddam w przyszlym tygodniu.",
+  "category": "HOME_SUPPORT",
+  "priority": 2,
+  "status": "UNDER_REVIEW",
+  "riskFlags": ["SCAM_SUSPECTED"],
+  "tags": [],
+  "classificationSource": "FALLBACK",
+  "requester": { "...": "UserSummary (§3.2)" },
+  "approximateLocation": { "type": "Point", "coordinates": [19.93, 50.074] },
+  "maskedArea": { "type": "Polygon", "coordinates": [[[...]]] },
+  "createdAt": "2026-10-04T10:00:00Z",
+  "reviewedAt": null
+}
+```
+
+#### `POST /api/admin/help-requests/{id}/approve` · `POST /api/admin/help-requests/{id}/dismiss`
+
+No body. → `200 ModerationItem` after the decision: approve `UNDER_REVIEW → OPEN` (published to volunteers), dismiss `UNDER_REVIEW → CANCELLED`. `reviewedAt` is set and the admin is stored as the reviewer. **404** unknown id, **409** not `UNDER_REVIEW` (e.g. already decided). The `SCAM_SUSPECTED` flag stays on the request as a record of why it was held back.
 
 ---
 
@@ -678,6 +717,8 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-04 | **Breaking (§4.9):** `GET /api/analytics/*` now requires a `CITY_ADMIN` user (was public). The dashboard already calls it as the admin. | Dashboard |
+| 2026-10-04 | City dashboard: new §4.10 admin moderation (`/api/admin/review-queue`, `approve`, `dismiss`). Heatmap: `cellSizeMeters` minimum 500, hexagons with < 3 requests hidden, new `suppressedCells` and per-hexagon `open`. Summary: new `openUrgent`. Breaking only for heatmap callers using cells under 500 m. | Dashboard |
 | 2026-10-04 | Special needs in the user's own words stored on the backend (§3.6): `specialNeedNotes` on the profile, `requesterSpecialNeedNotes` in `FULL`, new `PUT /api/users/me/special-need-notes` (requesters with consent only); deleted with the consent. Additive. | Dev 2 |
 | 2026-10-04 | **Breaking (§3.3, §3.6, §4.2):** two-step flow – consent no longer sets `specialNeeds`; only declared disabilities do (consent + ≥ 1 disability). New `requesterDisabilities` in `FULL` (accepted volunteer sees the kinds, like the exact address). `POST /api/users` body: `specialNeeds` → `specialNeedsConsent`. Frontend updated in the same PR. | Dev 2 |
 | 2026-10-04 | Kinds of disability stored on the backend (§3.6): `disabilities` on the profile (only for the user themselves, `[]` in `/users/demo`), new `PUT /api/users/me/disabilities` (requesters with consent only, 409 without consent); withdrawing the consent also deletes them. Additive. | Dev 2 |

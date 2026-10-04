@@ -25,26 +25,28 @@ class AnalyticsServiceTest {
     private static final AnalyticsFilter NO_FILTER = new AnalyticsFilter(null, null, null, null);
 
     private final AnalyticsRepository repository = mock(AnalyticsRepository.class);
-    private final AnalyticsService service = new AnalyticsService(repository, JsonMapper.builder().build());
+    private final AnalyticsService service = new AnalyticsService(repository, JsonMapper.builder().build(), 3);
 
     @Test
     void mergesCategoryRowsOfSameHexagonIntoOneFeature() {
         given(repository.heatmap(any(), anyDouble())).willReturn(List.of(
-                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 2, 6),
-                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.SOCIAL, 1, 1),
-                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.GROCERIES, 4, 8)
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 2, 6, 1),
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.SOCIAL, 1, 1, 1),
+                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.GROCERIES, 4, 8, 0)
         ));
 
         HeatmapResponse response = service.heatmap(NO_FILTER, 500);
 
         assertThat(response.type()).isEqualTo("FeatureCollection");
         assertThat(response.totalRequests()).isEqualTo(7);
+        assertThat(response.suppressedCells()).isZero();
         assertThat(response.features()).hasSize(2);
 
         HeatmapResponse.Feature first = response.features().getFirst();
         assertThat(first.geometry().coordinates()).containsExactly(21.005, 52.205);
         assertThat(first.properties().count()).isEqualTo(3);
         assertThat(first.properties().weight()).isEqualTo(7);
+        assertThat(first.properties().open()).isEqualTo(2);
         assertThat(first.properties().byCategory())
                 .containsEntry(HelpCategory.MEDICINE, 2L)
                 .containsEntry(HelpCategory.SOCIAL, 1L)
@@ -52,6 +54,30 @@ class AnalyticsServiceTest {
                 .hasSize(HelpCategory.values().length);
         assertThat(first.properties().area().type()).isEqualTo("Polygon");
         assertThat(first.properties().area().coordinates().getFirst()).hasSize(4);
+    }
+
+    @Test
+    void heatmapHidesHexagonsWithFewerRequestsThanThreshold() {
+        given(repository.heatmap(any(), anyDouble())).willReturn(List.of(
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 1, 4, 0),
+                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.MEDICINE, 2, 8, 0),
+                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.MEDICINE, 2, 8, 0),
+                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.SOCIAL, 1, 1, 0)
+        ));
+
+        HeatmapResponse response = service.heatmap(NO_FILTER, 500);
+
+        // Only the hexagon with 3 requests (2 + 1 across categories) is shown.
+        assertThat(response.features()).hasSize(1);
+        assertThat(response.features().getFirst().properties().count()).isEqualTo(3);
+        assertThat(response.totalRequests()).isEqualTo(3);
+        assertThat(response.suppressedCells()).isEqualTo(2);
+    }
+
+    @Test
+    void rejectsThresholdBelowOne() {
+        assertThatThrownBy(() -> new AnalyticsService(repository, JsonMapper.builder().build(), 0))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -97,7 +123,7 @@ class AnalyticsServiceTest {
 
     @Test
     void rejectsCellSizeOutOfRange() {
-        assertThatThrownBy(() -> service.heatmap(NO_FILTER, 99)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.heatmap(NO_FILTER, 499)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.heatmap(NO_FILTER, 5001)).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -120,6 +146,7 @@ class AnalyticsServiceTest {
 
         assertThat(summary.total()).isEqualTo(10);
         assertThat(summary.open()).isEqualTo(3);
+        assertThat(summary.openUrgent()).isEqualTo(3);
         assertThat(summary.inProgress()).isEqualTo(1);
         assertThat(summary.fulfilled()).isEqualTo(4);
         assertThat(summary.cancelled()).isEqualTo(2);
@@ -131,6 +158,20 @@ class AnalyticsServiceTest {
                 .containsEntry(HelpCategory.MEDICINE, 4L)
                 .containsEntry(HelpCategory.EQUIPMENT_LOAN, 0L);
         assertThat(summary.byPriority()).containsEntry(1, 4L).containsEntry(2, 2L).containsEntry(3, 4L);
+    }
+
+    @Test
+    void openUrgentCountsOnlyOpenRequestsWithSpecialOrCriticalPriority() {
+        SummaryResponse summary = AnalyticsService.toSummary(List.of(
+                new SummaryRow(HelpCategory.MEDICINE, HelpRequestStatus.OPEN, 0, 2),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.OPEN, 1, 3),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.OPEN, 2, 4),
+                new SummaryRow(HelpCategory.GROCERIES, HelpRequestStatus.ACCEPTED, 1, 5),
+                new SummaryRow(HelpCategory.MEDICINE, HelpRequestStatus.COMPLETED, 0, 6)
+        ));
+
+        assertThat(summary.open()).isEqualTo(9);
+        assertThat(summary.openUrgent()).isEqualTo(5);
     }
 
     @Test

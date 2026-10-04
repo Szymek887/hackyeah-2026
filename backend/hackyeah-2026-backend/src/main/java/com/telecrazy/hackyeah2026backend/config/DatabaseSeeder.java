@@ -1,7 +1,9 @@
 package com.telecrazy.hackyeah2026backend.config;
 
+import com.telecrazy.hackyeah2026backend.ai.ClassificationSource;
 import com.telecrazy.hackyeah2026backend.ai.MedicineRedaction;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
+import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
@@ -69,6 +71,7 @@ public class DatabaseSeeder {
             Set<AppUser> busyVolunteers = new HashSet<>();
 
             seedRouteDemoRequests(helpRequestRepository, geometryFactory, anna, marek, zofia, ola);
+            seedReviewQueue(helpRequestRepository, geometryFactory, ewa, piotr, jan);
             busyVolunteers.add(ola);
             seedCluster(
                     helpRequestRepository,
@@ -187,6 +190,65 @@ public class DatabaseSeeder {
         user.grantSpecialNeedsConsent(Instant.now());
         user.replaceDisabilities(List.of(types));
         return user;
+    }
+
+    /**
+     * Requests the AI held back as suspected scams, for the city admin's review queue: two real
+     * scams to dismiss and one false alarm (paying for drill bits by transfer) to approve.
+     */
+    private void seedReviewQueue(
+            HelpRequestRepository helpRequestRepository,
+            GeometryFactory geometryFactory,
+            AppUser ewa,
+            AppUser piotr,
+            AppUser jan
+    ) {
+        helpRequestRepository.save(underReview(request(
+                geometryFactory,
+                ewa,
+                "Pomoc z rachunkiem za prad",
+                "Prosze o kod BLIK na 200 zl, zaplace rachunek za prad i oddam w przyszlym tygodniu.",
+                HelpCategory.HOME_SUPPORT,
+                2,
+                19.9301,
+                50.0738,
+                "Krolewska",
+                "41",
+                "6"
+        )));
+        helpRequestRepository.save(underReview(request(
+                geometryFactory,
+                piotr,
+                "Zakupy przez internet",
+                "Podam numer karty i kod SMS, prosze zrobic dla mnie zakupy w sklepie internetowym.",
+                HelpCategory.GROCERIES,
+                3,
+                19.9512,
+                50.0452,
+                "Kalwaryjska",
+                "18",
+                null
+        )));
+        helpRequestRepository.save(underReview(request(
+                geometryFactory,
+                jan,
+                "Pozyczenie wiertarki na sobote",
+                "Czy ktos pozyczy wiertarke na sobote? Zuzyte wiertla chetnie oddam przelewem.",
+                HelpCategory.EQUIPMENT_LOAN,
+                3,
+                19.9661,
+                50.0634,
+                "Grzegorzecka",
+                "7",
+                "12"
+        )));
+    }
+
+    private static HelpRequest underReview(HelpRequest request) {
+        request.setStatus(HelpRequestStatus.UNDER_REVIEW);
+        request.setRiskFlags(new HashSet<>(Set.of(RiskFlag.SCAM_SUSPECTED)));
+        request.setClassificationSource(ClassificationSource.FALLBACK);
+        return request;
     }
 
     private void seedRouteDemoRequests(

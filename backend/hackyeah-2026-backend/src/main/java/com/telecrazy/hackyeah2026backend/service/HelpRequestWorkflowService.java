@@ -36,6 +36,8 @@ import java.util.Set;
  * OPEN --offer--> OFFERED --accept--> ACCEPTED --complete (QR)--> COMPLETED --both rated--> RATED
  *   ^               |
  *   +----reject-----+          cancel: OPEN / OFFERED / ACCEPTED / UNDER_REVIEW --> CANCELLED
+ *
+ * UNDER_REVIEW (suspected scam) --approve--> OPEN, --dismiss--> CANCELLED: city admin, see ModerationService
  * </pre>
  * Every action loads the request with a row lock, then checks: visible to the caller (else 404),
  * caller allowed to act (else 403), status allows the transition (else 409).

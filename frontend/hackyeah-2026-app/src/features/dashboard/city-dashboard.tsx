@@ -5,13 +5,27 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Screen } from '@/components/ui/screen';
-import { CategoryColors, Spacing } from '@/constants/theme';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { CategoryColors, Radius, Spacing } from '@/constants/theme';
 import type { Category } from '@/api/types';
 import { AdminBar } from '@/features/dashboard/admin-bar';
 import { CityHeatmapMap } from '@/features/dashboard/city-heatmap-map';
+import {
+  HEATMAP_BINS,
+  HEATMAP_VIEWS,
+  requestsLabel,
+  type HeatmapCell,
+  type HeatmapView,
+} from '@/features/dashboard/heatmap-scale';
 import { dashboardKeys, useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
+import { ReviewQueue } from '@/features/dashboard/review-queue';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
+
+const VIEW_OPTIONS = (Object.keys(HEATMAP_VIEWS) as HeatmapView[]).map((value) => ({
+  value,
+  label: HEATMAP_VIEWS[value].label,
+}));
 
 const CATEGORY_KEYS = Object.keys(CategoryLabels) as Category[];
 
@@ -20,34 +34,31 @@ const CATEGORIES: { label: string; value?: Category }[] = [
   ...CATEGORY_KEYS.map((value) => ({ label: CategoryLabels[value], value })),
 ];
 
-/** Category with the most requests in a heatmap cell, used as the dot color. */
-const dominantCategory = (byCategory: Record<Category, number>) =>
-  CATEGORY_KEYS.reduce((best, key) => (byCategory[key] > byCategory[best] ? key : best));
-
 export function CityDashboard() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
+  // Unmet need first: where help is not arriving is what the city can act on.
+  const [heatmapView, setHeatmapView] = useState<HeatmapView>('OPEN');
 
-  const { data: summary, isPending: summaryLoading } = useCitySummary();
-  const { data: heatmap, isPending: heatmapLoading } = useHeatmapData(selectedCategory);
-  const cells = heatmap?.features ?? [];
-  const maxWeight = Math.max(1, ...cells.map((cell) => cell.properties.weight));
-  const points = cells.map((cell) => {
-    const [lng, lat] = cell.geometry.coordinates;
-    const category = dominantCategory(cell.properties.byCategory);
-    const weight = cell.properties.weight / maxWeight;
-    return {
-      lat,
-      lng,
-      weight,
-      category,
-      byCategory: cell.properties.byCategory,
-      totalInCell: cell.properties.weight,
-      area: cell.properties.area,
-    };
-  });
+  const {
+    data: summary,
+    isPending: summaryLoading,
+    isPlaceholderData: summaryUpdating,
+  } = useCitySummary(selectedCategory);
+  const {
+    data: heatmap,
+    isPending: heatmapLoading,
+    isPlaceholderData: heatmapUpdating,
+  } = useHeatmapData(selectedCategory, heatmapView);
+  const cells: HeatmapCell[] = (heatmap?.features ?? []).map(({ properties }) => ({
+    count: properties.count,
+    open: properties.open,
+    byCategory: properties.byCategory,
+    area: properties.area,
+  }));
 
+  // Full-screen spinner only on the first load; later filter changes keep the previous data visible.
   if (summaryLoading || heatmapLoading) {
     return (
       <Screen style={styles.center}>
@@ -72,8 +83,44 @@ export function CityDashboard() {
         </View>
       </View>
 
-      {/* KPI Cards */}
-      <View style={styles.kpiGrid}>
+      {/* Moderation first: it is the one part of the panel that asks the admin to act */}
+      <ReviewQueue />
+
+      {/* Category filter pills */}
+      <ThemedView type="backgroundElement" style={styles.filterSection}>
+        <ThemedText type="smallBold">Filtruj cały panel wg kategorii zgłoszeń:</ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterPills}>
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategory === cat.value;
+            return (
+              <Pressable
+                key={cat.label}
+                onPress={() => setSelectedCategory(cat.value)}
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: active ? theme.primary : theme.background,
+                    borderColor: theme.border,
+                  },
+                ]}>
+                <ThemedText
+                  type="smallBold"
+                  style={{
+                    color: active ? '#ffffff' : theme.text,
+                  }}>
+                  {cat.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
+      {/* KPI Cards (follow the category filter) */}
+      <View style={[styles.kpiGrid, summaryUpdating && styles.updating]}>
         <ThemedView type="backgroundElement" style={styles.kpiCard}>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
             Zgłoszone potrzeby
@@ -118,102 +165,106 @@ export function CityDashboard() {
             {summary?.open ?? 0}
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Pilnych: {summary?.byPriority['1'] ?? 0}
+            W tym pilnych: {summary?.openUrgent ?? 0}
           </ThemedText>
         </ThemedView>
       </View>
 
-      {/* Category filter pills */}
-      <ThemedView type="backgroundElement" style={styles.filterSection}>
-        <ThemedText type="smallBold">Filtruj wg kategorii zgłoszeń:</ThemedText>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterPills}>
-          {CATEGORIES.map((cat) => {
-            const active = selectedCategory === cat.value;
-            return (
-              <Pressable
-                key={cat.label}
-                onPress={() => setSelectedCategory(cat.value)}
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: active ? theme.primary : theme.background,
-                    borderColor: theme.border,
-                  },
-                ]}>
-                <ThemedText
-                  type="smallBold"
-                  style={{
-                    color: active ? '#ffffff' : theme.text,
-                  }}>
-                  {cat.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </ThemedView>
-
       {/* Heatmap visualization container */}
       <ThemedView type="backgroundElement" style={styles.heatmapCard}>
         <View style={styles.heatmapHeader}>
-          <View>
-            <ThemedText type="subtitle">Mapa Cieplna Zgłoszeń i Deficytów</ThemedText>
+          <View style={styles.heatmapTitle}>
+            <ThemedText type="subtitle">Mapa potrzeb</ThemedText>
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Zagęszczenie potrzeb w korytarzach miejskich ({heatmap?.totalRequests ?? 0} zgłoszeń w{' '}
-              {cells.length} obszarach)
+              {HEATMAP_VIEWS[heatmapView].description}: {requestsLabel(heatmap?.totalRequests ?? 0)}{' '}
+              w {cells.length} {cells.length === 1 ? 'obszarze' : 'obszarach'}
             </ThemedText>
+            {!!heatmap?.suppressedCells && (
+              <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                Ukryto obszary z mniej niż 3 zgłoszeniami ({heatmap.suppressedCells}), aby chronić
+                prywatność mieszkańców.
+              </ThemedText>
+            )}
           </View>
+          {heatmapUpdating && (
+            <ActivityIndicator
+              size="small"
+              color={theme.primary}
+              accessibilityLabel="Aktualizowanie mapy"
+            />
+          )}
         </View>
+
+        <SegmentedControl options={VIEW_OPTIONS} value={heatmapView} onChange={setHeatmapView} />
 
         {/* Real Interactive Map with OpenStreetMap tiles & Heatmap overlays */}
-        <CityHeatmapMap points={points} />
-
-        {/* Map Legend */}
-        <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
-          {CATEGORY_KEYS.map((key) => (
-            <View key={key} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors[key].color }]} />
-              <ThemedText type="small">{CategoryLabels[key]}</ThemedText>
-            </View>
-          ))}
-        </View>
-      </ThemedView>
-
-      {/* Requests by category (backend summary.byCategory) */}
-      <ThemedView type="backgroundElement" style={styles.sectionCard}>
-        <ThemedText type="subtitle">Zgłoszenia według kategorii</ThemedText>
-        <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          Gdzie mieszkańcy najczęściej potrzebują wsparcia
-        </ThemedText>
-
-        <View style={styles.districtList}>
-          {CATEGORY_KEYS.map((key) => {
-            const count = summary?.byCategory[key] ?? 0;
-            const pct = summary?.total ? Math.round((count / summary.total) * 100) : 0;
-            return (
-              <ThemedView key={key} type="background" style={styles.districtItem}>
-                <View style={styles.districtHeader}>
-                  <ThemedText type="subtitle">{CategoryLabels[key]}</ThemedText>
-                  <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                    {count} ({pct}%)
-                  </ThemedText>
-                </View>
-                <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${pct}%`, backgroundColor: CategoryColors[key].color },
-                    ]}
-                  />
-                </View>
+        <View style={heatmapUpdating && styles.updating}>
+          <CityHeatmapMap cells={cells} />
+          {!heatmapUpdating && cells.length === 0 && (
+            // Not an error: with few requests every area can be under the privacy threshold.
+            <View style={styles.emptyOverlay} pointerEvents="none">
+              <ThemedView type="backgroundElement" style={styles.emptyMessage}>
+                <ThemedText type="smallBold">Brak obszarów do pokazania</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {heatmap?.suppressedCells
+                    ? 'Każdy obszar ma w tym widoku mniej niż 3 zgłoszenia, więc dla ochrony prywatności nie jest pokazywany.'
+                    : 'W tym widoku nie ma zgłoszeń.'}
+                </ThemedText>
               </ThemedView>
-            );
-          })}
+            </View>
+          )}
+        </View>
+
+        {/* Map legend: the colour scale (fixed bins, see heatmap-scale.ts) */}
+        <View style={styles.legend}>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Liczba zgłoszeń w obszarze
+          </ThemedText>
+          <View style={styles.legendScale}>
+            {HEATMAP_BINS.map((bin) => (
+              <View key={bin.label} style={styles.legendStep}>
+                <View style={[styles.legendSwatch, { backgroundColor: bin.color }]} />
+                <ThemedText type="small">{bin.label}</ThemedText>
+              </View>
+            ))}
+          </View>
         </View>
       </ThemedView>
+
+      {/* Requests by category (backend summary.byCategory); one category selected would be a single 100% bar */}
+      {!selectedCategory && (
+        <ThemedView type="backgroundElement" style={styles.sectionCard}>
+          <ThemedText type="subtitle">Zgłoszenia według kategorii</ThemedText>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Gdzie mieszkańcy najczęściej potrzebują wsparcia
+          </ThemedText>
+
+          <View style={styles.districtList}>
+            {CATEGORY_KEYS.map((key) => {
+              const count = summary?.byCategory[key] ?? 0;
+              const pct = summary?.total ? Math.round((count / summary.total) * 100) : 0;
+              return (
+                <ThemedView key={key} type="background" style={styles.districtItem}>
+                  <View style={styles.districtHeader}>
+                    <ThemedText type="subtitle">{CategoryLabels[key]}</ThemedText>
+                    <ThemedText type="smallBold" style={{ color: theme.primary }}>
+                      {count} ({pct}%)
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${pct}%`, backgroundColor: CategoryColors[key].color },
+                      ]}
+                    />
+                  </View>
+                </ThemedView>
+              );
+            })}
+          </View>
+        </ThemedView>
+      )}
     </Screen>
   );
 }
@@ -271,23 +322,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  legendBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    padding: Spacing.two,
     gap: Spacing.two,
   },
-  legendItem: {
-    flexDirection: 'row',
+  heatmapTitle: {
+    flexShrink: 1,
+  },
+  updating: {
+    opacity: 0.6,
+  },
+  emptyOverlay: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  emptyMessage: {
+    padding: Spacing.three,
+    borderRadius: Radius.large,
+    gap: Spacing.half,
+    maxWidth: 360,
+  },
+  legend: {
     gap: Spacing.one,
   },
-  legendDot: {
-    width: 10,
+  legendScale: {
+    flexDirection: 'row',
+    gap: Spacing.half,
+  },
+  legendStep: {
+    flex: 1,
+    gap: Spacing.half,
+  },
+  legendSwatch: {
     height: 10,
-    borderRadius: 5,
+    borderRadius: Spacing.half,
   },
   sectionCard: {
     padding: Spacing.four,

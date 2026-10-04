@@ -320,7 +320,10 @@ export type RatingResult = {
 export type HeatmapResponse = {
   type: 'FeatureCollection';
   cellSizeMeters: number;
+  /** requests in the cells shown (suppressed cells not included) */
   totalRequests: number;
+  /** cells hidden because they have fewer than 3 requests (k-anonymity) */
+  suppressedCells: number;
   features: {
     type: 'Feature';
     geometry: GeoPoint;
@@ -328,6 +331,8 @@ export type HeatmapResponse = {
       count: number;
       /** priority 1 counts 3, priority 2 counts 2, priority 3 counts 1 */
       weight: number;
+      /** requests still OPEN; 0 when the status filter leaves them out */
+      open: number;
       byCategory: Record<Category, number>;
       area: GeoPolygon;
     };
@@ -338,6 +343,8 @@ export type HeatmapResponse = {
 export type AnalyticsSummary = {
   total: number;
   open: number;
+  /** OPEN requests with priority 0 (special, medicine) or 1 (critical) */
+  openUrgent: number;
   inProgress: number;
   fulfilled: number;
   cancelled: number;
@@ -346,6 +353,28 @@ export type AnalyticsSummary = {
   byStatus: Record<Exclude<RequestStatus, 'UNDER_REVIEW'>, number>;
   byCategory: Record<Category, number>;
   byPriority: Record<'0' | '1' | '2' | '3', number>;
+};
+
+/**
+ * `ModerationItem` – a request the AI held back as a suspected scam, as the city admin reviews it.
+ * Original text, but only the masked area: no address.
+ */
+export type ModerationItem = {
+  id: number;
+  title: string;
+  description: string;
+  category: Category;
+  priority: Priority;
+  status: RequestStatus;
+  riskFlags: RiskFlag[];
+  tags: string[];
+  classificationSource: ClassificationSource | null;
+  requester: UserSummary;
+  approximateLocation: GeoPoint;
+  maskedArea: GeoPolygon;
+  createdAt: string;
+  /** null while waiting for a decision */
+  reviewedAt: string | null;
 };
 
 /** Query of the analytics endpoints. */
