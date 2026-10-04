@@ -416,7 +416,7 @@ export function MapScreen() {
       </View>
 
       {!selectedRequest && !isSummaryOpen && (
-        <View style={[styles.leftActions, { top: insets.top + (activeRoute ? 176 : 136) }]}>
+        <View style={[styles.leftActions, { bottom: insets.bottom + 118 }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Otwórz listę zgłoszeń"
