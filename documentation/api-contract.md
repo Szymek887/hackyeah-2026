@@ -597,6 +597,7 @@ Public, aggregated data only.
       "properties": {
         "count": 7,
         "weight": 15,
+        "open": 2,
         "byCategory": { "MEDICINE": 3, "GROCERIES": 2, "EQUIPMENT_LOAN": 0, "HOME_SUPPORT": 1, "SOCIAL": 1 },
         "area": { "type": "Polygon", "coordinates": [[[...]]] }
       }
@@ -604,7 +605,7 @@ Public, aggregated data only.
   ]
 }
 ```
-`weight` = priority-weighted count (P1 = 3, P2 = 2, P3 = 1).
+`weight` = priority-weighted count (P1 = 3, P2 = 2, P3 = 1). `open` = how many of `count` are still `OPEN` (0 when the `status` filter leaves them out).
 
 **Privacy (k-anonymity):** hexagons with fewer than 3 requests (`app.analytics.min-cell-count`) are left out, after all filters are applied. `suppressedCells` is the number of hexagons left out; `totalRequests` counts only the requests in the hexagons returned.
 

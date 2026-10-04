@@ -103,16 +103,19 @@ public class AnalyticsService {
             Map<HelpCategory, Long> byCategory = zeroCounts(HelpCategory.class);
             long count = 0;
             long weight = 0;
+            long open = 0;
             for (HeatmapRow row : hexagonRows) {
                 byCategory.merge(row.category(), row.count(), Long::sum);
                 count += row.count();
                 weight += row.weight();
+                open += row.open();
             }
             features.add(HeatmapResponse.Feature.of(
                     GeoJsonPoint.of(first.centerLng(), first.centerLat()),
                     new HeatmapResponse.Properties(
                             count,
                             weight,
+                            open,
                             byCategory,
                             jsonMapper.readValue(first.areaGeoJson(), GeoJsonPolygon.class))
             ));

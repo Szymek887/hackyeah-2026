@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polygon } from 'react-native-maps';
 
 import { HeatmapCellBorder, Radius } from '@/constants/theme';
+import { HeatmapCellCard } from '@/features/dashboard/heatmap-cell-card';
 import {
   HEATMAP_FILL_OPACITY,
+  HEATMAP_FILL_OPACITY_ACTIVE,
+  cellKey,
   heatmapColor,
   type HeatmapCell,
 } from '@/features/dashboard/heatmap-scale';
@@ -33,6 +37,10 @@ const DISTRICT_CENTERS = [
 
 export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
   const theme = useTheme();
+  // Stored by key, so the card closes by itself when a filter removes the hexagon. Not closed by
+  // tapping the map: on iOS the map's onPress can also fire for a polygon tap.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selected = cells.find((cell) => cellKey(cell) === selectedKey);
 
   return (
     <View style={[styles.mapFrame, { borderColor: theme.border }]}>
@@ -51,18 +59,23 @@ export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
         {cells.map((cell) => {
           const [outer, ...holes] = getAreaPolygonRings(cell.area);
           if (!outer) return null;
+          const key = cellKey(cell);
+          const opacity = key === selectedKey ? HEATMAP_FILL_OPACITY_ACTIVE : HEATMAP_FILL_OPACITY;
           return (
             <Polygon
-              key={`${outer[0].latitude}:${outer[0].longitude}`}
+              key={key}
               coordinates={outer}
               holes={holes}
-              fillColor={withOpacity(heatmapColor(cell.count), HEATMAP_FILL_OPACITY)}
+              tappable
+              onPress={() => setSelectedKey(key)}
+              fillColor={withOpacity(heatmapColor(cell.count), opacity)}
               strokeColor={HeatmapCellBorder}
               strokeWidth={2}
             />
           );
         })}
       </MapView>
+      {selected && <HeatmapCellCard cell={selected} onClose={() => setSelectedKey(null)} />}
     </View>
   );
 }

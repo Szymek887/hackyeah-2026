@@ -30,9 +30,9 @@ class AnalyticsServiceTest {
     @Test
     void mergesCategoryRowsOfSameHexagonIntoOneFeature() {
         given(repository.heatmap(any(), anyDouble())).willReturn(List.of(
-                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 2, 6),
-                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.SOCIAL, 1, 1),
-                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.GROCERIES, 4, 8)
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 2, 6, 1),
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.SOCIAL, 1, 1, 1),
+                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.GROCERIES, 4, 8, 0)
         ));
 
         HeatmapResponse response = service.heatmap(NO_FILTER, 500);
@@ -46,6 +46,7 @@ class AnalyticsServiceTest {
         assertThat(first.geometry().coordinates()).containsExactly(21.005, 52.205);
         assertThat(first.properties().count()).isEqualTo(3);
         assertThat(first.properties().weight()).isEqualTo(7);
+        assertThat(first.properties().open()).isEqualTo(2);
         assertThat(first.properties().byCategory())
                 .containsEntry(HelpCategory.MEDICINE, 2L)
                 .containsEntry(HelpCategory.SOCIAL, 1L)
@@ -58,10 +59,10 @@ class AnalyticsServiceTest {
     @Test
     void heatmapHidesHexagonsWithFewerRequestsThanThreshold() {
         given(repository.heatmap(any(), anyDouble())).willReturn(List.of(
-                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 1, 4),
-                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.MEDICINE, 2, 8),
-                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.MEDICINE, 2, 8),
-                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.SOCIAL, 1, 1)
+                new HeatmapRow(1, 1, 21.005, 52.205, HEXAGON, HelpCategory.MEDICINE, 1, 4, 0),
+                new HeatmapRow(1, 2, 21.015, 52.215, HEXAGON, HelpCategory.MEDICINE, 2, 8, 0),
+                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.MEDICINE, 2, 8, 0),
+                new HeatmapRow(1, 3, 21.025, 52.225, HEXAGON, HelpCategory.SOCIAL, 1, 1, 0)
         ));
 
         HeatmapResponse response = service.heatmap(NO_FILTER, 500);

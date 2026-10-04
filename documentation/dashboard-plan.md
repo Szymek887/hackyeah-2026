@@ -19,7 +19,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 | 2 | ✅ Fix misleading KPIs and make the category filter apply to the whole dashboard | P0 | FE | 30 min |
 | 3 | ✅ Stop the full-screen spinner on every filter change | P0 | FE | 10 min |
 | 4 | ✅ Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
-| 5 | Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
+| 5 | ✅ Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
 | 6 | Moderation queue for requests flagged by the AI (`UNDER_REVIEW`) | P1 | BE + FE + mock | 3–4 h |
 | 7 | "Unmet need" view: open vs fulfilled toggle | P1 | FE | 45 min |
 | 8 | Time dimension: backdated seed data + time range filter | P2 | BE + FE | 1.5–2 h |
@@ -96,7 +96,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 **Done when** the map shows a grid of hexagons that line up with each other and get darker where there are more requests, on web and native.
 
-### 5. Useful cell popups
+### 5. Useful cell popups — ✅ Done (2026-10-04)
+
+> **Implemented.** New per-hexagon `open` count in the heatmap API (`count(*) FILTER (WHERE status = 'OPEN')` in the same query, so it is not hidden by the k-anonymity rule the way a second `status=OPEN` query would be); mock and types follow. Web: hovering a hexagon shows a tooltip with the total, "Czeka na pomoc: N" and the categories present, most requested first. Native: hexagons are tappable and open a card at the bottom of the map with the same content (`heatmap-cell-card.tsx`), closed with "Zamknij". The percentage and `totalInCell` are gone.
 
 **Problem.** The popup shows "Wskaźnik zapotrzebowania: 73%", relative to the busiest cell, which means nothing to an official. `totalInCell` is set to `weight`, not to the count.
 

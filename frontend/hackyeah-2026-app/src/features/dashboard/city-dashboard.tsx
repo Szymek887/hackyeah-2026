@@ -38,6 +38,7 @@ export function CityDashboard() {
   } = useHeatmapData(selectedCategory);
   const cells: HeatmapCell[] = (heatmap?.features ?? []).map(({ properties }) => ({
     count: properties.count,
+    open: properties.open,
     byCategory: properties.byCategory,
     area: properties.area,
   }));

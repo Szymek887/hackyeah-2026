@@ -41,7 +41,7 @@ class AnalyticsControllerTest {
         given(repository.heatmap(any(), eq(500.0))).willReturn(List.of(new HeatmapRow(
                 1, 1, 21.0, 52.2,
                 "{\"type\":\"Polygon\",\"coordinates\":[[[21.0,52.2],[21.1,52.2],[21.0,52.3],[21.0,52.2]]]}",
-                HelpCategory.MEDICINE, 3, 9)));
+                HelpCategory.MEDICINE, 3, 9, 2)));
 
         mockMvc.perform(get("/api/analytics/heatmap")
                         .param("category", "MEDICINE")
@@ -59,6 +59,7 @@ class AnalyticsControllerTest {
                 .andExpect(jsonPath("$.features[0].geometry.coordinates[0]").value(21.0))
                 .andExpect(jsonPath("$.features[0].properties.count").value(3))
                 .andExpect(jsonPath("$.features[0].properties.weight").value(9))
+                .andExpect(jsonPath("$.features[0].properties.open").value(2))
                 .andExpect(jsonPath("$.features[0].properties.byCategory.MEDICINE").value(3))
                 .andExpect(jsonPath("$.features[0].properties.area.type").value("Polygon"));
 

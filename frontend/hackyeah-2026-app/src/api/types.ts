@@ -331,6 +331,8 @@ export type HeatmapResponse = {
       count: number;
       /** priority 1 counts 3, priority 2 counts 2, priority 3 counts 1 */
       weight: number;
+      /** requests still OPEN; 0 when the status filter leaves them out */
+      open: number;
       byCategory: Record<Category, number>;
       area: GeoPolygon;
     };

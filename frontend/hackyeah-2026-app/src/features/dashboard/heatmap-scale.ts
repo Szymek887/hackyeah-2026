@@ -1,10 +1,13 @@
 import type { Category, GeoPolygon } from '@/api/types';
-import { HeatmapScaleColors } from '@/constants/theme';
+import { CategoryColors, HeatmapScaleColors } from '@/constants/theme';
+import { CategoryLabels } from '@/features/requests/labels';
 
 /** One hexagon of the city heatmap, as drawn by `CityHeatmapMap`. */
 export type HeatmapCell = {
   /** Requests in the hexagon (never below the backend k-anonymity threshold of 3). */
   count: number;
+  /** Requests in the hexagon still waiting for a volunteer. */
+  open: number;
   byCategory: Record<Category, number>;
   area: GeoPolygon;
 };
@@ -36,4 +39,20 @@ export function requestsLabel(count: number): string {
   const lastTwo = count % 100;
   const few = lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14);
   return `${count} ${few ? 'zgłoszenia' : 'zgłoszeń'}`;
+}
+
+/** Stable id of a hexagon: its first corner (the grid is fixed, see `AnalyticsRepository`). */
+export const cellKey = (cell: HeatmapCell) => cell.area.coordinates[0]?.[0]?.join(':') ?? '';
+
+/** Categories present in a hexagon, most requested first. */
+export function categoryBreakdown(cell: HeatmapCell) {
+  return (Object.keys(cell.byCategory) as Category[])
+    .filter((category) => cell.byCategory[category] > 0)
+    .sort((a, b) => cell.byCategory[b] - cell.byCategory[a])
+    .map((category) => ({
+      category,
+      label: CategoryLabels[category],
+      color: CategoryColors[category].color,
+      count: cell.byCategory[category],
+    }));
 }

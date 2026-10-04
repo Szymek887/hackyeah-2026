@@ -771,6 +771,7 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
       properties: {
         count: items.length,
         weight: items.reduce((sum, r) => sum + (4 - r.priority), 0),
+        open: items.filter((r) => r.status === 'OPEN').length,
         byCategory: countBy(
           CATEGORIES,
           items.map((r) => r.category),

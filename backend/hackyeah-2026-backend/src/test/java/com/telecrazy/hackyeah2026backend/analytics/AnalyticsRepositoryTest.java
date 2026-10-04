@@ -78,6 +78,7 @@ class AnalyticsRepositoryTest {
         HeatmapResponse.Properties oldTown = byCount.getFirst().properties();
         assertThat(oldTown.count()).isEqualTo(3);
         assertThat(oldTown.weight()).isEqualTo(3 + 3 + 1);
+        assertThat(oldTown.open()).isEqualTo(1);
         assertThat(oldTown.byCategory())
                 .containsEntry(HelpCategory.MEDICINE, 2L)
                 .containsEntry(HelpCategory.GROCERIES, 1L);
