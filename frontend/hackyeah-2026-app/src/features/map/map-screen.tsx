@@ -575,7 +575,7 @@ export function MapScreen() {
       </View>
 
       {!selectedRequest && !isSummaryOpen && (
-        <View style={[styles.leftActions, { bottom: insets.bottom + 82 }]}>
+        <View style={[styles.leftActions, { bottom: insets.bottom + 34 }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Otwórz listę zgłoszeń"
