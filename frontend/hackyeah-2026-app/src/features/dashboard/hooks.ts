@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { getAnalyticsSummary, getHeatmap } from '@/api/dashboard';
 import type { Category } from '@/api/types';
@@ -14,6 +14,8 @@ export function useHeatmapData(category?: Category) {
     queryKey: dashboardKeys.heatmap(category),
     queryFn: () => getHeatmap({ category }),
     staleTime: 1000 * 60 * 2,
+    // Keep the current numbers on screen while a new filter loads, instead of a blank spinner.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -22,5 +24,7 @@ export function useCitySummary() {
     queryKey: dashboardKeys.summary(),
     queryFn: () => getAnalyticsSummary(),
     staleTime: 1000 * 60 * 2,
+    // Keep the current numbers on screen while a new filter loads, instead of a blank spinner.
+    placeholderData: keepPreviousData,
   });
 }

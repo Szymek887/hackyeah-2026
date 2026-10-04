@@ -30,7 +30,11 @@ export function CityDashboard() {
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
 
   const { data: summary, isPending: summaryLoading } = useCitySummary();
-  const { data: heatmap, isPending: heatmapLoading } = useHeatmapData(selectedCategory);
+  const {
+    data: heatmap,
+    isPending: heatmapLoading,
+    isPlaceholderData: heatmapUpdating,
+  } = useHeatmapData(selectedCategory);
   const cells = heatmap?.features ?? [];
   const maxWeight = Math.max(1, ...cells.map((cell) => cell.properties.weight));
   const points = cells.map((cell) => {
@@ -48,6 +52,7 @@ export function CityDashboard() {
     };
   });
 
+  // Full-screen spinner only on the first load; later filter changes keep the previous data visible.
   if (summaryLoading || heatmapLoading) {
     return (
       <Screen style={styles.center}>
@@ -159,7 +164,7 @@ export function CityDashboard() {
       {/* Heatmap visualization container */}
       <ThemedView type="backgroundElement" style={styles.heatmapCard}>
         <View style={styles.heatmapHeader}>
-          <View>
+          <View style={styles.heatmapTitle}>
             <ThemedText type="subtitle">Mapa Cieplna Zgłoszeń i Deficytów</ThemedText>
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
               Zagęszczenie potrzeb w korytarzach miejskich ({heatmap?.totalRequests ?? 0} zgłoszeń w{' '}
@@ -172,10 +177,19 @@ export function CityDashboard() {
               </ThemedText>
             )}
           </View>
+          {heatmapUpdating && (
+            <ActivityIndicator
+              size="small"
+              color={theme.primary}
+              accessibilityLabel="Aktualizowanie mapy"
+            />
+          )}
         </View>
 
         {/* Real Interactive Map with OpenStreetMap tiles & Heatmap overlays */}
-        <CityHeatmapMap points={points} />
+        <View style={heatmapUpdating && styles.updating}>
+          <CityHeatmapMap points={points} />
+        </View>
 
         {/* Map Legend */}
         <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
@@ -277,6 +291,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
+  },
+  heatmapTitle: {
+    flexShrink: 1,
+  },
+  updating: {
+    opacity: 0.6,
   },
   legendBar: {
     flexDirection: 'row',

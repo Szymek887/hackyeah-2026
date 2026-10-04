@@ -17,7 +17,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 |---|---|---|---|---|
 | 1 | ✅ Close the heatmap privacy leak (min cell size + k-anonymity) | P0 | BE + mock | 45 min |
 | 2 | Fix misleading KPIs and make the category filter apply to the whole dashboard | P0 | FE | 30 min |
-| 3 | Stop the full-screen spinner on every filter change | P0 | FE | 10 min |
+| 3 | ✅ Stop the full-screen spinner on every filter change | P0 | FE | 10 min |
 | 4 | Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
 | 5 | Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
 | 6 | Moderation queue for requests flagged by the AI (`UNDER_REVIEW`) | P1 | BE + FE + mock | 3–4 h |
@@ -65,7 +65,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 **Done when** every number on screen matches the selected filter, and "Pilnych" counts only requests that are still waiting.
 
-### 3. No full-screen spinner on filter change
+### 3. No full-screen spinner on filter change — ✅ Done (2026-10-04)
+
+> **Implemented.** Both dashboard queries use `placeholderData: keepPreviousData`, so `isPending` is true only on the first load. While a new category loads, the previous map stays visible at 60% opacity with a small spinner next to the map title (`isPlaceholderData`). The summary query already keeps its data too, ready for task 2 adding the category to its key.
 
 **Problem.** A new category creates a new query key → `isPending` → the whole dashboard is replaced by a spinner.
 
