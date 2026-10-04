@@ -228,6 +228,18 @@ export type ClassifyRequestDto = {
   description: string;
 };
 
+/** `TranscriptInput` – raw speech-to-text of a dictated request. */
+export type FormatTranscriptDto = {
+  transcript: string;
+};
+
+/** `FormattedRequest` – `POST /api/requests/format-transcript` (nothing is saved). */
+export type FormattedRequest = {
+  title: string;
+  description: string;
+  source: ClassificationSource;
+};
+
 /** `RequestClassification` – `POST /api/requests/classify` (preview, nothing is saved). */
 export type AiClassification = {
   category: Category;

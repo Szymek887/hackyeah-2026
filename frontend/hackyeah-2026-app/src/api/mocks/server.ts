@@ -14,6 +14,7 @@ import {
   MEDICINE_TITLE,
   SPECIAL_PRIORITY,
 } from '@/api/mocks/classifier';
+import { formatTranscript } from '@/api/mocks/transcript';
 import { newRequestId, ratings, requests, users, type MockHelpRequest } from '@/api/mocks/db';
 import type {
   AnalyticsSummary,
@@ -22,6 +23,7 @@ import type {
   CreateHelpRequestDto,
   CreateUserDto,
   DisabilityType,
+  FormatTranscriptDto,
   GeoPoint,
   GeoPolygon,
   HandoffToken,
@@ -143,6 +145,11 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     ({ params, req }) => rate(Number(params[0]), req.body as RatingDto, currentUser(req)),
   ],
   ['POST', /^\/api\/requests\/classify$/, ({ req }) => classify(req.body as ClassifyRequestDto)],
+  [
+    'POST',
+    /^\/api\/requests\/format-transcript$/,
+    ({ req }) => formatTranscriptRequest(req.body as FormatTranscriptDto),
+  ],
   ['GET', /^\/api\/analytics\/heatmap$/, ({ req }) => heatmap(req.query)],
   ['GET', /^\/api\/analytics\/summary$/, ({ req }) => summary(req.query)],
 ];
@@ -460,6 +467,11 @@ function classify(body: ClassifyRequestDto) {
   if (!body?.title?.trim() || !body?.description?.trim())
     throw badRequest('Request validation failed');
   return classifyRequest(body);
+}
+
+function formatTranscriptRequest(body: FormatTranscriptDto) {
+  if (!body?.transcript?.trim()) throw badRequest('Request validation failed');
+  return formatTranscript(body.transcript);
 }
 
 function create(body: CreateHelpRequestDto, user: UserProfile) {
