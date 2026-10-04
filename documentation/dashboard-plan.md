@@ -18,7 +18,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 | 1 | ✅ Close the heatmap privacy leak (min cell size + k-anonymity) | P0 | BE + mock | 45 min |
 | 2 | ✅ Fix misleading KPIs and make the category filter apply to the whole dashboard | P0 | FE | 30 min |
 | 3 | ✅ Stop the full-screen spinner on every filter change | P0 | FE | 10 min |
-| 4 | Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
+| 4 | ✅ Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
 | 5 | Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
 | 6 | Moderation queue for requests flagged by the AI (`UNDER_REVIEW`) | P1 | BE + FE + mock | 3–4 h |
 | 7 | "Unmet need" view: open vs fulfilled toggle | P1 | FE | 45 min |
@@ -81,7 +81,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 ## P1 – Biggest demo impact
 
-### 4. Draw real hexagons
+### 4. Draw real hexagons — ✅ Done (2026-10-04)
+
+> **Implemented.** Both maps draw `properties.area` as polygons (Leaflet `L.polygon` on web, `react-native-maps` `Polygon` on native) with a 2 px white gap between cells. Colour comes from fixed count bins in `features/dashboard/heatmap-scale.ts` (3–4 / 5–7 / 8–11 / 12–19 / 20+, chosen to spread the seeded data). The scale is one blue hue (`HeatmapScaleColors` in `theme.ts`, validated as an ordinal ramp). The colours don't change in dark mode because the map tiles stay light. On web, hovering a cell highlights it and shows "N zgłoszeń". The category legend under the map is replaced by the count scale. Circles, markers and the `dominantCategory` colouring are gone. Native has no tap details yet; that comes with task 5.
 
 **Problem.** The README promises a hexagon heatmap and the API returns each hexagon outline in `properties.area`, but both map components draw two blurred circles + a marker per cell. The circle radii (170–430 m) do not match the 500 m cells.
 

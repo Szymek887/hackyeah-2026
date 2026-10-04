@@ -1,26 +1,26 @@
-import { Fragment } from 'react';
 import { StyleSheet, View } from 'react-native';
-import MapView, { Circle, Marker } from 'react-native-maps';
+import MapView, { Marker, Polygon } from 'react-native-maps';
 
-import type { Category, GeoPolygon } from '@/api/types';
-import { CategoryColors, Radius } from '@/constants/theme';
+import { HeatmapCellBorder, Radius } from '@/constants/theme';
+import {
+  HEATMAP_FILL_OPACITY,
+  heatmapColor,
+  type HeatmapCell,
+} from '@/features/dashboard/heatmap-scale';
+import { getAreaPolygonRings } from '@/features/map/area-geometry';
 import { KRAKOW_INITIAL_REGION } from '@/features/map/krakow-map-data';
-import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
 
-export type HeatmapPointItem = {
-  lat: number;
-  lng: number;
-  weight: number;
-  category: Category;
-  byCategory?: Record<Category, number>;
-  totalInCell?: number;
-  area?: GeoPolygon;
+type CityHeatmapMapProps = {
+  cells: HeatmapCell[];
 };
 
-type CityHeatmapMapProps = {
-  points: HeatmapPointItem[];
-};
+/** `#RRGGBB` + opacity -> `#RRGGBBAA` (react-native-maps polygons have no separate fill opacity). */
+const withOpacity = (hex: string, opacity: number) =>
+  hex +
+  Math.round(opacity * 255)
+    .toString(16)
+    .padStart(2, '0');
 
 const DISTRICT_CENTERS = [
   { name: 'Stare Miasto', latitude: 50.0619, longitude: 19.9367 },
@@ -31,7 +31,7 @@ const DISTRICT_CENTERS = [
   { name: 'Prądnik Czerwony', latitude: 50.086, longitude: 19.952 },
 ];
 
-export function CityHeatmapMap({ points }: CityHeatmapMapProps) {
+export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
   const theme = useTheme();
 
   return (
@@ -47,36 +47,19 @@ export function CityHeatmapMap({ points }: CityHeatmapMapProps) {
           />
         ))}
 
-        {/* Heat diffusion circles and point markers */}
-        {points.map((pt, idx) => {
-          const catConfig = CategoryColors[pt.category] ?? {
-            color: theme.primary,
-            soft: theme.primarySoft,
-          };
-          const catLabel = CategoryLabels[pt.category] ?? pt.category;
-          const intensity = Math.round(pt.weight * 100);
-
+        {/* One hexagon per cell, drawn from the outline the backend computed (`properties.area`) */}
+        {cells.map((cell) => {
+          const [outer, ...holes] = getAreaPolygonRings(cell.area);
+          if (!outer) return null;
           return (
-            <Fragment key={`pt-${idx}`}>
-              <Circle
-                center={{ latitude: pt.lat, longitude: pt.lng }}
-                radius={200 + pt.weight * 260}
-                fillColor={`${catConfig.color}2B`}
-                strokeColor="transparent"
-              />
-              <Circle
-                center={{ latitude: pt.lat, longitude: pt.lng }}
-                radius={90 + pt.weight * 120}
-                fillColor={`${catConfig.color}52`}
-                strokeColor="transparent"
-              />
-              <Marker
-                coordinate={{ latitude: pt.lat, longitude: pt.lng }}
-                pinColor={catConfig.color}
-                title={catLabel}
-                description={`Zapotrzebowanie: ${intensity}%`}
-              />
-            </Fragment>
+            <Polygon
+              key={`${outer[0].latitude}:${outer[0].longitude}`}
+              coordinates={outer}
+              holes={holes}
+              fillColor={withOpacity(heatmapColor(cell.count), HEATMAP_FILL_OPACITY)}
+              strokeColor={HeatmapCellBorder}
+              strokeWidth={2}
+            />
           );
         })}
       </MapView>

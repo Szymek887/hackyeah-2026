@@ -9,6 +9,7 @@ import { CategoryColors, Spacing } from '@/constants/theme';
 import type { Category } from '@/api/types';
 import { AdminBar } from '@/features/dashboard/admin-bar';
 import { CityHeatmapMap } from '@/features/dashboard/city-heatmap-map';
+import { HEATMAP_BINS, type HeatmapCell } from '@/features/dashboard/heatmap-scale';
 import { dashboardKeys, useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,10 +20,6 @@ const CATEGORIES: { label: string; value?: Category }[] = [
   { label: 'Wszystkie' },
   ...CATEGORY_KEYS.map((value) => ({ label: CategoryLabels[value], value })),
 ];
-
-/** Category with the most requests in a heatmap cell, used as the dot color. */
-const dominantCategory = (byCategory: Record<Category, number>) =>
-  CATEGORY_KEYS.reduce((best, key) => (byCategory[key] > byCategory[best] ? key : best));
 
 export function CityDashboard() {
   const theme = useTheme();
@@ -39,22 +36,11 @@ export function CityDashboard() {
     isPending: heatmapLoading,
     isPlaceholderData: heatmapUpdating,
   } = useHeatmapData(selectedCategory);
-  const cells = heatmap?.features ?? [];
-  const maxWeight = Math.max(1, ...cells.map((cell) => cell.properties.weight));
-  const points = cells.map((cell) => {
-    const [lng, lat] = cell.geometry.coordinates;
-    const category = dominantCategory(cell.properties.byCategory);
-    const weight = cell.properties.weight / maxWeight;
-    return {
-      lat,
-      lng,
-      weight,
-      category,
-      byCategory: cell.properties.byCategory,
-      totalInCell: cell.properties.weight,
-      area: cell.properties.area,
-    };
-  });
+  const cells: HeatmapCell[] = (heatmap?.features ?? []).map(({ properties }) => ({
+    count: properties.count,
+    byCategory: properties.byCategory,
+    area: properties.area,
+  }));
 
   // Full-screen spinner only on the first load; later filter changes keep the previous data visible.
   if (summaryLoading || heatmapLoading) {
@@ -192,17 +178,22 @@ export function CityDashboard() {
 
         {/* Real Interactive Map with OpenStreetMap tiles & Heatmap overlays */}
         <View style={heatmapUpdating && styles.updating}>
-          <CityHeatmapMap points={points} />
+          <CityHeatmapMap cells={cells} />
         </View>
 
-        {/* Map Legend */}
-        <View style={[styles.legendBar, { backgroundColor: theme.backgroundElement }]}>
-          {CATEGORY_KEYS.map((key) => (
-            <View key={key} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CategoryColors[key].color }]} />
-              <ThemedText type="small">{CategoryLabels[key]}</ThemedText>
-            </View>
-          ))}
+        {/* Map legend: the colour scale (fixed bins, see heatmap-scale.ts) */}
+        <View style={styles.legend}>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Liczba zgłoszeń w obszarze
+          </ThemedText>
+          <View style={styles.legendScale}>
+            {HEATMAP_BINS.map((bin) => (
+              <View key={bin.label} style={styles.legendStep}>
+                <View style={[styles.legendSwatch, { backgroundColor: bin.color }]} />
+                <ThemedText type="small">{bin.label}</ThemedText>
+              </View>
+            ))}
+          </View>
         </View>
       </ThemedView>
 
@@ -305,22 +296,20 @@ const styles = StyleSheet.create({
   updating: {
     opacity: 0.6,
   },
-  legendBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    padding: Spacing.two,
-    gap: Spacing.two,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  legend: {
     gap: Spacing.one,
   },
-  legendDot: {
-    width: 10,
+  legendScale: {
+    flexDirection: 'row',
+    gap: Spacing.half,
+  },
+  legendStep: {
+    flex: 1,
+    gap: Spacing.half,
+  },
+  legendSwatch: {
     height: 10,
-    borderRadius: 5,
+    borderRadius: Spacing.half,
   },
   sectionCard: {
     padding: Spacing.four,
