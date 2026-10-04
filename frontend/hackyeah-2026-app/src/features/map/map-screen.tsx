@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import MapView, { Circle, Marker, Polyline, type Region } from 'react-native-maps';
@@ -89,6 +90,7 @@ export function MapScreen() {
   );
   const [mapRegion, setMapRegion] = useState<Region>(KRAKOW_INITIAL_REGION);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(true);
   const [onlyAlongRoute, setOnlyAlongRoute] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('ALL');
@@ -274,7 +276,7 @@ export function MapScreen() {
         mapPadding={{
           top: insets.top + (activeRoute ? 110 : 70),
           right: 12,
-          bottom: selectedRequest ? 260 : 160,
+          bottom: selectedRequest || isSummaryOpen ? 260 : 90,
           left: 12,
         }}>
         <Marker
@@ -410,308 +412,346 @@ export function MapScreen() {
         )}
       </View>
 
-      <View style={[styles.leftActions, { top: insets.top + (activeRoute ? 176 : 136) }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Otwórz listę zgłoszeń"
-          onPress={() => router.push('/(tabs)/requests')}
-          style={({ pressed }) => [
-            styles.sideAction,
-            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-            pressed && styles.pressed,
-          ]}>
-          <ThemedText type="defaultBold" style={{ color: theme.primary }}>
-            ☰
-          </ThemedText>
-          <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-            Lista
-          </ThemedText>
-        </Pressable>
+      {!selectedRequest && !isSummaryOpen && (
+        <View style={[styles.leftActions, { top: insets.top + (activeRoute ? 176 : 136) }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Otwórz listę zgłoszeń"
+            onPress={() => setIsSummaryOpen(true)}
+            style={({ pressed }) => [
+              styles.sideAction,
+              { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+              pressed && styles.pressed,
+            ]}>
+            <SymbolView
+              name={{ ios: 'list.bullet', android: 'list' }}
+              size={27}
+              tintColor={theme.primary}
+              weight="bold"
+            />
+            <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+              Lista
+            </ThemedText>
+          </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Zaplanuj trasę"
-          onPress={openRoutePlanner}
-          style={({ pressed }) => [
-            styles.sideAction,
-            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-            pressed && styles.pressed,
-          ]}>
-          <ThemedText type="defaultBold" style={{ color: theme.primary }}>
-            ⤴
-          </ThemedText>
-          <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
-            Trasa
-          </ThemedText>
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zaplanuj trasę"
+            onPress={openRoutePlanner}
+            style={({ pressed }) => [
+              styles.sideAction,
+              { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+              pressed && styles.pressed,
+            ]}>
+            <SymbolView
+              name={{ ios: 'point.topleft.down.curvedto.point.bottomright.up', android: 'route' }}
+              size={27}
+              tintColor={theme.primary}
+              weight="bold"
+            />
+            <ThemedText type="caption" style={{ color: theme.primary, fontWeight: '700' }}>
+              Trasa
+            </ThemedText>
+          </Pressable>
+        </View>
+      )}
 
       {/* Bottom Panel */}
-      <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
-        {selectedRequest ? (
-          <ThemedView type="backgroundElement" style={styles.selectedCard}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Zamknij szczegóły zgłoszenia"
-              onPress={() => setSelectedRequestId(null)}
-              style={({ pressed }) => [
-                styles.closeIconButton,
-                { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
-                pressed && styles.pressed,
-              ]}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                ×
-              </ThemedText>
-            </Pressable>
-
-            <View style={styles.selectedHeader}>
-              <View style={styles.badges}>
-                <PriorityBadge priority={selectedRequest.priority} />
-                <CategoryBadge category={selectedRequest.category} />
-              </View>
-            </View>
-
-            <ThemedText type="defaultBold" numberOfLines={2}>
-              {selectedRequest.title}
-            </ThemedText>
-
-            <ThemedText type="caption" themeColor="textSecondary">
-              Zgłoszono: {timeAgo(selectedRequest.createdAt)} · Strefa przybliżona ~300 m
-            </ThemedText>
-
-            {offeredIds.includes(selectedRequest.id) ? (
-              <View
-                style={[
-                  styles.offeredBanner,
-                  { backgroundColor: theme.backgroundSelected, borderColor: theme.border },
+      {(selectedRequest || isSummaryOpen) && (
+        <View style={[styles.panel, { paddingBottom: insets.bottom + Spacing.three }]}>
+          {selectedRequest ? (
+            <ThemedView type="backgroundElement" style={styles.selectedCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Zamknij szczegóły zgłoszenia"
+                onPress={() => setSelectedRequestId(null)}
+                style={({ pressed }) => [
+                  styles.closeIconButton,
+                  { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                  pressed && styles.pressed,
                 ]}>
-                <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                  Zgłoszono chęć pomocy
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Czekasz na akceptację przez osobę potrzebującą.
-                </ThemedText>
-                <Button
-                  variant="secondary"
-                  title="Otwórz szczegóły zlecenia"
-                  onPress={() =>
-                    router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
-                  }
+                <SymbolView
+                  name={{ ios: 'xmark', android: 'close' }}
+                  size={17}
+                  tintColor={theme.textSecondary}
+                  weight="bold"
                 />
-              </View>
-            ) : (
-              <View style={styles.actionButtonsCol}>
-                <Button
-                  title={offerHelpMutation.isPending ? 'Wysyłam zgłoszenie...' : 'Chcę pomóc'}
-                  disabled={offerHelpMutation.isPending}
-                  onPress={() => {
-                    offerHelpMutation.mutate(selectedRequest.id, {
-                      onSuccess: () => {
-                        setOfferedIds((prev) => [...prev, selectedRequest.id]);
-                      },
-                    });
-                  }}
-                />
-                <Button
-                  variant="secondary"
-                  title="Zobacz pełne szczegóły"
-                  onPress={() =>
-                    router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
-                  }
-                />
-              </View>
-            )}
+              </Pressable>
 
-            {offerHelpMutation.error && (
-              <ThemedText themeColor="danger">{errorMessage(offerHelpMutation.error)}</ThemedText>
-            )}
-          </ThemedView>
-        ) : (
-          <ThemedView type="backgroundElement" style={styles.summary}>
-            <View style={styles.summaryHeader}>
-              <View style={styles.summaryTitleWrapper}>
-                <ThemedText type="smallBold">
-                  Najbliżej Ciebie ({displayRequests.length}{' '}
-                  {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'})
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Promień wyszukiwania i filtry:
-                </ThemedText>
+              <View style={styles.selectedHeader}>
+                <View style={styles.badges}>
+                  <PriorityBadge priority={selectedRequest.priority} />
+                  <CategoryBadge category={selectedRequest.category} />
+                </View>
               </View>
-              <View style={styles.radiusChips}>
-                {[1.5, 2.5, 5.0].map((r) => {
-                  const isSelected = radiusKm === r;
+
+              <ThemedText type="defaultBold" numberOfLines={2}>
+                {selectedRequest.title}
+              </ThemedText>
+
+              <ThemedText type="caption" themeColor="textSecondary">
+                Zgłoszono: {timeAgo(selectedRequest.createdAt)} · Strefa przybliżona ~300 m
+              </ThemedText>
+
+              {offeredIds.includes(selectedRequest.id) ? (
+                <View
+                  style={[
+                    styles.offeredBanner,
+                    { backgroundColor: theme.backgroundSelected, borderColor: theme.border },
+                  ]}>
+                  <ThemedText type="smallBold" style={{ color: theme.primary }}>
+                    Zgłoszono chęć pomocy
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    Czekasz na akceptację przez osobę potrzebującą.
+                  </ThemedText>
+                  <Button
+                    variant="secondary"
+                    title="Otwórz szczegóły zlecenia"
+                    onPress={() =>
+                      router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
+                    }
+                  />
+                </View>
+              ) : (
+                <View style={styles.actionButtonsCol}>
+                  <Button
+                    title={offerHelpMutation.isPending ? 'Wysyłam zgłoszenie...' : 'Chcę pomóc'}
+                    disabled={offerHelpMutation.isPending}
+                    onPress={() => {
+                      offerHelpMutation.mutate(selectedRequest.id, {
+                        onSuccess: () => {
+                          setOfferedIds((prev) => [...prev, selectedRequest.id]);
+                        },
+                      });
+                    }}
+                  />
+                  <Button
+                    variant="secondary"
+                    title="Zobacz pełne szczegóły"
+                    onPress={() =>
+                      router.push({ pathname: '/request/[id]', params: { id: selectedRequest.id } })
+                    }
+                  />
+                </View>
+              )}
+
+              {offerHelpMutation.error && (
+                <ThemedText themeColor="danger">{errorMessage(offerHelpMutation.error)}</ThemedText>
+              )}
+            </ThemedView>
+          ) : (
+            <ThemedView type="backgroundElement" style={styles.summary}>
+              <View style={styles.summaryHeader}>
+                <View style={styles.summaryTitleWrapper}>
+                  <ThemedText type="smallBold">
+                    Najbliżej Ciebie ({displayRequests.length}{' '}
+                    {displayRequests.length === 1 ? 'zgłoszenie' : 'zgłoszeń'})
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    Promień wyszukiwania i filtry:
+                  </ThemedText>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Zamknij listę zgłoszeń"
+                  onPress={() => setIsSummaryOpen(false)}
+                  style={({ pressed }) => [
+                    styles.summaryCloseButton,
+                    { backgroundColor: theme.backgroundMuted, borderColor: theme.border },
+                    pressed && styles.pressed,
+                  ]}>
+                  <SymbolView
+                    name={{ ios: 'xmark', android: 'close' }}
+                    size={15}
+                    tintColor={theme.textSecondary}
+                    weight="bold"
+                  />
+                  <ThemedText
+                    type="caption"
+                    themeColor="textSecondary"
+                    style={{ fontWeight: '700' }}>
+                    Zamknij
+                  </ThemedText>
+                </Pressable>
+              </View>
+
+              <View style={styles.summaryControls}>
+                <View style={styles.radiusChips}>
+                  {[1.5, 2.5, 5.0].map((r) => {
+                    const isSelected = radiusKm === r;
+                    return (
+                      <Pressable
+                        key={r}
+                        onPress={() => setRadiusKm(r)}
+                        style={({ pressed }) => [
+                          styles.radiusChip,
+                          {
+                            backgroundColor: isSelected ? theme.primary : theme.background,
+                            borderColor: isSelected ? theme.primary : theme.border,
+                          },
+                          pressed && styles.pressed,
+                        ]}>
+                        <ThemedText
+                          type="caption"
+                          style={{
+                            color: isSelected ? theme.onPrimary : theme.text,
+                            fontWeight: '700',
+                          }}>
+                          {r} km
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterList}>
+                {CATEGORY_FILTERS.map((category) => {
+                  const selected = categoryFilter === category;
+                  const label = category === 'ALL' ? 'Wszystkie' : CategoryLabels[category];
                   return (
                     <Pressable
-                      key={r}
-                      onPress={() => setRadiusKm(r)}
+                      key={category}
+                      onPress={() => setCategoryFilter(category)}
                       style={({ pressed }) => [
-                        styles.radiusChip,
+                        styles.filterChip,
                         {
-                          backgroundColor: isSelected ? theme.primary : theme.background,
-                          borderColor: isSelected ? theme.primary : theme.border,
+                          backgroundColor:
+                            selected && category !== 'ALL'
+                              ? CategoryColors[category].soft
+                              : selected
+                                ? theme.primarySoft
+                                : theme.background,
+                          borderColor:
+                            selected && category !== 'ALL'
+                              ? CategoryColors[category].color
+                              : theme.border,
                         },
                         pressed && styles.pressed,
                       ]}>
                       <ThemedText
                         type="caption"
                         style={{
-                          color: isSelected ? theme.onPrimary : theme.text,
+                          color:
+                            selected && category !== 'ALL'
+                              ? CategoryColors[category].color
+                              : selected
+                                ? theme.primary
+                                : theme.textSecondary,
                           fontWeight: '700',
                         }}>
-                        {r} km
+                        {label}
                       </ThemedText>
                     </Pressable>
                   );
                 })}
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterList}>
-              {CATEGORY_FILTERS.map((category) => {
-                const selected = categoryFilter === category;
-                const label = category === 'ALL' ? 'Wszystkie' : CategoryLabels[category];
-                return (
-                  <Pressable
-                    key={category}
-                    onPress={() => setCategoryFilter(category)}
-                    style={({ pressed }) => [
-                      styles.filterChip,
-                      {
-                        backgroundColor:
-                          selected && category !== 'ALL'
-                            ? CategoryColors[category].soft
-                            : selected
-                              ? theme.primarySoft
-                              : theme.background,
-                        borderColor:
-                          selected && category !== 'ALL'
-                            ? CategoryColors[category].color
-                            : theme.border,
-                      },
-                      pressed && styles.pressed,
-                    ]}>
-                    <ThemedText
-                      type="caption"
-                      style={{
-                        color:
-                          selected && category !== 'ALL'
-                            ? CategoryColors[category].color
-                            : selected
-                              ? theme.primary
-                              : theme.textSecondary,
-                        fontWeight: '700',
-                      }}>
-                      {label}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-              {PRIORITY_FILTERS.map((priority) => {
-                const selected = priorityFilter === priority;
-                const label = priority === 'ALL' ? 'Każda pilność' : PriorityLabels[priority];
-                return (
-                  <Pressable
-                    key={priority}
-                    onPress={() => setPriorityFilter(priority)}
-                    style={({ pressed }) => [
-                      styles.filterChip,
-                      {
-                        backgroundColor:
-                          selected && priority !== 'ALL'
-                            ? PriorityColors[priority].soft
-                            : selected
-                              ? theme.primarySoft
-                              : theme.background,
-                        borderColor:
-                          selected && priority !== 'ALL'
-                            ? PriorityColors[priority].color
-                            : theme.border,
-                      },
-                      pressed && styles.pressed,
-                    ]}>
-                    <ThemedText
-                      type="caption"
-                      style={{
-                        color:
-                          selected && priority !== 'ALL'
-                            ? PriorityColors[priority].color
-                            : selected
-                              ? theme.primary
-                              : theme.textSecondary,
-                        fontWeight: '700',
-                      }}>
-                      {label}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Quick list of nearby items */}
-            {displayRequests.length > 0 && (
-              <ScrollView
-                style={styles.nearbyList}
-                contentContainerStyle={styles.nearbyListContent}
-                showsVerticalScrollIndicator={false}
-                nestedScrollEnabled>
-                {displayRequests.slice(0, 8).map((req) => {
-                  const [lng, lat] = req.approximateLocation.coordinates;
+                {PRIORITY_FILTERS.map((priority) => {
+                  const selected = priorityFilter === priority;
+                  const label = priority === 'ALL' ? 'Każda pilność' : PriorityLabels[priority];
                   return (
                     <Pressable
-                      key={req.id}
-                      onPress={() => {
-                        setSelectedRequestId(req.id);
-                        mapRef.current?.animateToRegion(
-                          {
-                            latitude: lat,
-                            longitude: lng,
-                            latitudeDelta: 0.005,
-                            longitudeDelta: 0.005,
-                          },
-                          300,
-                        );
-                      }}
+                      key={priority}
+                      onPress={() => setPriorityFilter(priority)}
                       style={({ pressed }) => [
-                        styles.nearbyItem,
-                        { backgroundColor: theme.background, borderColor: theme.border },
+                        styles.filterChip,
+                        {
+                          backgroundColor:
+                            selected && priority !== 'ALL'
+                              ? PriorityColors[priority].soft
+                              : selected
+                                ? theme.primarySoft
+                                : theme.background,
+                          borderColor:
+                            selected && priority !== 'ALL'
+                              ? PriorityColors[priority].color
+                              : theme.border,
+                        },
                         pressed && styles.pressed,
                       ]}>
-                      <View style={styles.nearbyItemText}>
-                        <View style={styles.nearbyItemHeader}>
-                          <PriorityBadge priority={req.priority} />
-                          <CategoryBadge category={req.category} />
-                        </View>
-                        <ThemedText
-                          type="smallBold"
-                          numberOfLines={1}
-                          style={styles.nearbyItemTitle}>
-                          {req.title}
-                        </ThemedText>
-                        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                          {formatDistance(requestDistance(req, mapCenter))} ·{' '}
-                          {timeAgo(req.createdAt)}
-                        </ThemedText>
-                      </View>
                       <ThemedText
                         type="caption"
-                        style={{ color: theme.primary, fontWeight: '700' }}>
-                        Pokaż
+                        style={{
+                          color:
+                            selected && priority !== 'ALL'
+                              ? PriorityColors[priority].color
+                              : selected
+                                ? theme.primary
+                                : theme.textSecondary,
+                          fontWeight: '700',
+                        }}>
+                        {label}
                       </ThemedText>
                     </Pressable>
                   );
                 })}
               </ScrollView>
-            )}
 
-            {isPending && <ActivityIndicator color={theme.primary} />}
-            {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
-          </ThemedView>
-        )}
-      </View>
+              {/* Quick list of nearby items */}
+              {displayRequests.length > 0 && (
+                <ScrollView
+                  style={styles.nearbyList}
+                  contentContainerStyle={styles.nearbyListContent}
+                  showsVerticalScrollIndicator={false}
+                  nestedScrollEnabled>
+                  {displayRequests.slice(0, 8).map((req) => {
+                    const [lng, lat] = req.approximateLocation.coordinates;
+                    return (
+                      <Pressable
+                        key={req.id}
+                        onPress={() => {
+                          setSelectedRequestId(req.id);
+                          mapRef.current?.animateToRegion(
+                            {
+                              latitude: lat,
+                              longitude: lng,
+                              latitudeDelta: 0.005,
+                              longitudeDelta: 0.005,
+                            },
+                            300,
+                          );
+                        }}
+                        style={({ pressed }) => [
+                          styles.nearbyItem,
+                          { backgroundColor: theme.background, borderColor: theme.border },
+                          pressed && styles.pressed,
+                        ]}>
+                        <View style={styles.nearbyItemText}>
+                          <View style={styles.nearbyItemHeader}>
+                            <PriorityBadge priority={req.priority} />
+                            <CategoryBadge category={req.category} />
+                          </View>
+                          <ThemedText
+                            type="smallBold"
+                            numberOfLines={1}
+                            style={styles.nearbyItemTitle}>
+                            {req.title}
+                          </ThemedText>
+                          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                            {formatDistance(requestDistance(req, mapCenter))} ·{' '}
+                            {timeAgo(req.createdAt)}
+                          </ThemedText>
+                        </View>
+                        <ThemedText
+                          type="caption"
+                          style={{ color: theme.primary, fontWeight: '700' }}>
+                          Pokaż
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {isPending && <ActivityIndicator color={theme.primary} />}
+              {error && <ThemedText themeColor="danger">{errorMessage(error)}</ThemedText>}
+            </ThemedView>
+          )}
+        </View>
+      )}
 
       {/* Initial / Onboarding Location Permission Modal */}
       <LocationPermissionModal
@@ -963,6 +1003,20 @@ const styles = StyleSheet.create({
   summaryTitleWrapper: {
     flex: 1,
     gap: 2,
+  },
+  summaryCloseButton: {
+    minHeight: 34,
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.one,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  summaryControls: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   radiusChips: {
     flexDirection: 'row',
