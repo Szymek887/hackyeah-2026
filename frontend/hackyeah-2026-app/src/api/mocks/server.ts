@@ -168,8 +168,22 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     /^\/api\/admin\/help-requests\/(\d+)\/dismiss$/,
     ({ params, req }) => decide(Number(params[0]), currentUser(req), 'CANCELLED'),
   ],
-  ['GET', /^\/api\/analytics\/heatmap$/, ({ req }) => heatmap(req.query)],
-  ['GET', /^\/api\/analytics\/summary$/, ({ req }) => summary(req.query)],
+  [
+    'GET',
+    /^\/api\/analytics\/heatmap$/,
+    ({ req }) => {
+      requireCityAdmin(currentUser(req), ANALYTICS_FORBIDDEN);
+      return heatmap(req.query);
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/analytics\/summary$/,
+    ({ req }) => {
+      requireCityAdmin(currentUser(req), ANALYTICS_FORBIDDEN);
+      return summary(req.query);
+    },
+  ],
 ];
 
 export async function handleMockRequest<T>(req: ApiRequest): Promise<T> {
@@ -734,10 +748,14 @@ function rate(id: number, body: RatingDto, user: UserProfile): RatingResult {
 
 // ---------- Moderation (ModerationService) ----------
 
-function requireAdmin(user: UserProfile) {
-  if (user.role !== 'CITY_ADMIN')
-    throw forbidden('Only city administrators can review help requests');
+/** CityAdminPolicy: the city panel (analytics, moderation) is for city administrators only. */
+function requireCityAdmin(user: UserProfile, detail: string) {
+  if (user.role !== 'CITY_ADMIN') throw forbidden(detail);
 }
+
+const ANALYTICS_FORBIDDEN = 'Only city administrators can see city analytics';
+const requireAdmin = (user: UserProfile) =>
+  requireCityAdmin(user, 'Only city administrators can review help requests');
 
 function toModerationItem(r: MockHelpRequest): ModerationItem {
   return {

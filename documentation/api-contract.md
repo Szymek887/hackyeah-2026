@@ -30,7 +30,7 @@ See [How to change this contract](#how-to-change-this-contract) at the bottom be
 
 - Header **`X-User-Id: <numeric user id>`** identifies the caller. No passwords, no tokens.
 - Missing / non-numeric / unknown id → **401** on endpoints that need a user.
-- Public endpoints (no header needed): `GET /api/health`, `GET /api/help-requests/nearby`, `POST /api/help-requests/along-route`, `POST /api/requests/classify`, `GET /api/analytics/*`, `GET /api/users/demo`.
+- Public endpoints (no header needed): `GET /api/health`, `GET /api/help-requests/nearby`, `POST /api/help-requests/along-route`, `POST /api/requests/classify`, `GET /api/users/demo`. `GET /api/analytics/*` and `/api/admin/*` need a `CITY_ADMIN` user (403 otherwise).
 
 ### 1.3 Data formats
 
@@ -573,7 +573,7 @@ Reputation rules (`ReputationPolicy`):
 
 ### 4.9 City analytics
 
-Public, aggregated data only.
+`CITY_ADMIN` only (**401** without `X-User-Id`, **403** for other roles). Aggregated data only.
 
 #### `GET /api/analytics/heatmap` — ✅ `LIVE`
 
@@ -717,6 +717,7 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-04 | **Breaking (§4.9):** `GET /api/analytics/*` now requires a `CITY_ADMIN` user (was public). The dashboard already calls it as the admin. | Dashboard |
 | 2026-10-04 | City dashboard: new §4.10 admin moderation (`/api/admin/review-queue`, `approve`, `dismiss`). Heatmap: `cellSizeMeters` minimum 500, hexagons with < 3 requests hidden, new `suppressedCells` and per-hexagon `open`. Summary: new `openUrgent`. Breaking only for heatmap callers using cells under 500 m. | Dashboard |
 | 2026-10-04 | Special needs in the user's own words stored on the backend (§3.6): `specialNeedNotes` on the profile, `requesterSpecialNeedNotes` in `FULL`, new `PUT /api/users/me/special-need-notes` (requesters with consent only); deleted with the consent. Additive. | Dev 2 |
 | 2026-10-04 | **Breaking (§3.3, §3.6, §4.2):** two-step flow – consent no longer sets `specialNeeds`; only declared disabilities do (consent + ≥ 1 disability). New `requesterDisabilities` in `FULL` (accepted volunteer sees the kinds, like the exact address). `POST /api/users` body: `specialNeeds` → `specialNeedsConsent`. Frontend updated in the same PR. | Dev 2 |

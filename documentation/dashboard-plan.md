@@ -24,7 +24,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 | 7 | ✅ "Unmet need" view: open vs fulfilled toggle | P1 | FE | 45 min |
 | 8 | Time dimension: backdated seed data + time range filter | P2 | BE + FE | 1.5–2 h |
 | 9 | Trend per category (this period vs previous) | P2 | BE + FE | 1.5 h |
-| 10 | Require `CITY_ADMIN` for analytics endpoints | P3 | BE + FE | 30 min |
+| 10 | ✅ Require `CITY_ADMIN` for analytics endpoints | P3 | BE + FE | 30 min |
 | 11 | Map clean-up: district labels, legend, colour scale | P3 | FE | 45 min |
 
 Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Tasks 1–5 are about 3.5 h in total; task 6 is the largest single item.
@@ -165,7 +165,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 ## P3 – Polish
 
-### 10. Analytics only for `CITY_ADMIN`
+### 10. Analytics only for `CITY_ADMIN` — ✅ Done (2026-10-04)
+
+> **Implemented.** `AnalyticsController` takes `@CurrentUser` and checks `CityAdminPolicy.requireCityAdmin` (new shared policy, also used by `ModerationService`): 401 without a user, 403 for other roles. Tests, `http/analytics.http` (admin header + a 403 case), the mock server, `api-contract.md` (changelog: breaking) and the README are updated. The `AnalyticsService` privacy rules from task 1 stay, as defence in depth.
 
 After task 1 the data is safe to keep public, so this is optional. If done: `AnalyticsController` takes `@CurrentUser` and returns 403 for other roles; update `AnalyticsControllerTest`, the `.http` files, `api-contract.md` and the README ("public" → "city admin only").
 

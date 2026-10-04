@@ -284,7 +284,7 @@ A volunteer can have only **one** request in `OFFERED` or `ACCEPTED` at a time; 
 - **Special needs are health data (GDPR art. 9).** They are stored only with a consent record, never shown in public views or lists, shared only with the accepted volunteer, and deleted together with the consent when it is withdrawn.
 - **The QR handoff can't be forged or reused:** 256-bit random tokens, single-use, valid for 24 h, compared in constant time, and never included in API responses other than the requester's own QR endpoint.
 - **No race conditions:** each request's state changes are handled one at a time, so two volunteers can never take the same request. This was tested with simultaneous offers.
-- **Analytics are aggregated only:** counts per hexagon, with no personal data. Hexagons are at least 500 m (coarser than the ~300 m public masking), and hexagons with fewer than 3 requests are hidden, so no filter can single out one person's request.
+- **Analytics are aggregated only, and only for city administrators:** counts per hexagon, with no personal data. Hexagons are at least 500 m (coarser than the ~300 m public masking), and hexagons with fewer than 3 requests are hidden, so no filter can single out one person's request.
 - **Automated "no leak" tests** search the raw JSON of public responses for addresses, names, phone numbers and exact coordinates.
 
 ---

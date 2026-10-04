@@ -5,9 +5,7 @@ import com.telecrazy.hackyeah2026backend.api.UserSummary;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
-import com.telecrazy.hackyeah2026backend.domain.UserRole;
 import com.telecrazy.hackyeah2026backend.exception.ConflictException;
-import com.telecrazy.hackyeah2026backend.exception.ForbiddenException;
 import com.telecrazy.hackyeah2026backend.exception.NotFoundException;
 import com.telecrazy.hackyeah2026backend.repository.HelpRequestRepository;
 import org.springframework.stereotype.Service;
@@ -79,9 +77,7 @@ public class ModerationService {
     }
 
     private static void requireAdmin(AppUser user) {
-        if (user.getRole() != UserRole.CITY_ADMIN) {
-            throw new ForbiddenException("Only city administrators can review help requests");
-        }
+        CityAdminPolicy.requireCityAdmin(user, "Only city administrators can review help requests");
     }
 
     private ModerationItem toItem(HelpRequest request) {

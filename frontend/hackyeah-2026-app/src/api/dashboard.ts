@@ -1,4 +1,4 @@
-/** City dashboard: `AnalyticsController` (public, aggregated data only). */
+/** City dashboard: `AnalyticsController` (CITY_ADMIN only, aggregated data only). */
 import { apiRequest } from '@/api/client';
 import type { AnalyticsQuery, AnalyticsSummary, HeatmapResponse, RequestStatus } from '@/api/types';
 
