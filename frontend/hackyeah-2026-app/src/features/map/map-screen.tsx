@@ -238,6 +238,12 @@ export function MapScreen() {
     bottom: selectedRequest || isSummaryOpen ? 260 : 90,
     left: 12,
   };
+  const appleLegalLabelInsets = {
+    top: 0,
+    right: 0,
+    bottom: Math.max(insets.bottom + Spacing.half, 12),
+    left: Spacing.two,
+  };
 
   const hideLocationError = () => {
     if (locationErrorTimeoutRef.current) {
@@ -432,7 +438,8 @@ export function MapScreen() {
             setMapRegion(region);
             setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
           }}
-          mapPadding={mapPadding}>
+          mapPadding={mapPadding}
+          legalLabelInsets={appleLegalLabelInsets}>
           <Marker
             coordinate={mapCenter}
             anchor={{ x: 0.5, y: 0.5 }}
