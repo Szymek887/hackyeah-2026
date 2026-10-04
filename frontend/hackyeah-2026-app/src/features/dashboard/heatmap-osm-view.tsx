@@ -17,15 +17,13 @@ import {
  *
  * react-native-maps renders a blank map with only the Google logo on Android in Expo Go (SDK 57,
  * expo/expo#49323), the same reason the volunteer map uses `OsmMapView`. This view draws the same
- * hexagons as the web dashboard and reports taps, so the native card shows the details.
+ * hexagons as the web dashboard and reports taps, so the native card shows the details. District
+ * names come from the map tiles.
  */
-
-type District = { name: string; latitude: number; longitude: number };
 
 type HeatmapOsmViewProps = {
   initialRegion: Region;
   cells: HeatmapCell[];
-  districts: District[];
   selectedKey: string | null;
   onCellPress: (key: string) => void;
 };
@@ -33,7 +31,6 @@ type HeatmapOsmViewProps = {
 /** What the page draws; sent with `window.__render` whenever it changes. */
 type RenderData = {
   hexagons: { key: string; rings: [number, number][][]; fill: string; active: boolean }[];
-  districts: District[];
 };
 
 function pageHtml(region: Region) {
@@ -44,9 +41,6 @@ function pageHtml(region: Region) {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0; background: #e8e4dc; }
-  .pd-district { font: 600 11px/14px sans-serif; color: #334155; background: rgba(255,255,255,.88);
-    border: 1px solid #cbd5e1; border-radius: 9999px; padding: 2px 8px; white-space: nowrap;
-    transform: translate(-50%, -50%); display: inline-block; }
 </style>
 </head><body><div id="map"></div>
 <script>
@@ -67,12 +61,6 @@ function pageHtml(region: Region) {
         .on('click', function () { send({ type: 'cell', key: h.key }); })
         .addTo(layer);
     });
-    // District names are constants from the app, never user input.
-    d.districts.forEach(function (district) {
-      L.marker([district.latitude, district.longitude], { interactive: false,
-        icon: L.divIcon({ className: '', iconSize: [0, 0],
-          html: '<span class="pd-district">' + district.name + '</span>' }) }).addTo(layer);
-    });
   };
 
   send({ type: 'ready' });
@@ -88,7 +76,6 @@ function zoomFor(longitudeDelta: number) {
 export function HeatmapOsmView({
   initialRegion,
   cells,
-  districts,
   selectedKey,
   onCellPress,
 }: HeatmapOsmViewProps) {
@@ -107,7 +94,6 @@ export function HeatmapOsmView({
       fill: heatmapColor(cell.count),
       active: cellKey(cell) === selectedKey,
     })),
-    districts,
   } satisfies RenderData);
 
   useEffect(() => {
