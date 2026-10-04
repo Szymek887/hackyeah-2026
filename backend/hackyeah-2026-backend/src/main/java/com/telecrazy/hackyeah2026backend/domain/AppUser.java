@@ -64,6 +64,15 @@ public class AppUser {
     @Setter(AccessLevel.NONE)
     private SpecialNeedsConsent specialNeedsConsent;
 
+    /** Declared kinds of disability. Kept only while the consent exists; never shown to other users. */
+    @ElementCollection
+    @CollectionTable(name = "app_user_disabilities", joinColumns = @JoinColumn(name = "user_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "disability", nullable = false)
+    @BatchSize(size = 50)
+    @Setter(AccessLevel.NONE)
+    private Set<DisabilityType> disabilities = new HashSet<>();
+
     @Column(nullable = false)
     private int trustScore;
 
@@ -117,10 +126,23 @@ public class AppUser {
         specialNeeds = true;
     }
 
-    /** Deletes the consent record and the special-needs information itself. Idempotent. */
+    /** Deletes the consent record and the special-needs information itself, incl. disabilities. Idempotent. */
     public void withdrawSpecialNeedsConsent() {
         specialNeedsConsent = null;
         specialNeeds = false;
+        disabilities.clear();
+    }
+
+    /**
+     * Replaces the declared disabilities. Allowed only while the consent exists – without it no
+     * disability information may be stored.
+     */
+    public void replaceDisabilities(Collection<DisabilityType> types) {
+        if (!hasSpecialNeedsConsent()) {
+            throw new IllegalStateException("Disabilities can be stored only with special-needs consent");
+        }
+        disabilities.clear();
+        disabilities.addAll(types);
     }
 
     public boolean hasSpecialNeedsConsent() {

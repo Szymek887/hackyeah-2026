@@ -1,7 +1,9 @@
 package com.telecrazy.hackyeah2026backend.domain;
 
 import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
+import com.telecrazy.hackyeah2026backend.service.SpecialNeedsService;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,12 +11,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Runs against the development PostGIS database (docker compose); every test rolls back.
- * Checks the actual rows, because withdrawing consent must delete the consent record.
+ * Changes go through {@link SpecialNeedsService} like in production, and the actual rows are checked,
+ * because withdrawing the consent must delete the consent record and the disabilities.
  */
 @SpringBootTest
 @Transactional
@@ -26,23 +30,35 @@ class SpecialNeedsConsentPersistenceTest {
     private AppUserRepository userRepository;
 
     @Autowired
+    private SpecialNeedsService specialNeedsService;
+
+    @Autowired
     private EntityManager entityManager;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Test
-    void withdrawingConsentDeletesTheConsentRowAndSpecialNeeds() {
+    private long userId;
+    private long consentId;
+
+    @BeforeEach
+    void requesterWithConsentAndDisabilities() {
         AppUser user = new AppUser("Consent Test", UserRole.REQUESTER, true, false, 50);
         user.grantSpecialNeedsConsent(GRANTED_AT);
-        long userId = userRepository.saveAndFlush(user).getId();
-        long consentId = user.getSpecialNeedsConsent().getId();
+        user.replaceDisabilities(List.of(DisabilityType.VISION, DisabilityType.MOBILITY));
+        userId = userRepository.saveAndFlush(user).getId();
+        consentId = user.getSpecialNeedsConsent().getId();
         assertThat(consentRows(consentId)).isEqualTo(1);
+        assertThat(disabilityRows()).isEqualTo(2);
+    }
 
-        user.withdrawSpecialNeedsConsent();
-        userRepository.saveAndFlush(user);
+    @Test
+    void withdrawingConsentDeletesConsentRowSpecialNeedsAndDisabilities() {
+        specialNeedsService.updateConsent(userId, false);
+        entityManager.flush();
 
         assertThat(consentRows(consentId)).isZero();
+        assertThat(disabilityRows()).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT special_needs FROM app_users WHERE id = ?", Boolean.class, userId)).isFalse();
         assertThat(jdbcTemplate.queryForObject(
@@ -50,27 +66,43 @@ class SpecialNeedsConsentPersistenceTest {
     }
 
     @Test
-    void grantingAgainCreatesANewConsentRow() {
-        AppUser user = new AppUser("Consent Test", UserRole.REQUESTER, true, false, 50);
-        user.grantSpecialNeedsConsent(GRANTED_AT);
-        userRepository.saveAndFlush(user);
-        long firstConsentId = user.getSpecialNeedsConsent().getId();
-        user.withdrawSpecialNeedsConsent();
-        userRepository.saveAndFlush(user);
+    void disabilitiesAreReplacedAndCanBeCleared() {
+        specialNeedsService.updateDisabilities(userId, List.of(DisabilityType.HEARING));
+        entityManager.flush();
+        assertThat(disabilities()).containsExactly("HEARING");
 
-        user.grantSpecialNeedsConsent(GRANTED_AT.plusSeconds(3600));
-        userRepository.saveAndFlush(user);
-        entityManager.clear();
-
-        AppUser reloaded = userRepository.findById(user.getId()).orElseThrow();
-        assertThat(reloaded.isSpecialNeeds()).isTrue();
-        assertThat(reloaded.getSpecialNeedsConsent().getId()).isNotEqualTo(firstConsentId);
-        assertThat(reloaded.getSpecialNeedsConsent().getGrantedAt()).isEqualTo(GRANTED_AT.plusSeconds(3600));
-        assertThat(consentRows(firstConsentId)).isZero();
+        specialNeedsService.updateDisabilities(userId, List.of());
+        entityManager.flush();
+        assertThat(disabilityRows()).isZero();
     }
 
-    private int consentRows(long consentId) {
+    @Test
+    void grantingAgainCreatesANewConsentRow() {
+        specialNeedsService.updateConsent(userId, false);
+        entityManager.flush();
+
+        specialNeedsService.updateConsent(userId, true);
+        entityManager.flush();
+        entityManager.clear();
+
+        AppUser reloaded = userRepository.findById(userId).orElseThrow();
+        assertThat(reloaded.isSpecialNeeds()).isTrue();
+        assertThat(reloaded.getSpecialNeedsConsent().getId()).isNotEqualTo(consentId);
+        assertThat(reloaded.getDisabilities()).isEmpty();
+        assertThat(consentRows(consentId)).isZero();
+    }
+
+    private List<String> disabilities() {
+        return jdbcTemplate.queryForList(
+                "SELECT disability FROM app_user_disabilities WHERE user_id = ?", String.class, userId);
+    }
+
+    private int disabilityRows() {
+        return disabilities().size();
+    }
+
+    private int consentRows(long id) {
         return jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM special_needs_consents WHERE id = ?", Integer.class, consentId);
+                "SELECT count(*) FROM special_needs_consents WHERE id = ?", Integer.class, id);
     }
 }

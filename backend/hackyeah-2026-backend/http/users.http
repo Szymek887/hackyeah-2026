@@ -57,7 +57,24 @@ X-User-Id: {{requesterId}}
     });
 %}
 
-### Withdraw the special-needs consent (profile switch off) – deletes the consent record and specialNeeds
+### Store the kinds of disability (requester with consent, e.g. seeded Anna K.)
+PUT {{host}}/api/users/me/disabilities
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "disabilities": ["MOBILITY", "CHRONIC"]
+}
+
+> {%
+    client.test("Disabilities are stored and sorted", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(JSON.stringify(response.body.disabilities) === JSON.stringify(["MOBILITY", "CHRONIC"]), "Expected sorted kinds");
+    });
+%}
+
+### Withdraw the special-needs consent (profile switch off) – deletes the consent record, specialNeeds and disabilities
 PUT {{host}}/api/users/me/special-needs-consent
 Content-Type: application/json
 Accept: application/json
@@ -73,6 +90,23 @@ X-User-Id: {{requesterId}}
         client.assert(response.body.specialNeedsConsent === false, "Expected no consent");
         client.assert(response.body.specialNeedsConsentGrantedAt === null, "Expected no consent date");
         client.assert(response.body.specialNeeds === false, "Expected specialNeeds deleted");
+        client.assert(response.body.disabilities.length === 0, "Expected disabilities deleted");
+    });
+%}
+
+### Disabilities cannot be stored without the consent
+PUT {{host}}/api/users/me/disabilities
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "disabilities": ["VISION"]
+}
+
+> {%
+    client.test("Without consent returns 409", function () {
+        client.assert(response.status === 409, "Expected status 409");
     });
 %}
 

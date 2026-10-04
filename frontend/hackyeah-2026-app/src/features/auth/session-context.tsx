@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 
-import { createUser, getMe } from '@/api/auth';
+import { createUser, getMe, updateMyDisabilities } from '@/api/auth';
 import { setApiUserId } from '@/api/client';
 import type { CreateUserDto, UserProfile, UserRole } from '@/api/types';
 import { commuteStore } from '@/features/commute/commute-store';
@@ -82,11 +82,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const signIn = useCallback((userId: number) => getMe(userId).then(applyUser), [applyUser]);
   const signUp = useCallback(
     async (dto: CreateUserDto, details?: Partial<ProfileDetails>) => {
-      const created = await createUser(dto);
+      let created = await createUser(dto);
+      // A requester who declared special needs consents at sign-up, so the kinds go to the backend.
+      if (created.specialNeedsConsent && details?.disabilities?.length) {
+        created = await updateMyDisabilities({ disabilities: details.disabilities }, created.id);
+      }
+      const createdId = created.id;
       if (details) {
         setDetailsByUser((current) => ({
           ...current,
-          [created.id]: { ...emptyProfileDetails, ...details },
+          [createdId]: { ...emptyProfileDetails, ...details },
         }));
       }
       return applyUser(created);

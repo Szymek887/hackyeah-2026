@@ -21,6 +21,7 @@ import type {
   ClassifyRequestDto,
   CreateHelpRequestDto,
   CreateUserDto,
+  DisabilityType,
   GeoPoint,
   GeoPolygon,
   HandoffToken,
@@ -33,6 +34,7 @@ import type {
   RatingResult,
   RequestStatus,
   UserProfile,
+  UpdateDisabilitiesDto,
   UpdateLanguagesDto,
   UpdateSpecialNeedsConsentDto,
   UserSummary,
@@ -85,6 +87,11 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     /^\/api\/users\/me\/special-needs-consent$/,
     ({ req }) =>
       updateSpecialNeedsConsent(currentUser(req), req.body as UpdateSpecialNeedsConsentDto),
+  ],
+  [
+    'PUT',
+    /^\/api\/users\/me\/disabilities$/,
+    ({ req }) => updateDisabilities(currentUser(req), req.body as UpdateDisabilitiesDto),
   ],
   ['GET', /^\/api\/help-requests\/nearby$/, ({ req }) => nearby(req.query)],
   ['POST', /^\/api\/help-requests\/along-route$/, ({ req }) => alongRoute(req.body)],
@@ -163,8 +170,11 @@ function currentUser(req: ApiRequest): UserProfile {
 
 // UserController.demo: role order (enum ordinal), then id. Public, no X-User-Id needed.
 const ROLE_ORDER: UserProfile['role'][] = ['REQUESTER', 'VOLUNTEER', 'CITY_ADMIN'];
+// UserProfileResponse.forDemoList: the public list never carries disabilities (health data).
 const demoAccounts = () =>
-  [...users].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.id - b.id);
+  [...users]
+    .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.id - b.id)
+    .map((user) => ({ ...user, disabilities: [] }));
 
 // Proposed UserController.create: new accounts start unverified with a neutral trust score.
 const NEW_USER_TRUST = 50;
@@ -190,6 +200,7 @@ function createUser(body: CreateUserDto): UserProfile {
     specialNeeds,
     specialNeedsConsent: specialNeeds,
     specialNeedsConsentGrantedAt: specialNeeds ? new Date().toISOString() : null,
+    disabilities: [],
     trustScore: NEW_USER_TRUST,
     ratingCount: 0,
     ratingAverage: null,
@@ -237,7 +248,33 @@ function updateSpecialNeedsConsent(user: UserProfile, body: UpdateSpecialNeedsCo
     user.specialNeedsConsent = false;
     user.specialNeedsConsentGrantedAt = null;
     user.specialNeeds = false;
+    user.disabilities = [];
   }
+  return user;
+}
+
+const DISABILITY_TYPES: DisabilityType[] = [
+  'VISION',
+  'HEARING',
+  'MOBILITY',
+  'COGNITIVE',
+  'CHRONIC',
+  'OTHER',
+];
+
+// SpecialNeedsService.updateDisabilities: requesters with the consent only; replaces the list.
+function updateDisabilities(user: UserProfile, body: UpdateDisabilitiesDto) {
+  if (user.role !== 'REQUESTER') throw forbidden('Only requesters can store disabilities');
+  const disabilities = body?.disabilities;
+  if (!Array.isArray(disabilities) || disabilities.length > DISABILITY_TYPES.length)
+    throw new ApiError(400, 'Request validation failed', {
+      disabilities: 'size must be at most 6',
+    });
+  if (disabilities.some((d) => !DISABILITY_TYPES.includes(d)))
+    throw badRequest('Malformed request body');
+  if (!user.specialNeedsConsent)
+    throw conflict('Give the special-needs consent before storing disabilities');
+  user.disabilities = DISABILITY_TYPES.filter((d) => disabilities.includes(d));
   return user;
 }
 

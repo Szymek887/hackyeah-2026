@@ -78,6 +78,11 @@ export type UserProfile = {
   specialNeedsConsent: boolean;
   /** When the consent was given (ISO-8601), null without consent. */
   specialNeedsConsentGrantedAt: string | null;
+  /**
+   * Declared kinds of disability, sorted. Stored only with the consent and only returned to the user
+   * themselves – always [] in `GET /api/users/demo`.
+   */
+  disabilities: DisabilityType[];
   trustScore: number;
   ratingCount: number;
   /** null until the user is rated. */
@@ -97,6 +102,17 @@ export type UserSummary = {
   ratingCount: number;
   /** Spoken languages, sorted alphabetically. */
   languages: LanguageCode[];
+};
+
+/** Backend `DisabilityType` (health data, contract §3.6). */
+export type DisabilityType = 'VISION' | 'HEARING' | 'MOBILITY' | 'COGNITIVE' | 'CHRONIC' | 'OTHER';
+
+/**
+ * `UpdateDisabilitiesRequest` – `PUT /api/users/me/disabilities`, requesters with consent only,
+ * replaces the list ([] clears it).
+ */
+export type UpdateDisabilitiesDto = {
+  disabilities: DisabilityType[];
 };
 
 /** `UpdateLanguagesRequest` – `PUT /api/users/me/languages`, 1–10 codes, replaces the list. */

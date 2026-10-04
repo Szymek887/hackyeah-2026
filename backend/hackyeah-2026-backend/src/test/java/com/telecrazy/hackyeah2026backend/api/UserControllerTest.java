@@ -3,8 +3,10 @@ package com.telecrazy.hackyeah2026backend.api;
 import com.telecrazy.hackyeah2026backend.config.ClockConfig;
 import com.telecrazy.hackyeah2026backend.config.WebConfig;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
 import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
+import com.telecrazy.hackyeah2026backend.service.SpecialNeedsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -32,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import({WebConfig.class, ClockConfig.class})
+@Import({WebConfig.class, ClockConfig.class, SpecialNeedsService.class})
 class UserControllerTest {
 
     @Autowired
@@ -167,6 +169,84 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").isNotEmpty())
                 .andExpect(jsonPath("$.specialNeeds").value(true));
         assertThat(anna.sharesSpecialNeeds()).isTrue();
+    }
+
+    @Test
+    void disabilitiesAreStoredWithConsentAndReturnedSorted() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"VISION\", \"CHRONIC\", \"VISION\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disabilities").value(contains("VISION", "CHRONIC")));
+        assertThat(anna.getDisabilities()).containsExactlyInAnyOrder(DisabilityType.VISION, DisabilityType.CHRONIC);
+    }
+
+    @Test
+    void disabilitiesRequireConsent() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.withdrawSpecialNeedsConsent();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"VISION\"]}"))
+                .andExpect(status().isConflict());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    void onlyRequestersStoreDisabilities() throws Exception {
+        given(userRepository.findById(9L)).willReturn(Optional.of(user(9L, "Kuba W.", UserRole.VOLUNTEER)));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "9")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"VISION\"]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unknownDisabilityIsRejected() throws Exception {
+        given(userRepository.findById(1L)).willReturn(Optional.of(requesterWithSpecialNeeds()));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"TELEPATHY\"]}"))
+                .andExpect(status().isBadRequest());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    void withdrawingConsentAlsoDeletesDisabilities() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.MOBILITY));
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        putConsent(false)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disabilities").isEmpty());
+        assertThat(anna.getDisabilities()).isEmpty();
+    }
+
+    @Test
+    void demoListNeverExposesDisabilities() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.CHRONIC));
+        given(userRepository.findAll()).willReturn(List.of(anna));
+
+        String body = mockMvc.perform(get("/api/users/demo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].disabilities").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("CHRONIC");
     }
 
     @Test

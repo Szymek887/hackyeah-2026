@@ -7,6 +7,7 @@ import { MEDICINE_DESCRIPTION, MEDICINE_TITLE, SPECIAL_PRIORITY } from '@/api/mo
 import type {
   Category,
   ClassificationSource,
+  DisabilityType,
   Priority,
   RequestStatus,
   RiskFlag,
@@ -55,18 +56,19 @@ type SeedUser = [
   specialNeeds: boolean,
   trust: number,
   languages: string[],
+  disabilities?: DisabilityType[],
 ];
 
 const SEED_CONSENT_GRANTED_AT = '2026-10-01T10:00:00Z';
 
 // Same order as the seeder, so ids match the real database (1 = Anna K. … 13 = Miasto Kraków).
 const SEED_USERS: SeedUser[] = [
-  ['Anna K.', 'REQUESTER', true, true, 72, ['pl']],
+  ['Anna K.', 'REQUESTER', true, true, 72, ['pl'], ['CHRONIC']],
   ['Marek S.', 'REQUESTER', true, false, 66, ['pl', 'en']],
   ['Ewa P.', 'REQUESTER', false, false, 45, ['pl']],
-  ['Zofia M.', 'REQUESTER', true, true, 81, ['pl', 'de']],
+  ['Zofia M.', 'REQUESTER', true, true, 81, ['pl', 'de'], ['VISION']],
   ['Jan B.', 'REQUESTER', true, false, 58, ['pl']],
-  ['Halina R.', 'REQUESTER', true, true, 77, ['pl', 'ru']],
+  ['Halina R.', 'REQUESTER', true, true, 77, ['pl', 'ru'], ['HEARING', 'MOBILITY']],
   ['Piotr N.', 'REQUESTER', false, false, 40, ['pl', 'uk']],
   ['Maria T.', 'REQUESTER', true, false, 69, ['pl', 'en']],
   ['Kuba W.', 'VOLUNTEER', true, false, 91, ['pl', 'en', 'uk']],
@@ -77,7 +79,10 @@ const SEED_USERS: SeedUser[] = [
 ];
 
 export const users: UserProfile[] = SEED_USERS.map(
-  ([displayName, role, identityVerified, specialNeeds, trustScore, languages], index) => ({
+  (
+    [displayName, role, identityVerified, specialNeeds, trustScore, languages, disabilities = []],
+    index,
+  ) => ({
     id: index + 1,
     displayName,
     role,
@@ -86,6 +91,7 @@ export const users: UserProfile[] = SEED_USERS.map(
     // As in the backend seeder: special needs are stored together with the consent given at sign-up.
     specialNeedsConsent: specialNeeds,
     specialNeedsConsentGrantedAt: specialNeeds ? SEED_CONSENT_GRANTED_AT : null,
+    disabilities,
     trustScore,
     ratingCount: 0,
     ratingAverage: null,
