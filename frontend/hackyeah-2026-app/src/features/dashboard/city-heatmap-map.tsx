@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import MapView, { Marker, Polygon } from 'react-native-maps';
+import MapView, { Polygon } from 'react-native-maps';
 
 import { HeatmapCellBorder, Radius } from '@/constants/theme';
 import { HeatmapCellCard } from '@/features/dashboard/heatmap-cell-card';
@@ -30,15 +30,6 @@ const withOpacity = (hex: string, opacity: number) =>
 /** Same switch as the volunteer map: Google Maps renders blank on Android in Expo Go (SDK 57). */
 const USE_OSM_MAP = Platform.OS === 'android';
 
-const DISTRICT_CENTERS = [
-  { name: 'Stare Miasto', latitude: 50.0619, longitude: 19.9367 },
-  { name: 'Krowodrza', latitude: 50.0715, longitude: 19.923 },
-  { name: 'Grzegórzki', latitude: 50.062, longitude: 19.965 },
-  { name: 'Podgórze', latitude: 50.0435, longitude: 19.948 },
-  { name: 'Dębniki', latitude: 50.045, longitude: 19.922 },
-  { name: 'Prądnik Czerwony', latitude: 50.086, longitude: 19.952 },
-];
-
 export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
   const theme = useTheme();
   // Stored by key, so the card closes by itself when a filter removes the hexagon. Not closed by
@@ -52,22 +43,11 @@ export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
         <HeatmapOsmView
           initialRegion={KRAKOW_INITIAL_REGION}
           cells={cells}
-          districts={DISTRICT_CENTERS}
           selectedKey={selectedKey}
           onCellPress={setSelectedKey}
         />
       ) : (
         <MapView style={styles.map} initialRegion={KRAKOW_INITIAL_REGION} showsCompass showsScale>
-          {/* District reference markers */}
-          {DISTRICT_CENTERS.map((district) => (
-            <Marker
-              key={district.name}
-              coordinate={{ latitude: district.latitude, longitude: district.longitude }}
-              title={district.name}
-              description="Dzielnica Krakowa"
-            />
-          ))}
-
           {/* One hexagon per cell, drawn from the outline the backend computed (`properties.area`) */}
           {cells.map((cell) => {
             const [outer, ...holes] = getAreaPolygonRings(cell.area);

@@ -171,7 +171,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 After task 1 the data is safe to keep public, so this is optional. If done: `AnalyticsController` takes `@CurrentUser` and returns 403 for other roles; update `AnalyticsControllerTest`, the `.http` files, `api-contract.md` and the README ("public" → "city admin only").
 
-### 11. Map clean-up
+### 11. Map clean-up — 🟡 Partly done (2026-10-04)
+
+> **Done:** the hard-coded district labels (web badges, Android badges, iOS red pins) are removed from the heatmap; the OpenStreetMap tiles already name the districts. **Open:** the items below except the first.
 
 - Native: the six district markers are standard red pins that compete with the data. Replace them with text labels or remove them (web already uses text badges).
 - Optionally use real district boundaries (GeoJSON of the 18 Kraków districts) as a thin outline layer, instead of 6 hard-coded points.

@@ -50,15 +50,6 @@ const leafletElementStyle: CSSProperties = {
 
 const KRAKOW_CENTER: [number, number] = [50.0614, 19.9372];
 
-const DISTRICT_CENTERS = [
-  { name: 'Stare Miasto', lat: 50.0619, lng: 19.9367 },
-  { name: 'Krowodrza', lat: 50.0715, lng: 19.923 },
-  { name: 'Grzegórzki', lat: 50.062, lng: 19.965 },
-  { name: 'Podgórze', lat: 50.0435, lng: 19.948 },
-  { name: 'Dębniki', lat: 50.045, lng: 19.922 },
-  { name: 'Prądnik Czerwony', lat: 50.086, lng: 19.952 },
-];
-
 export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
   const theme = useTheme();
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -92,18 +83,8 @@ export function CityHeatmapMap({ cells }: CityHeatmapMapProps) {
       const overlays = L.layerGroup().addTo(mapRef.current);
       overlayRef.current = overlays;
 
-      // Add district labels for quick spatial orientation in Krakow
-      DISTRICT_CENTERS.forEach((district) => {
-        const icon = L.divIcon({
-          className: 'leaflet-district-badge',
-          html: `<div style="background: rgba(255, 255, 255, 0.88); backdrop-filter: blur(4px); border: 1px solid #CBD5E1; border-radius: 9999px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.12); pointer-events: none; transform: translate(-50%, -50%);">${district.name}</div>`,
-          iconSize: [0, 0],
-        });
-        L.marker([district.lat, district.lng], { icon, interactive: false }).addTo(overlays);
-      });
-
       // One hexagon per cell, drawn from the outline the backend computed (`properties.area`).
-      // District labels are markers, so Leaflet keeps them above the hexagons.
+      // No district labels of our own: the OpenStreetMap tiles already show district names.
       cells.forEach((cell) => {
         const hexagon = L.polygon(
           cell.area.coordinates.map((ring) =>
