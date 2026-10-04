@@ -11,6 +11,7 @@ import { AdminBar } from '@/features/dashboard/admin-bar';
 import { CityHeatmapMap } from '@/features/dashboard/city-heatmap-map';
 import { HEATMAP_BINS, type HeatmapCell } from '@/features/dashboard/heatmap-scale';
 import { dashboardKeys, useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
+import { ReviewQueue } from '@/features/dashboard/review-queue';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -67,6 +68,9 @@ export function CityDashboard() {
           </ThemedText>
         </View>
       </View>
+
+      {/* Moderation first: it is the one part of the panel that asks the admin to act */}
+      <ReviewQueue />
 
       {/* Category filter pills */}
       <ThemedView type="backgroundElement" style={styles.filterSection}>

@@ -20,7 +20,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 | 3 | ✅ Stop the full-screen spinner on every filter change | P0 | FE | 10 min |
 | 4 | ✅ Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
 | 5 | ✅ Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
-| 6 | Moderation queue for requests flagged by the AI (`UNDER_REVIEW`) | P1 | BE + FE + mock | 3–4 h |
+| 6 | ✅ Moderation queue for requests flagged by the AI (`UNDER_REVIEW`) | P1 | BE + FE + mock | 3–4 h |
 | 7 | "Unmet need" view: open vs fulfilled toggle | P1 | FE | 45 min |
 | 8 | Time dimension: backdated seed data + time range filter | P2 | BE + FE | 1.5–2 h |
 | 9 | Trend per category (this period vs previous) | P2 | BE + FE | 1.5 h |
@@ -106,7 +106,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 - Popup / callout content: total requests in the area, number still open (needs task 7 data or a second query with `status=OPEN`), and a per-category list with coloured dots, sorted by count.
 - Remove `totalInCell` and the percentage.
 
-### 6. Moderation queue for flagged requests
+### 6. Moderation queue for flagged requests — ✅ Done (2026-10-04)
+
+> **Implemented.** Backend: `ModerationService` + `AdminController` (`GET /api/admin/review-queue`, `POST /api/admin/help-requests/{id}/approve|dismiss`, CITY_ADMIN only), `ModerationItem` DTO with original text and masked area only, `reviewedBy`/`reviewedAt` on `HelpRequest`, 3 seeded flagged requests (2 scams, 1 false alarm), `http/admin.http`, `ModerationServiceTest` + `AdminControllerTest`. Frontend: `src/api/admin.ts`, mock endpoints and seeds, `RiskFlagLabels`, `review-queue.tsx` at the top of the dashboard (polled every 20 s, dismiss asks for confirmation, decisions refresh the KPIs and map). Checked end to end against the real database. Deviation from the plan: the requester's side was left as is; a dismissed request shows as "Anulowane".
 
 **Problem.** When the AI suspects a scam, `HelpRequestDetailsService` puts the request in `UNDER_REVIEW`. Nothing can move it out except the requester cancelling it. The pitch says "held back for review", but nobody reviews.
 

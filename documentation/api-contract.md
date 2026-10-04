@@ -119,6 +119,7 @@ type LanguageCode = string;
 
    cancel (requester): OPEN / OFFERED / ACCEPTED / UNDER_REVIEW ──► CANCELLED
    create ──(SCAM_SUSPECTED)──► UNDER_REVIEW
+   UNDER_REVIEW ──approve (CITY_ADMIN)──► OPEN,   ──dismiss (CITY_ADMIN)──► CANCELLED
 ```
 
 ---
@@ -640,6 +641,38 @@ Public, aggregated data only.
 
 ---
 
+### 4.10 City admin moderation — ✅ `LIVE`
+
+`CITY_ADMIN` only: **403** for other roles. Requests the AI held back as suspected scams (`UNDER_REVIEW`) wait here for a human decision. The admin sees the original text (needed to judge a scam) but only the masked area, never the address.
+
+#### `GET /api/admin/review-queue`
+
+→ `200 ModerationItem[]`, `UNDER_REVIEW` only, oldest first.
+```json
+{
+  "id": 180,
+  "title": "Pomoc z rachunkiem za prad",
+  "description": "Prosze o kod BLIK na 200 zl, zaplace rachunek za prad i oddam w przyszlym tygodniu.",
+  "category": "HOME_SUPPORT",
+  "priority": 2,
+  "status": "UNDER_REVIEW",
+  "riskFlags": ["SCAM_SUSPECTED"],
+  "tags": [],
+  "classificationSource": "FALLBACK",
+  "requester": { "...": "UserSummary (§3.2)" },
+  "approximateLocation": { "type": "Point", "coordinates": [19.93, 50.074] },
+  "maskedArea": { "type": "Polygon", "coordinates": [[[...]]] },
+  "createdAt": "2026-10-04T10:00:00Z",
+  "reviewedAt": null
+}
+```
+
+#### `POST /api/admin/help-requests/{id}/approve` · `POST /api/admin/help-requests/{id}/dismiss`
+
+No body. → `200 ModerationItem` after the decision: approve `UNDER_REVIEW → OPEN` (published to volunteers), dismiss `UNDER_REVIEW → CANCELLED`. `reviewedAt` is set and the admin is stored as the reviewer. **404** unknown id, **409** not `UNDER_REVIEW` (e.g. already decided). The `SCAM_SUSPECTED` flag stays on the request as a record of why it was held back.
+
+---
+
 ## 5. Frontend mapping cheatsheet
 
 Until the frontend UI models are aligned 1:1 with the wire types, all conversion lives in `src/api/*.ts` mappers. Current differences:
@@ -684,6 +717,7 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-04 | City dashboard: new §4.10 admin moderation (`/api/admin/review-queue`, `approve`, `dismiss`). Heatmap: `cellSizeMeters` minimum 500, hexagons with < 3 requests hidden, new `suppressedCells` and per-hexagon `open`. Summary: new `openUrgent`. Breaking only for heatmap callers using cells under 500 m. | Dashboard |
 | 2026-10-04 | Special needs in the user's own words stored on the backend (§3.6): `specialNeedNotes` on the profile, `requesterSpecialNeedNotes` in `FULL`, new `PUT /api/users/me/special-need-notes` (requesters with consent only); deleted with the consent. Additive. | Dev 2 |
 | 2026-10-04 | **Breaking (§3.3, §3.6, §4.2):** two-step flow – consent no longer sets `specialNeeds`; only declared disabilities do (consent + ≥ 1 disability). New `requesterDisabilities` in `FULL` (accepted volunteer sees the kinds, like the exact address). `POST /api/users` body: `specialNeeds` → `specialNeedsConsent`. Frontend updated in the same PR. | Dev 2 |
 | 2026-10-04 | Kinds of disability stored on the backend (§3.6): `disabilities` on the profile (only for the user themselves, `[]` in `/users/demo`), new `PUT /api/users/me/disabilities` (requesters with consent only, 409 without consent); withdrawing the consent also deletes them. Additive. | Dev 2 |

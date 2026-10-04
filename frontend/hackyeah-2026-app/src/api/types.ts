@@ -355,6 +355,28 @@ export type AnalyticsSummary = {
   byPriority: Record<'0' | '1' | '2' | '3', number>;
 };
 
+/**
+ * `ModerationItem` – a request the AI held back as a suspected scam, as the city admin reviews it.
+ * Original text, but only the masked area: no address.
+ */
+export type ModerationItem = {
+  id: number;
+  title: string;
+  description: string;
+  category: Category;
+  priority: Priority;
+  status: RequestStatus;
+  riskFlags: RiskFlag[];
+  tags: string[];
+  classificationSource: ClassificationSource | null;
+  requester: UserSummary;
+  approximateLocation: GeoPoint;
+  maskedArea: GeoPolygon;
+  createdAt: string;
+  /** null while waiting for a decision */
+  reviewedAt: string | null;
+};
+
 /** Query of the analytics endpoints. */
 export type AnalyticsQuery = {
   category?: Category;

@@ -15,7 +15,8 @@ import java.util.Set;
  *     <li>the requester always sees everything,</li>
  *     <li>the assigned volunteer sees everything once the requester accepted the offer,</li>
  *     <li>everyone else sees the public (masked) view,</li>
- *     <li>requests under review are visible only to the requester.</li>
+ *     <li>requests under review are visible only to the requester (city admins review them through
+ *     {@link ModerationService}, not through the regular endpoints).</li>
  * </ul>
  */
 public final class HelpRequestVisibilityPolicy {

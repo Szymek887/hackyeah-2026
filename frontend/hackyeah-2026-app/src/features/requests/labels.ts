@@ -1,4 +1,4 @@
-import type { Category, Priority, RequestStatus, UserRole } from '@/api/types';
+import type { Category, Priority, RequestStatus, RiskFlag, UserRole } from '@/api/types';
 
 export const CategoryLabels: Record<Category, string> = {
   MEDICINE: 'Leki',
@@ -23,6 +23,13 @@ export const StatusLabels: Record<RequestStatus, string> = {
   RATED: 'Ocenione',
   CANCELLED: 'Anulowane',
   UNDER_REVIEW: 'W weryfikacji',
+};
+
+export const RiskFlagLabels: Record<RiskFlag, string> = {
+  SCAM_SUSPECTED: 'Podejrzenie oszustwa',
+  MEDICAL_EMERGENCY: 'Nagły przypadek medyczny',
+  PERSONAL_DATA: 'Dane osobowe w treści',
+  INAPPROPRIATE_CONTENT: 'Niestosowna treść',
 };
 
 /** "5 min temu", "2 godz. temu", "3 dni temu". */

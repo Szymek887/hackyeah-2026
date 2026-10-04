@@ -1,0 +1,69 @@
+### City admin moderation of requests the AI held back as suspected scams. Run top to bottom.
+### User ids come from http-client.env.json: city admin 13 (Miasto Kraków), requester 1 (Anna K.), volunteer 9.
+### Step 1 also fills the queue on a database seeded before the review-queue demo requests existed.
+
+### 1. Requester creates a request that looks like a scam -> UNDER_REVIEW
+POST {{host}}/api/help-requests
+Content-Type: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "title": "Pomoc z rachunkiem",
+  "description": "Prosze o kod BLIK na 200 zl, zaplace rachunek za prad i oddam w przyszlym tygodniu.",
+  "lat": 50.0738,
+  "lng": 19.9301,
+  "street": "Krolewska",
+  "buildingNumber": "41"
+}
+
+> {%
+    client.test("Held back for review", function () {
+        client.assert(response.status === 201, "Expected 201");
+        client.assert(response.body.status === "UNDER_REVIEW", "Expected UNDER_REVIEW");
+    });
+    client.global.set("reviewRequestId", response.body.id);
+%}
+
+### 2. Admin sees it in the review queue, with the masked area but no address
+GET {{host}}/api/admin/review-queue
+X-User-Id: {{cityAdminId}}
+
+> {%
+    client.test("Queue contains the request", function () {
+        client.assert(response.status === 200, "Expected 200");
+        const item = response.body.find(i => i.id === client.global.get("reviewRequestId"));
+        client.assert(item !== undefined, "Expected the new request in the queue");
+        client.assert(item.street === undefined, "Expected no address");
+    });
+%}
+
+### 3. Other roles cannot see the queue -> 403
+GET {{host}}/api/admin/review-queue
+X-User-Id: {{volunteerId}}
+
+> {%
+    client.test("Volunteer gets 403", function () {
+        client.assert(response.status === 403, "Expected 403");
+    });
+%}
+
+### 4. Admin dismisses it -> CANCELLED (use .../approve instead to publish it as OPEN)
+POST {{host}}/api/admin/help-requests/{{reviewRequestId}}/dismiss
+X-User-Id: {{cityAdminId}}
+
+> {%
+    client.test("Dismissed", function () {
+        client.assert(response.status === 200, "Expected 200");
+        client.assert(response.body.status === "CANCELLED", "Expected CANCELLED");
+    });
+%}
+
+### 5. A second decision on the same request -> 409
+POST {{host}}/api/admin/help-requests/{{reviewRequestId}}/approve
+X-User-Id: {{cityAdminId}}
+
+> {%
+    client.test("Already decided", function () {
+        client.assert(response.status === 409, "Expected 409");
+    });
+%}

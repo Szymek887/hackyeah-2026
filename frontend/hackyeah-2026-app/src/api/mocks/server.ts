@@ -31,15 +31,16 @@ import type {
   HelpRequestFull,
   HelpRequestListItem,
   HelpRequestView,
+  ModerationItem,
   Priority,
   RatingDto,
   RatingResult,
   RequestStatus,
-  UserProfile,
   UpdateDisabilitiesDto,
-  UpdateSpecialNeedNotesDto,
   UpdateLanguagesDto,
+  UpdateSpecialNeedNotesDto,
   UpdateSpecialNeedsConsentDto,
+  UserProfile,
   UserSummary,
   ViewerRole,
 } from '@/api/types';
@@ -155,6 +156,17 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     'POST',
     /^\/api\/requests\/format-transcript$/,
     ({ req }) => formatTranscriptRequest(req.body as FormatTranscriptDto),
+  ],
+  ['GET', /^\/api\/admin\/review-queue$/, ({ req }) => reviewQueue(currentUser(req))],
+  [
+    'POST',
+    /^\/api\/admin\/help-requests\/(\d+)\/approve$/,
+    ({ params, req }) => decide(Number(params[0]), currentUser(req), 'OPEN'),
+  ],
+  [
+    'POST',
+    /^\/api\/admin\/help-requests\/(\d+)\/dismiss$/,
+    ({ params, req }) => decide(Number(params[0]), currentUser(req), 'CANCELLED'),
   ],
   ['GET', /^\/api\/analytics\/heatmap$/, ({ req }) => heatmap(req.query)],
   ['GET', /^\/api\/analytics\/summary$/, ({ req }) => summary(req.query)],
@@ -564,6 +576,8 @@ function create(body: CreateHelpRequestDto, user: UserProfile) {
     handoffToken: null,
     handoffTokenExpiresAt: null,
     handoffTokenUsedAt: null,
+    reviewedById: null,
+    reviewedAt: null,
   };
   requests.push(request);
   return toFull(request, user);
@@ -716,6 +730,53 @@ function rate(id: number, body: RatingDto, user: UserProfile): RatingResult {
   if (ratings.some((x) => x.requestId === r.id && x.fromUserId === rated.id)) r.status = 'RATED';
   r.updatedAt = new Date().toISOString();
   return { requestStatus: r.status, ratedUser: summaryOf(rated.id)!, cityPointsAwarded };
+}
+
+// ---------- Moderation (ModerationService) ----------
+
+function requireAdmin(user: UserProfile) {
+  if (user.role !== 'CITY_ADMIN')
+    throw forbidden('Only city administrators can review help requests');
+}
+
+function toModerationItem(r: MockHelpRequest): ModerationItem {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    category: r.category,
+    priority: r.priority,
+    status: r.status,
+    riskFlags: r.riskFlags,
+    tags: r.tags,
+    classificationSource: r.classificationSource,
+    requester: summaryOf(r.requesterId)!,
+    approximateLocation: approximate(r),
+    maskedArea: maskedArea(r),
+    createdAt: r.createdAt,
+    reviewedAt: r.reviewedAt,
+  };
+}
+
+function reviewQueue(user: UserProfile): ModerationItem[] {
+  requireAdmin(user);
+  return requests
+    .filter((r) => r.status === 'UNDER_REVIEW')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map(toModerationItem);
+}
+
+/** UNDER_REVIEW -> OPEN (approve) or CANCELLED (dismiss). */
+function decide(id: number, user: UserProfile, decision: 'OPEN' | 'CANCELLED') {
+  requireAdmin(user);
+  const r = requests.find((candidate) => candidate.id === id);
+  if (!r) throw notFound(`Help request ${id} not found`);
+  requireStatus(r, 'UNDER_REVIEW', 'Help request is not waiting for review');
+  r.status = decision;
+  r.reviewedById = user.id;
+  r.reviewedAt = new Date().toISOString();
+  r.updatedAt = r.reviewedAt;
+  return toModerationItem(r);
 }
 
 // ---------- Analytics (AnalyticsService) ----------

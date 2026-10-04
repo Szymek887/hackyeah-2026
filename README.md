@@ -34,7 +34,7 @@ Seniors, people with disabilities and people who are temporarily ill often need 
 | ✅ **Verified handoff** | The volunteer confirms delivery by scanning a **single-use, expiring QR code** on the requester's phone. |
 | ⭐ **Trust & reputation** | Both sides rate each other. Trust scores, rating averages and city engagement points for volunteers update automatically. A volunteer takes **one active task at a time**, so no one over-commits. |
 | 🔔 **Notifications** | In-app banners tell volunteers about new requests nearby, and tell requesters when someone offers help or an offer is accepted. |
-| 📊 **City dashboard** | A **hexagon heatmap** of needs on a real map of Kraków, built only from aggregated, anonymised data, to support urban planning. |
+| 📊 **City dashboard** | A **hexagon heatmap** of needs on a real map of Kraków, built only from aggregated, anonymised data, to support urban planning. A **moderation queue** lets the city approve or reject requests the AI held back as possible scams. |
 
 ### Demo scenario
 
@@ -278,7 +278,7 @@ A volunteer can have only **one** request in `OFFERED` or `ACCEPTED` at a time; 
 - **The AI protects users:**
   - When personal data is detected, the title is replaced with a generic one and the description is hidden.
   - Medicine requests are stored with generic text only; the medicine itself is discussed in person.
-  - Suspected scams (requests for BLIK codes or money transfers) are hidden from the public.
+  - Suspected scams (requests for BLIK codes or money transfers) are hidden from the public until a city administrator approves them; rejected ones are never published.
   - Tags containing digits are rejected, and sentences with phone or PESEL numbers are dropped from formatted voice transcripts, so they can't leak.
   - Request texts are sent to the LLM through OpenRouter. Without an API key, or with `AI_ENABLED=false`, nothing leaves the server and rule-based fallbacks are used.
 - **Special needs are health data (GDPR art. 9).** They are stored only with a consent record, never shown in public views or lists, shared only with the accepted volunteer, and deleted together with the consent when it is withdrawn.

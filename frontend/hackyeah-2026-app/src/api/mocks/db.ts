@@ -38,6 +38,9 @@ export type MockHelpRequest = {
   handoffToken: string | null;
   handoffTokenExpiresAt: string | null;
   handoffTokenUsedAt: string | null;
+  /** City admin who approved or dismissed the request after the AI held it for review. */
+  reviewedById: number | null;
+  reviewedAt: string | null;
 };
 
 /** Entity `Rating`. */
@@ -111,7 +114,10 @@ export const newRequestId = () => nextRequestId++;
 
 const ANNA = 1;
 const MAREK = 2;
+const EWA = 3;
 const ZOFIA = 4;
+const JAN = 5;
+const PIOTR = 7;
 const KUBA = 9;
 const REQUESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const VOLUNTEERS = [9, 10, 11];
@@ -158,6 +164,8 @@ function addRequest(
     handoffToken: null,
     handoffTokenExpiresAt: null,
     handoffTokenUsedAt: null,
+    reviewedById: null,
+    reviewedAt: null,
   };
   requests.push(request);
   return request;
@@ -202,6 +210,57 @@ Object.assign(
     '15',
   ),
   { status: 'OFFERED', volunteerId: KUBA },
+);
+
+// --- seedReviewQueue: two scams to dismiss, one false alarm (drill bits paid by transfer) to approve ---
+const underReview = (request: MockHelpRequest) =>
+  Object.assign(request, {
+    status: 'UNDER_REVIEW',
+    riskFlags: ['SCAM_SUSPECTED'],
+    classificationSource: 'FALLBACK',
+  } satisfies Partial<MockHelpRequest>);
+
+underReview(
+  addRequest(
+    EWA,
+    'Pomoc z rachunkiem za prad',
+    'Prosze o kod BLIK na 200 zl, zaplace rachunek za prad i oddam w przyszlym tygodniu.',
+    'HOME_SUPPORT',
+    2,
+    19.9301,
+    50.0738,
+    'Krolewska',
+    '41',
+    '6',
+  ),
+);
+underReview(
+  addRequest(
+    PIOTR,
+    'Zakupy przez internet',
+    'Podam numer karty i kod SMS, prosze zrobic dla mnie zakupy w sklepie internetowym.',
+    'GROCERIES',
+    3,
+    19.9512,
+    50.0452,
+    'Kalwaryjska',
+    '18',
+    null,
+  ),
+);
+underReview(
+  addRequest(
+    JAN,
+    'Pozyczenie wiertarki na sobote',
+    'Czy ktos pozyczy wiertarke na sobote? Zuzyte wiertla chetnie oddam przelewem.',
+    'EQUIPMENT_LOAN',
+    3,
+    19.9661,
+    50.0634,
+    'Grzegorzecka',
+    '7',
+    '12',
+  ),
 );
 
 // --- seedCluster ---
