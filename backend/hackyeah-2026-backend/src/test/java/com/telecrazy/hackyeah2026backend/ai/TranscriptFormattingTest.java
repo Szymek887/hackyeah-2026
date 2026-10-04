@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.ResourceAccessException;
@@ -104,7 +105,8 @@ class TranscriptFormattingTest {
     }
 
     private TranscriptFormattingService service(boolean enabled) {
-        AiProperties properties = new AiProperties(enabled, "http://localhost:11434", "test", Duration.ofSeconds(1), "1m");
+        AiProperties properties = new AiProperties(
+                enabled, "http://localhost", "key", List.of("test"), Duration.ofSeconds(1));
         return new TranscriptFormattingService(properties, llm, simple);
     }
 }

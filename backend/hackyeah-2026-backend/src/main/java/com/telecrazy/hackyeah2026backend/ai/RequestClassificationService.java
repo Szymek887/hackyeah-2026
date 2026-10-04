@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Entry point for classifying help requests: tries the LLM first and falls back to keyword rules
- * on any failure (Ollama down, timeout, invalid JSON, unknown category). Medicine requests are then
+ * on any failure (OpenRouter down or rate-limited, timeout, invalid JSON, unknown category). Medicine requests are then
  * restricted by {@link MedicineRedaction}.
  */
 @Service
