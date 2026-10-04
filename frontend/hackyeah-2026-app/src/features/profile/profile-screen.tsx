@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { updateMyDisabilities, updateMyLanguages } from '@/api/auth';
+import { updateMyLanguages } from '@/api/auth';
 import { errorMessage } from '@/api/errors';
 import type { LanguageCode } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -27,22 +27,20 @@ export function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Requesters' disabilities live on the backend (with consent, contract §3.6); others keep them locally.
-  const storesDisabilitiesOnServer = user.role === 'REQUESTER' && user.specialNeedsConsent;
-  const shownDetails: ProfileDetails = storesDisabilitiesOnServer
+  // Requesters' disabilities live on the backend (with consent, contract §3.6) and are edited next to
+  // the consent checkbox; others keep them locally.
+  const isRequester = user.role === 'REQUESTER';
+  const shownDetails: ProfileDetails = isRequester
     ? { ...profileDetails, disabilities: user.disabilities }
     : profileDetails;
 
   const handleSave = async (details: ProfileDetails, languages: LanguageCode[]) => {
     setSaveError(null);
     const languagesChanged = !sameItems(languages, user.languages);
-    const disabilitiesChanged =
-      storesDisabilitiesOnServer && !sameItems(details.disabilities, user.disabilities);
-    if (languagesChanged || disabilitiesChanged) {
+    if (languagesChanged) {
       setSaving(true);
       try {
-        if (languagesChanged) await updateMyLanguages({ languages });
-        if (disabilitiesChanged) await updateMyDisabilities({ disabilities: details.disabilities });
+        await updateMyLanguages({ languages });
         await refreshUser();
       } catch (err) {
         setSaveError(errorMessage(err));
@@ -51,7 +49,8 @@ export function ProfileScreen() {
       }
       setSaving(false);
     }
-    updateProfileDetails(details);
+    // A requester's disabilities are kept only on the server, not on the device.
+    updateProfileDetails(isRequester ? { ...details, disabilities: [] } : details);
     setEditing(false);
   };
 

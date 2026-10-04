@@ -3,6 +3,7 @@ import type {
   CreateUserDto,
   UpdateDisabilitiesDto,
   UpdateLanguagesDto,
+  UpdateSpecialNeedNotesDto,
   UpdateSpecialNeedsConsentDto,
   UserProfile,
 } from '@/api/types';
@@ -29,7 +30,7 @@ export const updateMyLanguages = (dto: UpdateLanguagesDto) =>
 
 /**
  * `PUT /api/users/me/special-needs-consent` – requesters only. `consent: false` deletes the consent
- * record and the special-needs information; `true` creates the record and stores it again.
+ * record, the disabilities and the special-need notes; `true` creates a new record (nothing else).
  * Takes effect immediately. → 200 UserProfile.
  */
 export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto) =>
@@ -41,3 +42,10 @@ export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto) =>
  */
 export const updateMyDisabilities = (dto: UpdateDisabilitiesDto, userId?: number) =>
   apiRequest<UserProfile>('/api/users/me/disabilities', { method: 'PUT', body: dto, userId });
+
+/**
+ * `PUT /api/users/me/special-need-notes` – requesters with the special-needs consent only (409
+ * without it). Replaces the special needs described in the user's own words. → 200 UserProfile.
+ */
+export const updateMySpecialNeedNotes = (dto: UpdateSpecialNeedNotesDto, userId?: number) =>
+  apiRequest<UserProfile>('/api/users/me/special-need-notes', { method: 'PUT', body: dto, userId });

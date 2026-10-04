@@ -52,7 +52,7 @@ class AnalyticsRepositoryTest {
 
     @BeforeEach
     void setUp() {
-        requester = userRepository.save(new AppUser("Test", UserRole.REQUESTER, true, false, 50));
+        requester = userRepository.save(new AppUser("Test", UserRole.REQUESTER, true, 50));
 
         // Old Town cluster: three active requests and one cancelled at the same spot.
         save(HelpCategory.MEDICINE, 1, HelpRequestStatus.OPEN, 19.9373, 50.0614);

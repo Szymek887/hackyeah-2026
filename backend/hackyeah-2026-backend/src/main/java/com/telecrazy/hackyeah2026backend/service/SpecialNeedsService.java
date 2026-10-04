@@ -33,7 +33,10 @@ public class SpecialNeedsService {
         this.clock = clock;
     }
 
-    /** {@code true} creates the consent record and stores special needs; {@code false} deletes both. */
+    /**
+     * {@code true} creates the consent record (the user is marked as disabled only after declaring
+     * disabilities); {@code false} deletes the record, the disabilities, the special-need notes and the marking.
+     */
     @Transactional
     public UserProfileResponse updateConsent(long userId, boolean consent) {
         AppUser user = requester(userId, "Only requesters can manage special-needs consent");
@@ -45,7 +48,7 @@ public class SpecialNeedsService {
         return UserProfileResponse.from(user);
     }
 
-    /** Replaces the declared disabilities; requires the consent. */
+    /** Replaces the declared disabilities (an empty list removes the marking); requires the consent. */
     @Transactional
     public UserProfileResponse updateDisabilities(long userId, Collection<DisabilityType> disabilities) {
         AppUser user = requester(userId, "Only requesters can store disabilities");
@@ -53,6 +56,17 @@ public class SpecialNeedsService {
             throw new ConflictException("Give the special-needs consent before storing disabilities");
         }
         user.replaceDisabilities(disabilities);
+        return UserProfileResponse.from(user);
+    }
+
+    /** Replaces the special needs described in the user's own words; requires the consent. */
+    @Transactional
+    public UserProfileResponse updateSpecialNeedNotes(long userId, Collection<String> notes) {
+        AppUser user = requester(userId, "Only requesters can store special needs");
+        if (!user.hasSpecialNeedsConsent()) {
+            throw new ConflictException("Give the special-needs consent before storing special needs");
+        }
+        user.replaceSpecialNeedNotes(notes);
         return UserProfileResponse.from(user);
     }
 

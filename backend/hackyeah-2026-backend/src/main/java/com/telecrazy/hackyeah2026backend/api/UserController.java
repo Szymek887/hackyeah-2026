@@ -58,9 +58,10 @@ public class UserController {
     }
 
     /**
-     * Grants or withdraws the consent to store the caller's special needs and share them with the accepted
-     * volunteer. Withdrawing deletes the consent record and the special-needs information (incl. disabilities);
-     * granting creates the record and stores the special needs again. Takes effect immediately.
+     * Grants or withdraws the consent to store the caller's disabilities and share them with the accepted
+     * volunteer. Granting only creates the consent record – the caller is marked as disabled once they declare
+     * disabilities. Withdrawing deletes the record, the disabilities, the special-need notes and the marking.
+     * Takes effect immediately.
      */
     @PutMapping("/me/special-needs-consent")
     public UserProfileResponse updateSpecialNeedsConsent(
@@ -71,8 +72,9 @@ public class UserController {
     }
 
     /**
-     * Replaces the kinds of disability the caller declares (profile edit). Requesters only, and only while
-     * the special-needs consent exists – without it no disability information may be stored.
+     * Replaces the kinds of disability the caller declares. Requesters only, and only while the special-needs
+     * consent exists – without it no disability information may be stored. A non-empty list marks the caller as
+     * disabled, an empty one removes the marking.
      */
     @PutMapping("/me/disabilities")
     public UserProfileResponse updateDisabilities(
@@ -80,5 +82,18 @@ public class UserController {
             @Valid @RequestBody UpdateDisabilitiesRequest request
     ) {
         return specialNeedsService.updateDisabilities(user.getId(), request.disabilities());
+    }
+
+    /**
+     * Replaces the special needs the caller describes in their own words, extending the disabilities (e.g.
+     * "Nie słyszę pukania"). Same rules as disabilities: requesters only, only while the consent exists. They
+     * do not mark the caller as disabled.
+     */
+    @PutMapping("/me/special-need-notes")
+    public UserProfileResponse updateSpecialNeedNotes(
+            @CurrentUser AppUser user,
+            @Valid @RequestBody UpdateSpecialNeedNotesRequest request
+    ) {
+        return specialNeedsService.updateSpecialNeedNotes(user.getId(), request.notes());
     }
 }

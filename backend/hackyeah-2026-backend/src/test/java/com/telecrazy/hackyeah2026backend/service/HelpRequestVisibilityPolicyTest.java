@@ -61,7 +61,7 @@ class HelpRequestVisibilityPolicyTest {
     }
 
     private static AppUser user(long id, UserRole role) {
-        AppUser user = new AppUser("User " + id, role, true, false, 50);
+        AppUser user = new AppUser("User " + id, role, true, 50);
         user.setId(id);
         return user;
     }

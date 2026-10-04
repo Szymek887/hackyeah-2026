@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 
-import { createUser, getMe, updateMyDisabilities } from '@/api/auth';
+import { createUser, getMe, updateMyDisabilities, updateMySpecialNeedNotes } from '@/api/auth';
 import { setApiUserId } from '@/api/client';
 import type { CreateUserDto, UserProfile, UserRole } from '@/api/types';
 import { commuteStore } from '@/features/commute/commute-store';
@@ -25,8 +25,15 @@ type Auth = {
   /** Client-only profile description of the logged-in user. */
   profileDetails: ProfileDetails;
   signIn: (userId: number) => Promise<UserProfile>;
-  /** Creates a new account (`POST /api/users`) and logs in as it, with optional profile details. */
-  signUp: (dto: CreateUserDto, details?: Partial<ProfileDetails>) => Promise<UserProfile>;
+  /**
+   * Creates a new account (`POST /api/users`) and logs in as it, with optional profile details.
+   * With the consent, `details.disabilities` and `specialNeedNotes` are stored on the server.
+   */
+  signUp: (
+    dto: CreateUserDto,
+    details?: Partial<ProfileDetails>,
+    specialNeedNotes?: string[],
+  ) => Promise<UserProfile>;
   /** Re-reads `/users/me`, e.g. after a rating changed trust score or city points. */
   refreshUser: () => Promise<void>;
   signOut: () => void;
@@ -81,17 +88,26 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const signIn = useCallback((userId: number) => getMe(userId).then(applyUser), [applyUser]);
   const signUp = useCallback(
-    async (dto: CreateUserDto, details?: Partial<ProfileDetails>) => {
+    async (dto: CreateUserDto, details?: Partial<ProfileDetails>, specialNeedNotes?: string[]) => {
       let created = await createUser(dto);
-      // A requester who declared special needs consents at sign-up, so the kinds go to the backend.
+      // Consent was given at sign-up, so the kinds go to the backend (they mark the user as disabled)
+      // together with the needs described in the user's own words.
       if (created.specialNeedsConsent && details?.disabilities?.length) {
         created = await updateMyDisabilities({ disabilities: details.disabilities }, created.id);
       }
+      if (created.specialNeedsConsent && specialNeedNotes?.length) {
+        created = await updateMySpecialNeedNotes({ notes: specialNeedNotes }, created.id);
+      }
       const createdId = created.id;
       if (details) {
+        // A requester's disabilities and needs live only on the server; volunteers keep theirs here.
+        const local =
+          created.role === 'REQUESTER'
+            ? { ...details, disabilities: [], accessibilityNotes: '' }
+            : details;
         setDetailsByUser((current) => ({
           ...current,
-          [createdId]: { ...emptyProfileDetails, ...details },
+          [createdId]: { ...emptyProfileDetails, ...local },
         }));
       }
       return applyUser(created);

@@ -9,13 +9,14 @@ import { Disabilities, type DisabilityType } from '@/features/accessibility/acce
 type NeedsPickerProps = {
   disabilities: DisabilityType[];
   onDisabilitiesChange: (disabilities: DisabilityType[]) => void;
-  notes: string;
-  onNotesChange: (notes: string) => void;
+  /** Omit to show only the chips (requesters add needs with `SpecialNeedNotesEditor`). */
+  notes?: string;
+  onNotesChange?: (notes: string) => void;
 };
 
 /**
- * Optional self-description of a disability and extra needs ("dzwonić dłużej", "4. piętro bez
- * windy"). Shown only to the volunteer whose help the person accepted.
+ * Optional self-description of a disability and, for volunteers, extra needs kept on the device
+ * ("dzwonić dłużej", "4. piętro bez windy").
  */
 export function NeedsPicker({
   disabilities,
@@ -41,7 +42,7 @@ export function NeedsPicker({
           Niepełnosprawność i szczególne potrzeby (opcjonalnie)
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Zaznacz, jeśli coś utrudnia Ci codzienne sprawy. Twoje prośby dostaną wyższy priorytet.
+          Zaznacz, jeśli coś utrudnia Ci codzienne sprawy.
         </ThemedText>
       </View>
 
@@ -57,20 +58,23 @@ export function NeedsPicker({
         ))}
       </View>
 
-      <Input
-        label="Dodatkowe potrzeby"
-        placeholder={
-          hint ? `Np. ${hint}` : 'np. proszę dzwonić dłużej, mieszkam na 4. piętrze bez windy'
-        }
-        multiline
-        maxLength={300}
-        value={notes}
-        onChangeText={onNotesChange}
-      />
-      <ThemedText type="caption" themeColor="textSecondary">
-        Szczegóły widzisz tylko Ty. Wolontariuszowi możesz udostępnić sam fakt szczególnych potrzeb
-        – przełącznikiem w profilu.
-      </ThemedText>
+      {onNotesChange && (
+        <>
+          <Input
+            label="Dodatkowe potrzeby"
+            placeholder={
+              hint ? `Np. ${hint}` : 'np. proszę dzwonić dłużej, mieszkam na 4. piętrze bez windy'
+            }
+            multiline
+            maxLength={300}
+            value={notes}
+            onChangeText={onNotesChange}
+          />
+          <ThemedText type="caption" themeColor="textSecondary">
+            Notatka zostaje na tym urządzeniu i widzisz ją tylko Ty.
+          </ThemedText>
+        </>
+      )}
     </View>
   );
 }

@@ -54,7 +54,7 @@ class HelpRequestGeoIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        requester = userRepository.save(new AppUser("Geo Test", UserRole.REQUESTER, true, false, 50));
+        requester = userRepository.save(new AppUser("Geo Test", UserRole.REQUESTER, true, 50));
     }
 
     @Test
