@@ -1,6 +1,7 @@
 package com.telecrazy.hackyeah2026backend.api;
 
 import com.telecrazy.hackyeah2026backend.exception.ConflictException;
+import com.telecrazy.hackyeah2026backend.exception.FieldValidationException;
 import com.telecrazy.hackyeah2026backend.exception.ForbiddenException;
 import com.telecrazy.hackyeah2026backend.exception.NotFoundException;
 import com.telecrazy.hackyeah2026backend.exception.UnauthorizedException;
@@ -49,9 +50,12 @@ public class GlobalExceptionHandler {
             errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
-        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Request validation failed");
-        problem.setProperty("errors", errors);
-        return problem;
+        return validationProblem(errors);
+    }
+
+    @ExceptionHandler(FieldValidationException.class)
+    public ProblemDetail fieldValidationFailed(FieldValidationException exception) {
+        return validationProblem(exception.getErrors());
     }
 
     @ExceptionHandler(UnauthorizedException.class)
@@ -87,6 +91,12 @@ public class GlobalExceptionHandler {
     private ProblemDetail problem(HttpStatus status, String detail) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+
+    private ProblemDetail validationProblem(Map<String, String> errors) {
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Request validation failed");
+        problem.setProperty("errors", errors);
         return problem;
     }
 }

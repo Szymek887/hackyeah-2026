@@ -16,6 +16,7 @@
 - Publiczne wyszukiwanie zgłoszeń wzdłuż trasy `POST /api/help-requests/along-route` z `LINESTRING` i PostGIS `ST_DWithin` – **B2.2 zrobione**.
 - Maskowanie lokalizacji dla odpowiedzi publicznych: przybliżony punkt i polygon komórki ok. 300 m, bez dokładnego adresu – **B2.4 częściowo zrobione**.
 - Klasyfikacja AI zgłoszeń (pakiet `ai/`, `POST /api/requests/classify`) z fallbackiem regułowym – **B2.3 zrobione** (podpięte do `POST /api/help-requests`). Model: `qwen2.5:7b` w Ollamie.
+- Bezpieczny preset dla kategorii `MEDICINE`: backend nie przyjmuje swobodnego `title`/`description`, zapisuje systemowy opis odbioru leków i zwraca instrukcje dla zgłaszającego oraz wolontariusza – **privacy improvement zrobione**.
 - Analityka miejska (pakiet `analytics/`, `GET /api/analytics/heatmap`, `GET /api/analytics/summary`) – **B3.4 zrobione (API)**; widok dashboardu na froncie – później.
 
 ## 2. Decyzje techniczne
@@ -55,7 +56,7 @@ com.telecrazy.hackyeah2026backend
 
 **AppUser** (`app_users`) – `id`, `displayName`, `role` (`REQUESTER` | `VOLUNTEER` | `CITY_ADMIN`), `identityVerified` (bool), `specialNeeds` (bool), `trustScore` (int, 0–100), `ratingCount`. `CITY_ADMIN` widzi analitykę, nie tworzy zgłoszeń (403).
 
-**HelpRequest** (`help_requests`) – `id`, `requester` (FK), `volunteer` (FK, nullable), `title`, `description`, `category` (`MEDICINE`, `GROCERIES`, `EQUIPMENT_LOAN`, `HOME_SUPPORT`, `SOCIAL` – enum `HelpCategory`, wspólny dla encji i klasyfikatora AI), `priority` (1–3, końcowy), `aiPriority` (1–3, wynik AI przed korektą), `tags` (`help_request_tags`), `riskFlags` (`help_request_risk_flags`: `SCAM_SUSPECTED`, `MEDICAL_EMERGENCY`, `PERSONAL_DATA`, `INAPPROPRIATE_CONTENT`), `classificationSource` (`LLM` | `FALLBACK`), `status`, `location` (`Point`, 4326, dokładny), `street`, `buildingNumber`, `apartmentNumber` (adres – tylko w widoku `FULL`), `createdAt`, `updatedAt`, `version` (`@Version`). Indeks GiST na `location`.
+**HelpRequest** (`help_requests`) – `id`, `requester` (FK), `volunteer` (FK, nullable), `title`, `description`, `category` (`MEDICINE`, `GROCERIES`, `EQUIPMENT_LOAN`, `HOME_SUPPORT`, `SOCIAL` – enum `HelpCategory`, wspólny dla encji i klasyfikatora AI), `priority` (1–3, końcowy), `aiPriority` (1–3, wynik AI przed korektą), `tags` (`help_request_tags`), `riskFlags` (`help_request_risk_flags`: `SCAM_SUSPECTED`, `MEDICAL_EMERGENCY`, `PERSONAL_DATA`, `INAPPROPRIATE_CONTENT`), `classificationSource` (`LLM` | `FALLBACK` | `PRESET`), `status`, `location` (`Point`, 4326, dokładny), `street`, `buildingNumber`, `apartmentNumber` (adres – tylko w widoku `FULL`), `createdAt`, `updatedAt`, `version` (`@Version`). Indeks GiST na `location`.
 
 **Handshake / QR** – `id`, `request` (FK), `token`, `expiresAt`, `usedAt`.
 
@@ -73,7 +74,7 @@ Wszystkie ścieżki pod `/api`. Autoryzacja mockiem `X-User-Id`. Zgłoszenia są
 |---|---|---|
 | `GET /users/me` | Profil, reputacja, flagi – ✅ zrobione | B1 |
 | `POST /users/me/verify` | Mock mObywatel – ustawia `identityVerified` | B3 |
-| `POST /help-requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI – ✅ zrobione | B2 |
+| `POST /help-requests` | Utworzenie zgłoszenia; wywołuje klasyfikację AI albo bezpieczny preset `MEDICINE` – ✅ zrobione | B2 |
 | `POST /requests/classify` | Podgląd klasyfikacji AI bez zapisu (F2.2) – ✅ zrobione | B2.3 |
 | `GET /help-requests/nearby?lat&lng&radiusKm` | Zgłoszenia w promieniu, **zamaskowane**, GeoJSON – ✅ zrobione | B2.1 |
 | `POST /help-requests/along-route` | Body: `points[]` (polilinia), `bufferMeters`; zwraca zgłoszenia w korytarzu – ✅ zrobione | B2.2 |
@@ -149,7 +150,7 @@ Token (32 losowe bajty, base64url, 43 znaki) w polach `HelpRequest.handoffToken*
 - ✅ `LlmRequestClassifier` ładuje prompt systemowy z `prompts/classify-request.txt` (kategorie, priorytet 1–3, tagi, flagi ryzyka) i wywołuje Ollamę (`OllamaClient`, `/api/chat`) ze schematem JSON w polu `format`.
 - ✅ Odpowiedź normalizowana do `RequestClassification {category, priority, tags[], riskFlags[], source}`; nieznana kategoria → wyjątek i fallback, priorytet przycinany do 1–3, maks. 5 tagów, nieznane flagi pomijane. `MEDICAL_EMERGENCY` zawsze wymusza priorytet 1.
 - ✅ Flagi ryzyka: `SCAM_SUSPECTED`, `MEDICAL_EMERGENCY`, `PERSONAL_DATA`, `INAPPROPRIATE_CONTENT`.
-- ✅ **Fallback:** `KeywordRequestClassifier` (polskie rdzenie słów) przy wyłączonym AI (`AI_ENABLED=false`), błędzie połączenia, timeoucie (15 s) lub błędnym JSON-ie. Pole `source` = `LLM` / `FALLBACK`.
+- ✅ **Fallback:** `KeywordRequestClassifier` (polskie rdzenie słów) przy wyłączonym AI (`AI_ENABLED=false`), błędzie połączenia, timeoucie (15 s) lub błędnym JSON-ie. Pole `source` = `LLM` / `FALLBACK`; `PRESET` oznacza bezpieczny preset bez klasyfikacji AI.
 - ✅ Konfiguracja `app.ai.*` (`OLLAMA_URL`, `OLLAMA_MODEL`, timeout, `keep-alive` 30 min), testy jednostkowe, żądania `http/classify.http`.
 - ✅ Test na prawdziwym modelu (`qwen2.5:7b`, Ollama 0.35): wszystkie przypadki z `http/classify.http` klasyfikowane przez LLM, ~2–2,5 s na zapytanie.
 - ✅ **Poprawki po teście na modelu:**

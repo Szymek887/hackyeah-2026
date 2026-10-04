@@ -36,6 +36,8 @@ public record FullHelpRequestResponse(
         UserSummary requester,
         boolean requesterSpecialNeeds,
         UserSummary volunteer,
+        String requesterInstructions,
+        String volunteerInstructions,
         Instant createdAt,
         Instant updatedAt,
         ViewerRole viewerRole
