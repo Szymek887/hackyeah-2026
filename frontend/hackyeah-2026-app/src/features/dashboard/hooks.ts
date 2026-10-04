@@ -3,18 +3,20 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { approveRequest, dismissRequest, getReviewQueue } from '@/api/admin';
 import { getAnalyticsSummary, getHeatmap } from '@/api/dashboard';
 import type { Category } from '@/api/types';
+import { HEATMAP_VIEWS, type HeatmapView } from '@/features/dashboard/heatmap-scale';
 
 export const dashboardKeys = {
   all: ['dashboard'] as const,
-  heatmap: (category?: Category) => [...dashboardKeys.all, 'heatmap', category] as const,
+  heatmap: (category: Category | undefined, view: HeatmapView) =>
+    [...dashboardKeys.all, 'heatmap', category, view] as const,
   summary: (category?: Category) => [...dashboardKeys.all, 'summary', category] as const,
   reviewQueue: () => [...dashboardKeys.all, 'review-queue'] as const,
 };
 
-export function useHeatmapData(category?: Category) {
+export function useHeatmapData(category: Category | undefined, view: HeatmapView) {
   return useQuery({
-    queryKey: dashboardKeys.heatmap(category),
-    queryFn: () => getHeatmap({ category }),
+    queryKey: dashboardKeys.heatmap(category, view),
+    queryFn: () => getHeatmap({ category, statuses: HEATMAP_VIEWS[view].statuses }),
     staleTime: 1000 * 60 * 2,
     // Keep the current numbers on screen while a new filter loads, instead of a blank spinner.
     placeholderData: keepPreviousData,

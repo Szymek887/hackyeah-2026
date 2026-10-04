@@ -21,7 +21,7 @@ Companion to [`integration-plan.md`](./integration-plan.md). This file lists the
 | 4 | ✅ Draw real hexagons instead of circles | P1 | FE (web + native) | 1–1.5 h |
 | 5 | ✅ Useful cell popups (counts + category breakdown) | P1 | FE | 30 min |
 | 6 | ✅ Moderation queue for requests flagged by the AI (`UNDER_REVIEW`) | P1 | BE + FE + mock | 3–4 h |
-| 7 | "Unmet need" view: open vs fulfilled toggle | P1 | FE | 45 min |
+| 7 | ✅ "Unmet need" view: open vs fulfilled toggle | P1 | FE | 45 min |
 | 8 | Time dimension: backdated seed data + time range filter | P2 | BE + FE | 1.5–2 h |
 | 9 | Trend per category (this period vs previous) | P2 | BE + FE | 1.5 h |
 | 10 | Require `CITY_ADMIN` for analytics endpoints | P3 | BE + FE | 30 min |
@@ -131,7 +131,9 @@ Suggested order for a short time budget: **1 → 3 → 2 → 4 → 5 → 6**. Ta
 
 **Demo moment.** Create a scam-like request on the phone → it appears in the admin queue with the AI's risk flags → admin approves or rejects → the map updates.
 
-### 7. "Unmet need" view
+### 7. "Unmet need" view — ✅ Done (2026-10-04)
+
+> **Implemented.** `SegmentedControl` above the map: **Czeka na pomoc** (default) · **W toku** · **Zrealizowane** · **Wszystkie**, defined in `HEATMAP_VIEWS` (`heatmap-scale.ts`). Statuses go as one comma-separated `status` value (Spring binds it like repeated keys; covered by `AnalyticsControllerTest`), so `apiRequest` stays single-valued; the mock now honours `status` too. The map title became "Mapa potrzeb" with a one-line description of the view. When every area is under the privacy threshold (today: *W toku* and *Zrealizowane* on the seed data), the map shows an explanation instead of looking broken; task 8's richer seed fills these views.
 
 **Problem.** The heatmap mixes fulfilled and open requests. A planner needs to see where help is **not** arriving.
 

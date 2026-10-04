@@ -580,7 +580,7 @@ Public, aggregated data only.
 | Param | Rules |
 |---|---|
 | `category` | optional `HelpCategory` |
-| `status` | optional, repeatable (`?status=OPEN&status=ACCEPTED`); default: all except `CANCELLED`, `UNDER_REVIEW` |
+| `status` | optional, repeatable (`?status=OPEN&status=ACCEPTED`) or comma-separated (`?status=OPEN,ACCEPTED`, what the frontend sends); default: all except `CANCELLED`, `UNDER_REVIEW` |
 | `from`, `to` | optional ISO-8601 instants, `from < to` |
 | `cellSizeMeters` | hexagon side, 500–5000, default 500 (never finer than the ~300 m public location masking) |
 

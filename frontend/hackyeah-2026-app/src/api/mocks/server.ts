@@ -811,7 +811,11 @@ function heatmap(query: Record<string, string>): HeatmapResponse {
     throw badRequest(`cellSizeMeters must be between ${HEATMAP_MIN_CELL_SIZE_METERS} and 5000`);
   }
   // Backend uses hexagons; the mock uses square cells of the same size – same response shape.
-  const visible = filtered(query, ['OPEN', 'OFFERED', 'ACCEPTED', 'COMPLETED', 'RATED']);
+  // Like AnalyticsService: explicit statuses (comma-separated) minus hidden ones, else the default.
+  const statuses = query.status
+    ? (query.status.split(',') as RequestStatus[]).filter((s) => s !== 'UNDER_REVIEW')
+    : (['OPEN', 'OFFERED', 'ACCEPTED', 'COMPLETED', 'RATED'] as RequestStatus[]);
+  const visible = filtered(query, statuses);
   const cells = new Map<string, MockHelpRequest[]>();
   const latSize = cellSizeMeters / METERS_PER_LAT_DEGREE;
   const lngSize = cellSizeMeters / (METERS_PER_LAT_DEGREE * Math.cos((50.06 * Math.PI) / 180));

@@ -1,6 +1,38 @@
-import type { Category, GeoPolygon } from '@/api/types';
+import type { Category, GeoPolygon, RequestStatus } from '@/api/types';
 import { CategoryColors, HeatmapScaleColors } from '@/constants/theme';
 import { CategoryLabels } from '@/features/requests/labels';
+
+/**
+ * What the heatmap counts. The default is unmet need: where help is not arriving is what the city
+ * can act on. `statuses` empty = the backend default (everything except cancelled and under review).
+ */
+export const HEATMAP_VIEWS = {
+  OPEN: {
+    label: 'Czeka na pomoc',
+    description: 'Gdzie mieszkańcy wciąż czekają na wolontariusza',
+    statuses: ['OPEN'],
+  },
+  IN_PROGRESS: {
+    label: 'W toku',
+    description: 'Gdzie pomoc jest w drodze (oferty i przyjęta pomoc)',
+    statuses: ['OFFERED', 'ACCEPTED'],
+  },
+  FULFILLED: {
+    label: 'Zrealizowane',
+    description: 'Gdzie pomoc już dotarła',
+    statuses: ['COMPLETED', 'RATED'],
+  },
+  ALL: {
+    label: 'Wszystkie',
+    description: 'Wszystkie zgłoszenia poza anulowanymi',
+    statuses: [],
+  },
+} as const satisfies Record<
+  string,
+  { label: string; description: string; statuses: readonly RequestStatus[] }
+>;
+
+export type HeatmapView = keyof typeof HEATMAP_VIEWS;
 
 /** One hexagon of the city heatmap, as drawn by `CityHeatmapMap`. */
 export type HeatmapCell = {

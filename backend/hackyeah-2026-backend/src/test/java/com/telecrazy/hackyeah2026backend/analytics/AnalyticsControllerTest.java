@@ -73,6 +73,18 @@ class AnalyticsControllerTest {
     }
 
     @Test
+    void heatmapAcceptsCommaSeparatedStatuses() throws Exception {
+        // The frontend sends `status=OFFERED,ACCEPTED`; it must bind like repeated `status` keys.
+        mockMvc.perform(get("/api/analytics/heatmap").param("status", "OFFERED,ACCEPTED"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<AnalyticsFilter> filter = ArgumentCaptor.forClass(AnalyticsFilter.class);
+        verify(repository).heatmap(filter.capture(), any(Double.class));
+        assertThat(filter.getValue().statuses())
+                .containsExactlyInAnyOrder(HelpRequestStatus.OFFERED, HelpRequestStatus.ACCEPTED);
+    }
+
+    @Test
     void summaryWorksWithoutFilters() throws Exception {
         given(repository.summary(any())).willReturn(List.of(
                 new SummaryRow(HelpCategory.MEDICINE, HelpRequestStatus.OPEN, 1, 3)));

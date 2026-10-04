@@ -5,15 +5,27 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Screen } from '@/components/ui/screen';
-import { CategoryColors, Spacing } from '@/constants/theme';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { CategoryColors, Radius, Spacing } from '@/constants/theme';
 import type { Category } from '@/api/types';
 import { AdminBar } from '@/features/dashboard/admin-bar';
 import { CityHeatmapMap } from '@/features/dashboard/city-heatmap-map';
-import { HEATMAP_BINS, type HeatmapCell } from '@/features/dashboard/heatmap-scale';
+import {
+  HEATMAP_BINS,
+  HEATMAP_VIEWS,
+  requestsLabel,
+  type HeatmapCell,
+  type HeatmapView,
+} from '@/features/dashboard/heatmap-scale';
 import { dashboardKeys, useCitySummary, useHeatmapData } from '@/features/dashboard/hooks';
 import { ReviewQueue } from '@/features/dashboard/review-queue';
 import { CategoryLabels } from '@/features/requests/labels';
 import { useTheme } from '@/hooks/use-theme';
+
+const VIEW_OPTIONS = (Object.keys(HEATMAP_VIEWS) as HeatmapView[]).map((value) => ({
+  value,
+  label: HEATMAP_VIEWS[value].label,
+}));
 
 const CATEGORY_KEYS = Object.keys(CategoryLabels) as Category[];
 
@@ -26,6 +38,8 @@ export function CityDashboard() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<Category | undefined>(undefined);
+  // Unmet need first: where help is not arriving is what the city can act on.
+  const [heatmapView, setHeatmapView] = useState<HeatmapView>('OPEN');
 
   const {
     data: summary,
@@ -36,7 +50,7 @@ export function CityDashboard() {
     data: heatmap,
     isPending: heatmapLoading,
     isPlaceholderData: heatmapUpdating,
-  } = useHeatmapData(selectedCategory);
+  } = useHeatmapData(selectedCategory, heatmapView);
   const cells: HeatmapCell[] = (heatmap?.features ?? []).map(({ properties }) => ({
     count: properties.count,
     open: properties.open,
@@ -160,10 +174,10 @@ export function CityDashboard() {
       <ThemedView type="backgroundElement" style={styles.heatmapCard}>
         <View style={styles.heatmapHeader}>
           <View style={styles.heatmapTitle}>
-            <ThemedText type="subtitle">Mapa Cieplna Zgłoszeń i Deficytów</ThemedText>
+            <ThemedText type="subtitle">Mapa potrzeb</ThemedText>
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Zagęszczenie potrzeb w korytarzach miejskich ({heatmap?.totalRequests ?? 0} zgłoszeń w{' '}
-              {cells.length} obszarach)
+              {HEATMAP_VIEWS[heatmapView].description}: {requestsLabel(heatmap?.totalRequests ?? 0)}{' '}
+              w {cells.length} {cells.length === 1 ? 'obszarze' : 'obszarach'}
             </ThemedText>
             {!!heatmap?.suppressedCells && (
               <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -181,9 +195,24 @@ export function CityDashboard() {
           )}
         </View>
 
+        <SegmentedControl options={VIEW_OPTIONS} value={heatmapView} onChange={setHeatmapView} />
+
         {/* Real Interactive Map with OpenStreetMap tiles & Heatmap overlays */}
         <View style={heatmapUpdating && styles.updating}>
           <CityHeatmapMap cells={cells} />
+          {!heatmapUpdating && cells.length === 0 && (
+            // Not an error: with few requests every area can be under the privacy threshold.
+            <View style={styles.emptyOverlay} pointerEvents="none">
+              <ThemedView type="backgroundElement" style={styles.emptyMessage}>
+                <ThemedText type="smallBold">Brak obszarów do pokazania</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {heatmap?.suppressedCells
+                    ? 'Każdy obszar ma w tym widoku mniej niż 3 zgłoszenia, więc dla ochrony prywatności nie jest pokazywany.'
+                    : 'W tym widoku nie ma zgłoszeń.'}
+                </ThemedText>
+              </ThemedView>
+            </View>
+          )}
         </View>
 
         {/* Map legend: the colour scale (fixed bins, see heatmap-scale.ts) */}
@@ -300,6 +329,18 @@ const styles = StyleSheet.create({
   },
   updating: {
     opacity: 0.6,
+  },
+  emptyOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  emptyMessage: {
+    padding: Spacing.three,
+    borderRadius: Radius.large,
+    gap: Spacing.half,
+    maxWidth: 360,
   },
   legend: {
     gap: Spacing.one,
