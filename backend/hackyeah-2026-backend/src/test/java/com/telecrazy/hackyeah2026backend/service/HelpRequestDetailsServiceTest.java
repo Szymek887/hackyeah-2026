@@ -11,6 +11,7 @@ import com.telecrazy.hackyeah2026backend.api.FullHelpRequestResponse;
 import com.telecrazy.hackyeah2026backend.api.HelpRequestView;
 import com.telecrazy.hackyeah2026backend.api.PublicHelpRequestDetailsResponse;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
@@ -25,6 +26,7 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -103,13 +105,25 @@ class HelpRequestDetailsServiceTest {
     }
 
     @Test
-    void createBumpsPriorityForRequesterWithSpecialNeeds() {
+    void createBumpsPriorityForRequesterWithConsentedSpecialNeeds() {
         givenClassification(HelpCategory.GROCERIES, 3, Set.of());
+        anna.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"), List.of(DisabilityType.MOBILITY));
 
         FullHelpRequestResponse response = service.create(body(), anna);
 
         assertThat(response.aiPriority()).isEqualTo(3);
         assertThat(response.priority()).isEqualTo(2);
+    }
+
+    @Test
+    void specialNeedsWithoutConsentGiveNoPriorityBump() {
+        // e.g. a database seeded before consent records existed: special_needs = true, no consent row
+        givenClassification(HelpCategory.GROCERIES, 3, Set.of());
+
+        FullHelpRequestResponse response = service.create(body(), anna);
+
+        assertThat(anna.isSpecialNeeds()).isTrue();
+        assertThat(response.priority()).isEqualTo(3);
     }
 
     @Test

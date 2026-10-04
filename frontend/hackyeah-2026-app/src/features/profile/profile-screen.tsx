@@ -47,16 +47,19 @@ export function ProfileScreen() {
       storesDisabilitiesOnServer && !sameItems(details.disabilities, user.disabilities);
     if (languagesChanged || disabilitiesChanged) {
       setSaving(true);
+      let failed = false;
       try {
         if (languagesChanged) await updateMyLanguages({ languages });
         if (disabilitiesChanged) await updateMyDisabilities({ disabilities: details.disabilities });
-        await refreshUser();
       } catch (err) {
         setSaveError(errorMessage(err));
+        failed = true;
+      } finally {
+        // Also after a partial failure: what did save (e.g. languages) must show, not the old values.
+        await refreshUser().catch(() => undefined);
         setSaving(false);
-        return;
       }
-      setSaving(false);
+      if (failed) return;
     }
     // A requester's kinds of disability are kept only on the server – no copy on the device.
     updateProfileDetails(user.role === 'REQUESTER' ? { ...details, disabilities: [] } : details);

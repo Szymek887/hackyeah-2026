@@ -506,7 +506,8 @@ function create(body: CreateHelpRequestDto, user: UserProfile) {
   const priority = (
     classification.priority === SPECIAL_PRIORITY
       ? SPECIAL_PRIORITY
-      : Math.max(1, classification.priority - (user.specialNeeds ? 1 : 0))
+      : // Only consented special needs count, like HelpRequestDetailsService (sharesSpecialNeeds).
+        Math.max(1, classification.priority - (sharesSpecialNeeds(user.id) ? 1 : 0))
   ) as Priority;
   // MedicineRedaction: medicine names and usage are not stored, details are given in person.
   const redact = classification.category === 'MEDICINE';

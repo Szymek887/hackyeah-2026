@@ -64,7 +64,8 @@ public class HelpRequestDetailsService {
                 redact ? MedicineRedaction.TITLE : body.title().trim(),
                 redact ? MedicineRedaction.DESCRIPTION : body.description().trim(),
                 classification.category(),
-                PriorityPolicy.finalPriority(classification.priority(), requester.isSpecialNeeds()),
+                // Only consented special needs count (contract §3.6) – also for rows from before consent records.
+                PriorityPolicy.finalPriority(classification.priority(), requester.sharesSpecialNeeds()),
                 GEOMETRY_FACTORY.createPoint(new Coordinate(body.lng(), body.lat())),
                 body.street().trim(),
                 body.buildingNumber().trim(),

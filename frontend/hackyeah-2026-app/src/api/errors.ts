@@ -23,6 +23,10 @@ const KNOWN_MESSAGES: Record<string, string> = {
   'Only completed help requests can be rated': 'Ocenić można tylko zakończoną pomoc.',
   'Only volunteers can offer help': 'Pomoc mogą zgłaszać tylko wolontariusze.',
   'City administrators cannot create help requests': 'Konto miasta nie może dodawać zgłoszeń.',
+  // Special-needs consent (contract §3.6) – e.g. withdrawn meanwhile on another device.
+  'Give the special-needs consent before storing disabilities':
+    'Zgoda na przechowywanie informacji o niepełnosprawności jest wyłączona. Włącz ją przełącznikiem w profilu, aby zapisać niepełnosprawność.',
+  'Choose at least one kind of disability': 'Wybierz co najmniej jedną niepełnosprawność.',
 };
 
 const BY_STATUS: Record<number, string> = {
