@@ -232,16 +232,17 @@ export function MapScreen() {
     [requestClusters, showLabels, theme.primaryStrong],
   );
 
+  const isBottomPanelVisible = Boolean(selectedRequest || isSummaryOpen);
   const mapPadding = {
     top: insets.top + (activeRoute ? 110 : 70),
     right: 12,
-    bottom: selectedRequest || isSummaryOpen ? 260 : 90,
+    bottom: isBottomPanelVisible ? 260 : 90,
     left: 12,
   };
   const appleLegalLabelInsets = {
     top: 0,
     right: 0,
-    bottom: 1,
+    bottom: isBottomPanelVisible ? 1 : -Spacing.two,
     left: Spacing.two,
   };
 
