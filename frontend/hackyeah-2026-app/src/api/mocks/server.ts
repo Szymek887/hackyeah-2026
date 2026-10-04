@@ -589,6 +589,9 @@ function offer(id: number, user: UserProfile) {
   if (user.role !== 'VOLUNTEER' || isRequester(r, user))
     throw forbidden('Only volunteers can offer help');
   requireStatus(r, 'OPEN', 'Help request is no longer open');
+  // HelpRequestWorkflowService.VOLUNTEER_ACTIVE_STATUSES: one active request per volunteer.
+  if (requests.some((x) => x.volunteerId === user.id && ['OFFERED', 'ACCEPTED'].includes(x.status)))
+    throw conflict('Volunteer already has an active help request');
   r.volunteerId = user.id;
   r.status = 'OFFERED';
   return save(r, user);

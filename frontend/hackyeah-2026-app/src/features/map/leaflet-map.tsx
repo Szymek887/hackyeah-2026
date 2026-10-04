@@ -18,6 +18,7 @@ import {
   userLocationHtml,
 } from '@/features/map/user-location-icon';
 import { useTheme } from '@/hooks/use-theme';
+import { distanceMeters } from '@/lib/geo';
 import type { RouteCoordinate } from '@/lib/route-matching';
 
 export type RouteEndpoint = 'start' | 'end';
@@ -51,6 +52,10 @@ const leafletElementStyle: CSSProperties = {
 };
 
 const NO_ROUTE: RouteCoordinate[] = [];
+/** On a location change the map frames the user plus this many nearest requests… */
+const FIT_NEAREST_COUNT = 5;
+/** …that are at most this far away. */
+const FIT_NEAREST_MAX_METERS = 3000;
 const NO_REQUESTS: HelpRequestListItem[] = [];
 const MASKED_AREA_RADIUS_METERS = 180;
 
@@ -282,6 +287,7 @@ export function LeafletMap({
   // Base map + click handler.
   useEffect(() => {
     let disposed = false;
+    let resizeObserver: ResizeObserver | undefined;
     (async () => {
       const L = await import('leaflet');
       if (disposed || !elementRef.current || mapRef.current) return;
@@ -304,9 +310,18 @@ export function LeafletMap({
       mapRef.current = map;
       setZoom(map.getZoom());
       setMapReady(true);
+
+      // The container can change size after the map is created (side list, wrapping, window
+      // resize). Leaflet does not notice that by itself and would keep drawing tiles and points
+      // for the old size – grey map, points off screen.
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => map.invalidateSize());
+        resizeObserver.observe(elementRef.current);
+      }
     })();
     return () => {
       disposed = true;
+      resizeObserver?.disconnect();
     };
   }, []);
 
@@ -568,22 +583,50 @@ export function LeafletMap({
         .addTo(layer);
       marker.getElement()?.setAttribute('aria-label', `Tu jesteś: ${userLocationLabel}`);
       meRef.current = layer;
-
-      const key = `${meLatitude},${meLongitude}`;
-      if (shownLocationRef.current !== key) {
-        shownLocationRef.current = key;
-        const targetZoom = Math.max(map.getZoom(), 16);
-        if (settings.reduceMotion) {
-          map.setView([meLatitude, meLongitude], targetZoom, { animate: false });
-        } else {
-          map.flyTo([meLatitude, meLongitude], targetZoom, { duration: 0.35 });
-        }
-      }
     })();
     return () => {
       disposed = true;
     };
   }, [mapReady, meLatitude, meLongitude, settings.reduceMotion, theme.primary, userLocationLabel]);
+
+  // When the location changes, frame it together with the nearest requests, so the points are
+  // visible right away (a fixed close zoom often showed only the "you are here" marker).
+  const fittedLocationRef = useRef('');
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || meLatitude === undefined || meLongitude === undefined) return;
+    const key = `${meLatitude},${meLongitude}`;
+    if (fittedLocationRef.current === key) return;
+
+    const nearest = requests
+      .map((request) => ({
+        coordinates: request.approximateLocation.coordinates,
+        meters: distanceMeters(request.approximateLocation.coordinates, [meLongitude, meLatitude]),
+      }))
+      // Ignores requests still listed for a previous, distant location.
+      .filter((item) => item.meters <= FIT_NEAREST_MAX_METERS)
+      .sort((a, b) => a.meters - b.meters)
+      .slice(0, FIT_NEAREST_COUNT);
+
+    if (nearest.length === 0) {
+      // Requests for the new place are still loading (or there are none): centre for now.
+      if (shownLocationRef.current !== key) {
+        shownLocationRef.current = key;
+        map.setView([meLatitude, meLongitude], 15, { animate: false });
+      }
+      return;
+    }
+
+    fittedLocationRef.current = key;
+    shownLocationRef.current = key;
+    map.fitBounds(
+      [
+        [meLatitude, meLongitude],
+        ...nearest.map(({ coordinates: [lng, lat] }) => [lat, lng] as [number, number]),
+      ],
+      { padding: [56, 56], maxZoom: 16, animate: !settings.reduceMotion },
+    );
+  }, [mapReady, meLatitude, meLongitude, requests, settings.reduceMotion]);
 
   // Masked ~300 m area of the selected request (never the exact address).
   useEffect(() => {

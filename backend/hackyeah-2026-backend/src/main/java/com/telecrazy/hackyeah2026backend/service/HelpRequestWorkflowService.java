@@ -46,6 +46,14 @@ public class HelpRequestWorkflowService {
     static final Duration HANDOFF_TOKEN_TTL = Duration.ofHours(24);
 
     private static final int HANDOFF_TOKEN_BYTES = 32;
+    /**
+     * A volunteer works on one request at a time: an offer waiting for acceptance or an accepted
+     * request counts as active, until it is completed, rejected or cancelled.
+     */
+    static final Set<HelpRequestStatus> VOLUNTEER_ACTIVE_STATUSES = EnumSet.of(
+            HelpRequestStatus.OFFERED,
+            HelpRequestStatus.ACCEPTED
+    );
     private static final Set<HelpRequestStatus> CANCELLABLE_STATUSES = EnumSet.of(
             HelpRequestStatus.OPEN,
             HelpRequestStatus.OFFERED,
@@ -82,7 +90,7 @@ public class HelpRequestWorkflowService {
                 .toList();
     }
 
-    /** Volunteer offers help: {@code OPEN -> OFFERED}. */
+    /** Volunteer offers help: {@code OPEN -> OFFERED}. At most one active request per volunteer. */
     @Transactional
     public HelpRequestView offer(long id, AppUser user) {
         HelpRequest request = loadForUpdate(id, user);
@@ -90,6 +98,11 @@ public class HelpRequestWorkflowService {
             throw new ForbiddenException("Only volunteers can offer help");
         }
         requireStatus(request, HelpRequestStatus.OPEN, "Help request is no longer open");
+        // Lock the volunteer, so two offers sent at the same time cannot both pass the check.
+        userRepository.findByIdForUpdate(user.getId());
+        if (helpRequestRepository.existsByVolunteerAndStatusIn(user, VOLUNTEER_ACTIVE_STATUSES)) {
+            throw new ConflictException("Volunteer already has an active help request");
+        }
 
         request.setVolunteer(user);
         request.setStatus(HelpRequestStatus.OFFERED);

@@ -91,7 +91,7 @@ type UserRole = 'REQUESTER' | 'VOLUNTEER' | 'CITY_ADMIN';
 
 type RiskFlag = 'SCAM_SUSPECTED' | 'MEDICAL_EMERGENCY' | 'PERSONAL_DATA' | 'INAPPROPRIATE_CONTENT';
 
-type ClassificationSource = 'LLM' | 'FALLBACK';
+type ClassificationSource = 'LLM' | 'FALLBACK' | 'PRESET';
 
 /** Kinds of disability (health data, §3.6). */
 type DisabilityType = 'VISION' | 'HEARING' | 'MOBILITY' | 'COGNITIVE' | 'CHRONIC' | 'OTHER';
@@ -366,6 +366,8 @@ Auth required. Mock mObywatel: sets `identityVerified = true`. No body. → `200
 
 #### `POST /api/requests/classify` — ✅ `LIVE`
 Public. Preview only, nothing is saved. Takes ~2–3 s with LLM, < 50 ms with fallback; client timeout ≥ 20 s.
+The medicine pickup flow must not call this endpoint; it should use `category: "MEDICINE"` on create
+and skip free-text title/description entirely.
 
 Request:
 ```json
@@ -436,11 +438,19 @@ Auth required. Requests the caller is involved in, newest first.
 #### `POST /api/help-requests` — ✅ `LIVE`
 Auth required. Runs AI classification server-side (category, priority, tags, risk flags). The category always comes from the AI (decided: no user override). `CITY_ADMIN` → 403.
 
+For `category: "MEDICINE"` the request uses a privacy-safe preset. The client must not send
+free-text `title` or `description`; the backend stores a system title/description and returns
+medicine pickup instructions. This prevents accidental storage of e-prescription codes, PESEL,
+QR codes, medicine names, dosing or health details.
+Medicine presets skip scam/risk-flag detection because there is no user free text to classify.
+If the client omits `category` and the server classifies the free text as `MEDICINE`, create returns
+`400` and asks the client to use the medicine preset instead of storing that text.
+
 Request:
 ```json
 {
-  "title": "Leki z apteki",
-  "description": "Skończyły mi się leki na serce.",
+  "title": "Zakupy spożywcze",
+  "description": "Potrzebuję pomocy z zakupami na jutro.",
   "lat": 50.0647,
   "lng": 19.9449,
   "street": "Floriańska",
@@ -448,18 +458,46 @@ Request:
   "apartmentNumber": "4"
 }
 ```
+
+Medicine preset request:
+```json
+{
+  "lat": 50.0647,
+  "lng": 19.9449,
+  "street": "Floriańska",
+  "buildingNumber": "15",
+  "apartmentNumber": "4",
+  "category": "MEDICINE"
+}
+```
+
 | Field | Rules |
 |---|---|
-| `title` | required, ≤ 120 |
-| `description` | required, ≤ 1000 |
+| `title` | required for non-`MEDICINE`, ≤ 120. Not accepted for `MEDICINE`. |
+| `description` | required for non-`MEDICINE`, ≤ 1000. Not accepted for `MEDICINE`. |
 | `lat`, `lng` | required, valid range |
 | `street` | required, ≤ 255 |
 | `buildingNumber` | required, ≤ 20 |
 | `apartmentNumber` | optional, ≤ 20 |
+| `category` | **[+]** optional. When present it overrides the AI category (the user picked it in the form). `MEDICINE` enables the safe preset. |
 
-Not accepted (the server decides): `category`, `priority`, `tags`, `status`. Special needs are not sent per request – they come from the profile and are shared only with consent (§3.6). City is always Kraków in the MVP (no `city` field).
+Medicine in free text (no `category`, or the AI classifies the text as `MEDICINE` – typed or dictated): the request is **not rejected**; title and description are replaced with the generic medicine text (`MedicineRedaction`), so no medicine names are stored.
+
+Not accepted (the server decides): `priority`, `tags`, `status`. Special needs are not sent per request – they come from the profile and are shared only with consent (§3.6). City is always Kraków in the MVP (no `city` field).
 
 → `201 FullHelpRequestResponse`, `Location: /api/help-requests/{id}`.
+
+`MEDICINE` response fields:
+
+| Field | Value |
+|---|---|
+| `title` | `Odbiór leków z apteki` |
+| `description` | Safe system text; no e-prescription data is stored. |
+| `requesterInstructions` | Explains not to enter e-prescription code, PESEL, QR, medicine names or health details in the app. |
+| `volunteerInstructions` | Explains pharmacy-only pickup and direct off-app transfer of any required e-prescription data. |
+
+Sending `title` or `description` with `category: "MEDICINE"` → `400`.
+Omitting `category` while the classifier detects `MEDICINE` → `400`.
 If the AI flags a scam, the response has `status: "UNDER_REVIEW"` – the UI must tell the user the request is waiting for review.
 
 ### 4.6 Help requests – state transitions — ✅ `LIVE`

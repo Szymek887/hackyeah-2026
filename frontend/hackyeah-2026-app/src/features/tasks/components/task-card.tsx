@@ -3,13 +3,13 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { HelpRequestView, RequestStatus } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Radius, Spacing } from '@/constants/theme';
 import { CategoryBadge } from '@/features/requests/components/request-badges';
-import { StatusLabels, timeAgo } from '@/features/requests/labels';
+import { timeAgo } from '@/features/requests/labels';
 import { isFull } from '@/features/requests/view-helpers';
+import { turnLabel, turnOf, type Turn } from '@/features/tasks/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
 type Step = 'waiting' | 'inProgress' | 'done';
@@ -41,6 +41,8 @@ export function TaskCard({ task }: TaskCardProps) {
   // viewerRole comes from the backend: my part in this request, not my account role.
   const isVolunteer = task.viewerRole === 'VOLUNTEER';
   const step = StepByStatus[task.status];
+  const turn = turnOf(task);
+  const people = peopleHint(task, isVolunteer);
 
   const openDetails = () =>
     router.push(
@@ -50,11 +52,26 @@ export function TaskCard({ task }: TaskCardProps) {
     );
 
   return (
-    <Pressable onPress={openDetails} accessibilityRole="button" accessibilityLabel={task.title}>
+    <Pressable
+      onPress={openDetails}
+      accessibilityRole="button"
+      accessibilityLabel={`${TurnTitles[turn]}: ${turnLabel(task)}. ${task.title}`}>
       {(state) => {
         const { hovered } = state as typeof state & { hovered?: boolean };
+        const stripe = {
+          you: theme.accent,
+          other: theme.border,
+          none: theme.success,
+        }[turn];
         return (
-          <Card style={hovered && { borderColor: theme.primary }}>
+          <Card
+            style={[
+              styles.card,
+              { borderLeftColor: stripe },
+              hovered && { borderColor: theme.primary, borderLeftColor: stripe },
+            ]}>
+            <TurnBanner turn={turn} label={turnLabel(task)} />
+
             <View style={styles.topRow}>
               <CategoryBadge category={task.category} />
               <ThemedText type="caption" themeColor="textSecondary">
@@ -66,16 +83,11 @@ export function TaskCard({ task }: TaskCardProps) {
 
             <StageProgress status={task.status} />
 
-            <View style={styles.statusRow}>
-              <Badge
-                label={StatusLabels[task.status]}
-                color={step === 'done' ? theme.success : theme.primary}
-                backgroundColor={step === 'done' ? theme.successSoft : theme.primarySoft}
-              />
-              <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                {statusHint(task, isVolunteer)}
+            {people && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {people}
               </ThemedText>
-            </View>
+            )}
 
             <TaskAction task={task} isVolunteer={isVolunteer} />
           </Card>
@@ -85,28 +97,46 @@ export function TaskCard({ task }: TaskCardProps) {
   );
 }
 
-function statusHint(task: HelpRequestView, isVolunteer: boolean) {
-  // Names are only in the FULL view (requester always, volunteer after acceptance).
-  const requester = isFull(task) ? task.requester.displayName : 'osoba potrzebująca';
-  const volunteer = (isFull(task) && task.volunteer?.displayName) || 'Wolontariusz';
-  switch (task.status) {
-    case 'OPEN':
-      return 'Czeka na wolontariusza';
-    case 'OFFERED':
-      return isVolunteer
-        ? 'Czekasz, aż osoba potrzebująca przyjmie Twoją pomoc'
-        : `${volunteer} chce pomóc – zaakceptuj`;
-    case 'ACCEPTED':
-      return isVolunteer ? `Pomagasz: ${requester}` : `Pomaga Ci: ${volunteer}`;
-    case 'COMPLETED':
-      return 'Potwierdzone kodem QR – czeka na ocenę';
-    case 'RATED':
-      return 'Zakończone i ocenione';
-    case 'CANCELLED':
-      return 'Zgłoszenie anulowane';
-    case 'UNDER_REVIEW':
-      return 'Sprawdzamy zgłoszenie, zanim zobaczą je inni';
+const TurnTitles: Record<Turn, string> = {
+  you: 'Twój ruch',
+  other: 'Oczekuje',
+  none: 'Zakończone',
+};
+
+/** Who has to act now: orange "Twój ruch" or grey "Oczekuje", readable without colour too. */
+function TurnBanner({ turn, label }: { turn: Turn; label: string }) {
+  const theme = useTheme();
+  const colors = {
+    you: { pill: theme.accent, pillText: theme.onAccent, text: theme.accent },
+    other: { pill: theme.backgroundSelected, pillText: theme.text, text: theme.textSecondary },
+    none: { pill: theme.successSoft, pillText: theme.success, text: theme.success },
+  }[turn];
+
+  return (
+    <View style={styles.banner}>
+      <View style={[styles.pill, { backgroundColor: colors.pill }]}>
+        <ThemedText type="caption" style={[styles.pillText, { color: colors.pillText }]}>
+          {TurnTitles[turn].toUpperCase()}
+        </ThemedText>
+      </View>
+      <ThemedText type="smallBold" style={[styles.flex, { color: colors.text }]}>
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+
+/** Names are only in the FULL view (requester always, volunteer after acceptance). */
+function peopleHint(task: HelpRequestView, isVolunteer: boolean): string | null {
+  if (!isFull(task)) return null;
+  const volunteer = task.volunteer?.displayName;
+  if (task.status === 'OFFERED' && !isVolunteer && volunteer) return `Zgłosił(a) się: ${volunteer}`;
+  if (task.status === 'ACCEPTED') {
+    return isVolunteer
+      ? `Pomagasz: ${task.requester.displayName}`
+      : `Pomaga Ci: ${volunteer ?? 'wolontariusz'}`;
   }
+  return null;
 }
 
 function TaskAction({ task, isVolunteer }: { task: HelpRequestView; isVolunteer: boolean }) {
@@ -168,10 +198,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  statusRow: {
+  card: {
+    borderLeftWidth: 6,
+  },
+  banner: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  pill: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Radius.small,
+  },
+  pillText: {
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   progress: {
     flexDirection: 'row',

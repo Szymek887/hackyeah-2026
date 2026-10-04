@@ -91,6 +91,18 @@ class HelpRequestWorkflowServiceTest {
     }
 
     @Test
+    void volunteerWithAnActiveRequestCannotOfferAgain() {
+        given(helpRequestRepository.existsByVolunteerAndStatusIn(
+                kuba, HelpRequestWorkflowService.VOLUNTEER_ACTIVE_STATUSES)).willReturn(true);
+
+        assertThatThrownBy(() -> service.offer(10L, kuba))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Volunteer already has an active help request");
+        assertThat(request.getStatus()).isEqualTo(HelpRequestStatus.OPEN);
+        assertThat(request.getVolunteer()).isNull();
+    }
+
+    @Test
     void requesterCannotOfferHelp() {
         assertThatThrownBy(() -> service.offer(10L, marek)).isInstanceOf(ForbiddenException.class);
         assertThat(request.getStatus()).isEqualTo(HelpRequestStatus.OPEN);

@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClient;
 class AiConfig {
 
     @Bean
-    RestClient ollamaRestClient(AiProperties properties) {
+    RestClient openRouterRestClient(AiProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(properties.timeout())
                 .build();

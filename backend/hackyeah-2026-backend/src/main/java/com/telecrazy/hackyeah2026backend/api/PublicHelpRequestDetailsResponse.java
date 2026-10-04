@@ -20,6 +20,8 @@ public record PublicHelpRequestDetailsResponse(
         int priority,
         HelpRequestStatus status,
         List<String> tags,
+        String requesterInstructions,
+        String volunteerInstructions,
         GeoJsonPoint approximateLocation,
         GeoJsonPolygon maskedArea,
         Instant createdAt,

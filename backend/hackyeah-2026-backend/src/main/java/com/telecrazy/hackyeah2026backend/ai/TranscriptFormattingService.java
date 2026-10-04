@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Entry point for formatting dictated requests: tries the LLM first and falls back to
- * {@link SimpleTranscriptFormatter} on any failure (Ollama down, timeout, invalid output).
+ * {@link SimpleTranscriptFormatter} on any failure (OpenRouter down or rate-limited, timeout, invalid output).
  */
 @Service
 public class TranscriptFormattingService {

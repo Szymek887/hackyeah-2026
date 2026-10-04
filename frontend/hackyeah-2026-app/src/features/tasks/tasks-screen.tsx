@@ -19,6 +19,8 @@ import {
   TASK_TABS,
   TaskTabLabels,
   groupTasks,
+  turnOf,
+  useActiveVolunteerTask,
   useMyTasks,
   type TaskTab,
 } from '@/features/tasks/hooks';
@@ -27,6 +29,45 @@ import { VoiceRequestFlow } from '@/features/voice/voice-request-flow';
 import { useRefresh } from '@/hooks/use-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { enterItem, exitItem, layoutTransition } from '@/lib/motion';
+
+/** List rows: section headers in "W trakcie", then the task cards. */
+type Row =
+  | { kind: 'header'; key: string; title: string; hint: string; count: number; you: boolean }
+  | { kind: 'task'; key: string; task: HelpRequestView };
+
+function taskRows(tasks: HelpRequestView[]): Row[] {
+  return tasks.map((task) => ({ kind: 'task', key: String(task.id), task }));
+}
+
+/** "Twój ruch" first (things the user has to do), then "Oczekujące" (waiting for the other side). */
+function activeRows(tasks: HelpRequestView[]): Row[] {
+  const mine = tasks.filter((task) => turnOf(task) === 'you');
+  const waiting = tasks.filter((task) => turnOf(task) !== 'you');
+  const rows: Row[] = [];
+  if (mine.length > 0) {
+    rows.push({
+      kind: 'header',
+      key: 'h-you',
+      title: 'Twój ruch',
+      hint: 'Te zadania czekają na Ciebie.',
+      count: mine.length,
+      you: true,
+    });
+    rows.push(...taskRows(mine));
+  }
+  if (waiting.length > 0) {
+    rows.push({
+      kind: 'header',
+      key: 'h-wait',
+      title: 'Oczekujące',
+      hint: 'Nic nie musisz robić – czekasz na drugą stronę.',
+      count: waiting.length,
+      you: false,
+    });
+    rows.push(...taskRows(waiting));
+  }
+  return rows;
+}
 
 const EMPTY_TEXT: Record<TaskTab, string> = {
   active: 'Nie masz teraz żadnych zadań w trakcie.',
@@ -48,6 +89,7 @@ export function TasksScreen() {
   );
 
   const groups = groupTasks(data);
+  const activeTask = useActiveVolunteerTask();
   const tasks: Record<TaskTab, HelpRequestView[]> = {
     active: groups.active,
     done: groups.done,
@@ -74,6 +116,20 @@ export function TasksScreen() {
         />
       )}
 
+      {role === 'VOLUNTEER' && (
+        <Card
+          highlighted
+          accessibilityRole="summary"
+          style={[styles.limit, { borderColor: activeTask ? theme.accent : theme.border }]}>
+          <ThemedText type="smallBold">Aktywne zadania: {activeTask ? 1 : 0} z 1</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {activeTask
+              ? `Pomagasz przy: „${activeTask.title}”. Następne zadanie weźmiesz po jego zakończeniu.`
+              : 'Możesz zgłosić się do jednego zadania naraz. Wybierz je na mapie lub z listy zgłoszeń.'}
+          </ThemedText>
+        </Card>
+      )}
+
       <SegmentedControl
         value={tab}
         onChange={setSelected}
@@ -90,8 +146,8 @@ export function TasksScreen() {
       <FlatList
         // Remount on tab change so the entrance animation plays for the new tab.
         key={tab}
-        data={tasks[tab]}
-        keyExtractor={(task) => String(task.id)}
+        data={tab === 'active' ? activeRows(tasks.active) : taskRows(tasks[tab])}
+        keyExtractor={(row) => row.key}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -127,11 +183,25 @@ export function TasksScreen() {
             </Card>
           )
         }
-        renderItem={({ item, index }) => (
-          <Animated.View entering={enterItem(index)} exiting={exitItem} layout={layoutTransition}>
-            <TaskCard task={item} />
-          </Animated.View>
-        )}
+        renderItem={({ item, index }) =>
+          item.kind === 'header' ? (
+            <View style={styles.sectionHeader} accessibilityRole="header">
+              <ThemedText
+                type="subtitle"
+                style={item.you ? { color: theme.accent } : undefined}
+                themeColor={item.you ? undefined : 'textSecondary'}>
+                {item.title} ({item.count})
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {item.hint}
+              </ThemedText>
+            </View>
+          ) : (
+            <Animated.View entering={enterItem(index)} exiting={exitItem} layout={layoutTransition}>
+              <TaskCard task={item.task} />
+            </Animated.View>
+          )
+        }
       />
     </Screen>
   );
@@ -140,6 +210,14 @@ export function TasksScreen() {
 const styles = StyleSheet.create({
   header: {
     gap: Spacing.one,
+  },
+  limit: {
+    gap: Spacing.half,
+    borderWidth: 1.5,
+  },
+  sectionHeader: {
+    gap: Spacing.half,
+    paddingTop: Spacing.two,
   },
   list: {
     gap: Spacing.three,

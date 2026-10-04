@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { ApiError, errorMessage } from '@/api/errors';
+import { reverseGeocode } from '@/api/geocoding';
 import type { AiClassification } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
@@ -13,12 +14,14 @@ import { Input } from '@/components/ui/input';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
 import { PriorityBadge } from '@/features/requests/components/request-badges';
+import { useUserLocation } from '@/features/map/use-user-location';
 import { useCreateRequest } from '@/features/requests/hooks';
 import { CategoryLabels } from '@/features/requests/labels';
 import { parseDraftAi, type VoiceDraftParams } from '@/features/voice/voice-draft';
 import { VoiceRequestFlow } from '@/features/voice/voice-request-flow';
 import { useTheme } from '@/hooks/use-theme';
 import { DEFAULT_CENTER } from '@/lib/geo';
+import type { RouteCoordinate } from '@/lib/route-matching';
 import { enterItem, layoutTransition } from '@/lib/motion';
 
 const TITLE_MAX = 120;
@@ -41,6 +44,36 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
   const [building, setBuilding] = useState('');
   const [apartment, setApartment] = useState('');
   const [errors, setErrors] = useState<Errors>({});
+  /** Where the request is: the GPS position when used, else the city centre (no geocoding of typed addresses yet). */
+  const [position, setPosition] = useState<RouteCoordinate | null>(null);
+  const [locationNote, setLocationNote] = useState<string | null>(null);
+  const [resolvingAddress, setResolvingAddress] = useState(false);
+  const { locate, isLoading: locating, error: locationError } = useUserLocation();
+
+  const applyMyLocation = async () => {
+    setLocationNote(null);
+    const coords = await locate();
+    if (!coords) return;
+    setPosition(coords);
+    setResolvingAddress(true);
+    try {
+      const address = await reverseGeocode(coords);
+      if (address.street) setStreet(address.street);
+      if (address.buildingNumber) setBuilding(address.buildingNumber);
+      setErrors((current) => ({ ...current, street: undefined, buildingNumber: undefined }));
+      setLocationNote(
+        address.street && address.buildingNumber
+          ? `Ustawiono Twoją lokalizację: ${address.street} ${address.buildingNumber}. Sprawdź numer i dopisz mieszkanie.`
+          : 'Ustawiono Twoją lokalizację. Nie znaleźliśmy dokładnego adresu – uzupełnij ulicę i numer.',
+      );
+    } catch {
+      setLocationNote(
+        'Ustawiono Twoją lokalizację, ale nie udało się odczytać adresu. Wpisz ulicę i numer.',
+      );
+    } finally {
+      setResolvingAddress(false);
+    }
+  };
 
   const [classification, setClassification] = useState<AiClassification | null>(() =>
     parseDraftAi(draft?.draftAi),
@@ -62,6 +95,8 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
     setStreet('');
     setBuilding('');
     setApartment('');
+    setPosition(null);
+    setLocationNote(null);
     setClassification(null);
     setErrors({});
   };
@@ -84,9 +119,10 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
       await createMutation.mutateAsync({
         title: title.trim(),
         description: description.trim(),
-        // TODO(geocoding): convert the address to coordinates; city center until then.
-        lat: DEFAULT_CENTER.lat,
-        lng: DEFAULT_CENTER.lng,
+        // GPS position when "Użyj mojej lokalizacji" was used; typed addresses are not geocoded
+        // yet (TODO), so they fall back to the city centre.
+        lat: position?.latitude ?? DEFAULT_CENTER.lat,
+        lng: position?.longitude ?? DEFAULT_CENTER.lng,
         street: street.trim(),
         buildingNumber: building.trim(),
         apartmentNumber: apartment.trim() || undefined,
@@ -220,6 +256,37 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
       <Section title="2. Adres">
         <ThemedText type="small" themeColor="textSecondary">
           Dokładny adres zobaczy wyłącznie wolontariusz, którego pomoc zaakceptujesz.
+        </ThemedText>
+        <Button
+          title={
+            locating
+              ? 'Ustalam Twoją pozycję…'
+              : resolvingAddress
+                ? 'Szukam adresu…'
+                : position
+                  ? 'Odśwież moją lokalizację'
+                  : 'Użyj mojej aktualnej lokalizacji'
+          }
+          variant={position ? 'secondary' : 'primary'}
+          size="large"
+          disabled={locating || resolvingAddress}
+          onPress={applyMyLocation}
+        />
+        {locationError && (
+          <ThemedText type="small" themeColor="danger" accessibilityRole="alert">
+            {locationError} Możesz też wpisać adres ręcznie.
+          </ThemedText>
+        )}
+        {locationNote && (
+          <ThemedText
+            type="small"
+            accessibilityLiveRegion="polite"
+            style={{ color: position ? theme.success : theme.text }}>
+            {locationNote}
+          </ThemedText>
+        )}
+        <ThemedText type="small" themeColor="textSecondary">
+          albo wpisz adres ręcznie:
         </ThemedText>
         <Input
           label="Ulica"

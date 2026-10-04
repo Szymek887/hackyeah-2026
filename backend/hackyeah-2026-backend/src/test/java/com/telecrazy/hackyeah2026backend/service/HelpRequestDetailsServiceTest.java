@@ -16,6 +16,7 @@ import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
+import com.telecrazy.hackyeah2026backend.exception.FieldValidationException;
 import com.telecrazy.hackyeah2026backend.exception.ForbiddenException;
 import com.telecrazy.hackyeah2026backend.exception.NotFoundException;
 import com.telecrazy.hackyeah2026backend.repository.HelpRequestRepository;
@@ -28,6 +29,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -105,6 +107,53 @@ class HelpRequestDetailsServiceTest {
     }
 
     @Test
+    void createMedicinePresetStoresOnlySafeSystemText() {
+        FullHelpRequestResponse response = service.create(medicinePresetBody(), marek);
+
+        assertThat(response.category()).isEqualTo(HelpCategory.MEDICINE);
+        assertThat(response.title()).isEqualTo(MedicineRequestPolicy.SAFE_TITLE);
+        assertThat(response.description()).isEqualTo(MedicineRequestPolicy.SAFE_DESCRIPTION);
+        assertThat(response.priority()).isEqualTo(RequestClassification.SPECIAL);
+        assertThat(response.aiPriority()).isEqualTo(RequestClassification.SPECIAL);
+        assertThat(response.tags()).containsExactly("leki", "apteka");
+        assertThat(response.classificationSource()).isEqualTo(ClassificationSource.PRESET);
+        assertThat(response.requesterInstructions()).isEqualTo(MedicineRequestPolicy.REQUESTER_INSTRUCTIONS);
+        assertThat(response.volunteerInstructions()).isEqualTo(MedicineRequestPolicy.VOLUNTEER_INSTRUCTIONS);
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void createMedicinePresetRejectsUserText() {
+        CreateHelpRequestRequest body = new CreateHelpRequestRequest(
+                null,
+                "Kod recepty 1234, PESEL 12345678901",
+                50.0647,
+                19.9449,
+                "Długa",
+                "12",
+                null,
+                HelpCategory.MEDICINE
+        );
+
+        assertThatThrownBy(() -> service.create(body, marek))
+                .isInstanceOf(FieldValidationException.class)
+                .extracting("errors")
+                .satisfies(errors -> assertThat(errors(errors)).containsKey("description"));
+        verifyNoInteractions(classifier);
+    }
+
+    @Test
+    void createUsesExplicitNonMedicineCategoryOverride() {
+        givenClassification(HelpCategory.MEDICINE, 1, Set.of());
+
+        FullHelpRequestResponse response = service.create(groceryCategoryBody(), marek);
+
+        assertThat(response.category()).isEqualTo(HelpCategory.GROCERIES);
+        assertThat(response.priority()).isEqualTo(1);
+        verify(classifier).classify(any());
+    }
+
+    @Test
     void createBumpsPriorityForRequesterWithConsentedSpecialNeeds() {
         givenClassification(HelpCategory.GROCERIES, 3, Set.of());
         anna.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"), List.of(DisabilityType.MOBILITY));
@@ -140,7 +189,7 @@ class HelpRequestDetailsServiceTest {
     void createKeepsMedicalEmergencyOpenAndFlagged() {
         givenClassification(HelpCategory.MEDICINE, 1, Set.of(RiskFlag.MEDICAL_EMERGENCY));
 
-        FullHelpRequestResponse response = service.create(body(), marek);
+        FullHelpRequestResponse response = service.create(groceryCategoryBody(), marek);
 
         assertThat(response.status()).isEqualTo(HelpRequestStatus.OPEN);
         assertThat(response.priority()).isEqualTo(1);
@@ -240,7 +289,34 @@ class HelpRequestDetailsServiceTest {
                 19.9449,
                 "Długa",
                 "12",
-                "  "
+                "  ",
+                null
+        );
+    }
+
+    private static CreateHelpRequestRequest medicinePresetBody() {
+        return new CreateHelpRequestRequest(
+                null,
+                null,
+                50.0647,
+                19.9449,
+                "Długa",
+                "12",
+                "  ",
+                HelpCategory.MEDICINE
+        );
+    }
+
+    private static CreateHelpRequestRequest groceryCategoryBody() {
+        return new CreateHelpRequestRequest(
+                "Zakupy",
+                "Potrzebuję pomocy z zakupami.",
+                50.0647,
+                19.9449,
+                "Długa",
+                "12",
+                "  ",
+                HelpCategory.GROCERIES
         );
     }
 
@@ -248,5 +324,10 @@ class HelpRequestDetailsServiceTest {
         AppUser user = new AppUser("User " + id, role, true, specialNeeds, 50);
         user.setId(id);
         return user;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> errors(Object value) {
+        return (Map<String, String>) value;
     }
 }
