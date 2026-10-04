@@ -27,6 +27,7 @@ import {
   toLatLng,
 } from '@/features/map/krakow-map-data';
 import { clusterRequests, zoomFromLongitudeDelta } from '@/features/map/map-clustering';
+import { useSharedLocation } from '@/features/map/location-store';
 import type { RouteCoordinate } from '@/lib/route-matching';
 import { PlaceSearchModal } from '@/features/commute/components/place-search-modal';
 import { KRAKOW_PRESET_PLACES } from '@/features/commute/krakow-places';
@@ -44,17 +45,19 @@ export function RoutePlannerScreen() {
     startLabel?: string;
   }>();
   const { savedRoute, setSavedRoute } = useSavedCommuteRoute();
+  const sharedLocation = useSharedLocation();
 
   const [start, setStart] = useState<RouteCoordinate>(() => {
     if (params.startLat && params.startLng) {
       return { latitude: Number(params.startLat), longitude: Number(params.startLng) };
     }
-    return savedRoute?.start ?? DEFAULT_START_COORDS;
+    return savedRoute?.start ?? sharedLocation.coordinate ?? DEFAULT_START_COORDS;
   });
   const [end, setEnd] = useState<RouteCoordinate>(savedRoute?.end ?? DEFAULT_END_COORDS);
   const [startLabel, setStartLabel] = useState<string>(() => {
     if (params.startLabel) return params.startLabel;
-    const initialCoords = savedRoute?.start ?? DEFAULT_START_COORDS;
+    if (!savedRoute?.start && sharedLocation.label) return sharedLocation.label;
+    const initialCoords = savedRoute?.start ?? sharedLocation.coordinate ?? DEFAULT_START_COORDS;
     const matched = KRAKOW_PRESET_PLACES.find(
       (p) => Math.abs(p.coordinate.latitude - initialCoords.latitude) < 0.002,
     );

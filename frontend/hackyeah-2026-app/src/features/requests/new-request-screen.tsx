@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { ApiError, errorMessage } from '@/api/errors';
-import { reverseGeocode } from '@/api/geocoding';
+import { geocodeKrakowAddress, reverseGeocode } from '@/api/geocoding';
 import type { AiClassification } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,6 @@ import { CategoryLabels } from '@/features/requests/labels';
 import { parseDraftAi, type VoiceDraftParams } from '@/features/voice/voice-draft';
 import { VoiceRequestFlow } from '@/features/voice/voice-request-flow';
 import { useTheme } from '@/hooks/use-theme';
-import { DEFAULT_CENTER } from '@/lib/geo';
 import type { RouteCoordinate } from '@/lib/route-matching';
 import { enterItem, layoutTransition } from '@/lib/motion';
 
@@ -48,6 +47,7 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
   const [position, setPosition] = useState<RouteCoordinate | null>(null);
   const [locationNote, setLocationNote] = useState<string | null>(null);
   const [resolvingAddress, setResolvingAddress] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { locate, isLoading: locating, error: locationError } = useUserLocation();
 
   const applyMyLocation = async () => {
@@ -88,6 +88,16 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
     setDescription(text);
     setClassification(null);
   };
+  const changeStreet = (text: string) => {
+    setStreet(text);
+    setPosition(null);
+    setLocationNote(null);
+  };
+  const changeBuilding = (text: string) => {
+    setBuilding(text);
+    setPosition(null);
+    setLocationNote(null);
+  };
 
   const resetForm = () => {
     setTitle('');
@@ -97,6 +107,7 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
     setApartment('');
     setPosition(null);
     setLocationNote(null);
+    setSubmitError(null);
     setClassification(null);
     setErrors({});
   };
@@ -114,15 +125,29 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    setSubmitError(null);
+    let requestPosition = position;
+    if (!requestPosition) {
+      try {
+        requestPosition = await geocodeKrakowAddress(
+          [street.trim(), building.trim(), 'Kraków'].filter(Boolean).join(' '),
+        );
+      } catch {
+        setErrors((current) => ({
+          ...current,
+          street: 'Nie udało się znaleźć tego adresu w Krakowie. Sprawdź ulicę i numer.',
+        }));
+        return;
+      }
+    }
+
     try {
       // Category, priority and tags are decided by the backend AI from title + description.
       await createMutation.mutateAsync({
         title: title.trim(),
         description: description.trim(),
-        // GPS position when "Użyj mojej lokalizacji" was used; typed addresses are not geocoded
-        // yet (TODO), so they fall back to the city centre.
-        lat: position?.latitude ?? DEFAULT_CENTER.lat,
-        lng: position?.longitude ?? DEFAULT_CENTER.lng,
+        lat: requestPosition.latitude,
+        lng: requestPosition.longitude,
         street: street.trim(),
         buildingNumber: building.trim(),
         apartmentNumber: apartment.trim() || undefined,
@@ -131,6 +156,8 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
       // 400 "Request validation failed" carries per-field messages.
       if (err instanceof ApiError && err.fieldErrors) {
         setErrors((current) => ({ ...current, ...err.fieldErrors }));
+      } else {
+        setSubmitError(errorMessage(err));
       }
       return;
     }
@@ -292,7 +319,7 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
           label="Ulica"
           placeholder="ul. Długa"
           value={street}
-          onChangeText={setStreet}
+          onChangeText={changeStreet}
           error={errors.street}
         />
         <View style={styles.row}>
@@ -300,7 +327,7 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
             <Input
               label="Numer domu"
               value={building}
-              onChangeText={setBuilding}
+              onChangeText={changeBuilding}
               error={errors.buildingNumber}
             />
           </View>
@@ -310,8 +337,10 @@ export function NewRequestScreen({ draft }: { draft?: VoiceDraftParams }) {
         </View>
       </Section>
 
-      {createMutation.error && (
-        <ThemedText themeColor="danger">{errorMessage(createMutation.error)}</ThemedText>
+      {(submitError || createMutation.error) && (
+        <ThemedText themeColor="danger">
+          {submitError ?? errorMessage(createMutation.error)}
+        </ThemedText>
       )}
 
       <Button

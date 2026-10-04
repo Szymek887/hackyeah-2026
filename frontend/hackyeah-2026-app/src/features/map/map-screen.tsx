@@ -241,7 +241,7 @@ export function MapScreen() {
   const appleLegalLabelInsets = {
     top: 0,
     right: 0,
-    bottom: Math.max(insets.bottom + Spacing.half, 12),
+    bottom: 1,
     left: Spacing.two,
   };
 
@@ -439,7 +439,8 @@ export function MapScreen() {
             setMapZoom(zoomFromLongitudeDelta(region.longitudeDelta));
           }}
           mapPadding={mapPadding}
-          legalLabelInsets={appleLegalLabelInsets}>
+          legalLabelInsets={appleLegalLabelInsets}
+          appleLogoInsets={appleLegalLabelInsets}>
           <Marker
             coordinate={mapCenter}
             anchor={{ x: 0.5, y: 0.5 }}
