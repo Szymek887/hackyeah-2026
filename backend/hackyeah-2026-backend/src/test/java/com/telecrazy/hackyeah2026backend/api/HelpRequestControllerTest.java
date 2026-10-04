@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -157,26 +158,40 @@ class HelpRequestControllerTest {
     }
 
     @Test
-    void assignedVolunteerLearnsAboutSpecialNeedsOnlyWhileConsentExists() throws Exception {
+    void assignedVolunteerSeesDisabilitiesOnlyWhileConsentExists() throws Exception {
         requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
-        requester.replaceDisabilities(List.of(DisabilityType.CHRONIC));
+        requester.replaceDisabilities(List.of(DisabilityType.MOBILITY, DisabilityType.CHRONIC));
+        requester.replaceSpecialNeedNotes(List.of("Nie słyszę pukania"));
         HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
         request.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
 
-        String body = mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+        mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visibility").value("FULL"))
                 .andExpect(jsonPath("$.requesterSpecialNeeds").value(true))
-                .andReturn().getResponse().getContentAsString();
-        // Only the fact is shared – never the kind of disability.
-        assertThat(body).doesNotContain("CHRONIC").doesNotContainIgnoringCase("disabilit");
+                .andExpect(jsonPath("$.requesterDisabilities").value(contains("MOBILITY", "CHRONIC")))
+                .andExpect(jsonPath("$.requesterSpecialNeedNotes").value(contains("Nie słyszę pukania")));
 
         requester.withdrawSpecialNeedsConsent();
 
         mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false))
+                .andExpect(jsonPath("$.requesterDisabilities").isEmpty())
+                .andExpect(jsonPath("$.requesterSpecialNeedNotes").isEmpty());
+    }
+
+    @Test
+    void consentWithoutDisabilitiesSharesNothing() throws Exception {
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
+        HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
+        request.setVolunteer(volunteer);
+        given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
+
+        mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false))
+                .andExpect(jsonPath("$.requesterDisabilities").isEmpty());
     }
 
     @Test
@@ -193,6 +208,8 @@ class HelpRequestControllerTest {
     @Test
     void specialNeedsNeverReachPublicViewsOrVolunteerBeforeAcceptance() throws Exception {
         requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
+        requester.replaceDisabilities(List.of(DisabilityType.CHRONIC));
+        requester.replaceSpecialNeedNotes(List.of("Nie słyszę pukania"));
         HelpRequest offered = storedRequest(HelpRequestStatus.OFFERED);
         offered.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(offered));
@@ -212,7 +229,10 @@ class HelpRequestControllerTest {
                 .andReturn().getResponse().getContentAsString();
 
         for (String body : List.of(volunteerBeforeAcceptance, stranger, nearby)) {
-            assertThat(body).doesNotContainIgnoringCase("specialNeeds");
+            assertThat(body).doesNotContainIgnoringCase("specialNeeds")
+                    .doesNotContainIgnoringCase("disabilit")
+                    .doesNotContain("CHRONIC")
+                    .doesNotContain("pukania");
         }
     }
 
@@ -338,7 +358,7 @@ class HelpRequestControllerTest {
     }
 
     private static AppUser user(long id, String name, UserRole role) {
-        AppUser user = new AppUser(name, role, true, false, 50);
+        AppUser user = new AppUser(name, role, true, 50);
         user.setId(id);
         return user;
     }

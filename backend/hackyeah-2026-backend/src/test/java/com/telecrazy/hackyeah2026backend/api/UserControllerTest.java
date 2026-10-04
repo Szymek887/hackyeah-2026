@@ -64,8 +64,8 @@ class UserControllerTest {
 
     @Test
     void returnsProfileOfUserFromHeader() throws Exception {
-        AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, true, 72);
-        anna.setId(1L);
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.CHRONIC));
         given(userRepository.findById(1L)).willReturn(Optional.of(anna));
 
         mockMvc.perform(get("/api/users/me").header("X-User-Id", "1"))
@@ -136,7 +136,8 @@ class UserControllerTest {
 
         mockMvc.perform(get("/api/users/me").header("X-User-Id", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.specialNeeds").value(true))
+                // Consent alone does not mark the user as disabled – disabilities do.
+                .andExpect(jsonPath("$.specialNeeds").value(false))
                 .andExpect(jsonPath("$.specialNeedsConsent").value(true))
                 .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").value("2026-10-01T10:00:00Z"));
     }
@@ -144,6 +145,7 @@ class UserControllerTest {
     @Test
     void withdrawingConsentDeletesConsentAndSpecialNeeds() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.VISION));
         given(userRepository.findById(1L)).willReturn(Optional.of(anna));
         given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
 
@@ -157,8 +159,9 @@ class UserControllerTest {
     }
 
     @Test
-    void grantingConsentAgainRestoresRecordAndSpecialNeeds() throws Exception {
+    void grantingConsentAgainCreatesRecordWithoutMarkingUserAsDisabled() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.VISION));
         anna.withdrawSpecialNeedsConsent();
         given(userRepository.findById(1L)).willReturn(Optional.of(anna));
         given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
@@ -167,8 +170,9 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.specialNeedsConsent").value(true))
                 .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").isNotEmpty())
-                .andExpect(jsonPath("$.specialNeeds").value(true));
-        assertThat(anna.sharesSpecialNeeds()).isTrue();
+                .andExpect(jsonPath("$.specialNeeds").value(false))
+                .andExpect(jsonPath("$.disabilities").isEmpty());
+        assertThat(anna.sharesSpecialNeeds()).isFalse();
     }
 
     @Test
@@ -182,8 +186,25 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"disabilities\": [\"VISION\", \"CHRONIC\", \"VISION\"]}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.disabilities").value(contains("VISION", "CHRONIC")));
+                .andExpect(jsonPath("$.disabilities").value(contains("VISION", "CHRONIC")))
+                .andExpect(jsonPath("$.specialNeeds").value(true));
         assertThat(anna.getDisabilities()).containsExactlyInAnyOrder(DisabilityType.VISION, DisabilityType.CHRONIC);
+    }
+
+    @Test
+    void clearingDisabilitiesRemovesMarkingButKeepsConsent() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.VISION));
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": []}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disabilities").isEmpty())
+                .andExpect(jsonPath("$.specialNeeds").value(false))
+                .andExpect(jsonPath("$.specialNeedsConsent").value(true));
     }
 
     @Test
@@ -240,13 +261,72 @@ class UserControllerTest {
     void demoListNeverExposesDisabilities() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
         anna.replaceDisabilities(List.of(DisabilityType.CHRONIC));
+        anna.replaceSpecialNeedNotes(List.of("Nie słyszę pukania"));
         given(userRepository.findAll()).willReturn(List.of(anna));
 
         String body = mockMvc.perform(get("/api/users/demo"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].disabilities").isEmpty())
+                .andExpect(jsonPath("$[0].specialNeedNotes").isEmpty())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(body).doesNotContain("CHRONIC");
+        assertThat(body).doesNotContain("CHRONIC").doesNotContain("pukania");
+    }
+
+    @Test
+    void specialNeedNotesAreStoredTrimmedInOrderWithoutMarkingUserAsDisabled() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        putNotes("{\"notes\": [\"  Nie słyszę pukania \", \"\", \"3. piętro bez windy\", \"Nie słyszę pukania\"]}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialNeedNotes").value(contains("Nie słyszę pukania", "3. piętro bez windy")))
+                .andExpect(jsonPath("$.specialNeeds").value(false));
+        assertThat(anna.getSpecialNeedNotes()).containsExactly("Nie słyszę pukania", "3. piętro bez windy");
+    }
+
+    @Test
+    void specialNeedNotesRequireConsent() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.withdrawSpecialNeedsConsent();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        putNotes("{\"notes\": [\"Nie słyszę pukania\"]}").andExpect(status().isConflict());
+        assertThat(anna.getSpecialNeedNotes()).isEmpty();
+    }
+
+    @Test
+    void onlyRequestersStoreSpecialNeedNotes() throws Exception {
+        given(userRepository.findById(1L)).willReturn(Optional.of(user(1L, "Kuba W.", UserRole.VOLUNTEER)));
+
+        putNotes("{\"notes\": [\"Nie słyszę pukania\"]}").andExpect(status().isForbidden());
+    }
+
+    @Test
+    void tooLongSpecialNeedNoteIsRejected() throws Exception {
+        given(userRepository.findById(1L)).willReturn(Optional.of(requesterWithSpecialNeeds()));
+
+        putNotes("{\"notes\": [\"" + "a".repeat(201) + "\"]}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors").exists());
+    }
+
+    @Test
+    void withdrawingConsentAlsoDeletesSpecialNeedNotes() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceSpecialNeedNotes(List.of("Nie słyszę pukania"));
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        putConsent(false)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialNeedNotes").isEmpty());
+        assertThat(anna.getSpecialNeedNotes()).isEmpty();
+    }
+
+    private ResultActions putNotes(String json) throws Exception {
+        return mockMvc.perform(put("/api/users/me/special-need-notes")
+                .header("X-User-Id", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json));
     }
 
     @Test
@@ -306,16 +386,16 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.detail").value("Unknown user 999"));
     }
 
-    /** As seeded: special needs stored together with the consent given at sign-up. */
+    /** Requester who gave the consent but has not declared any disabilities yet. */
     private static AppUser requesterWithSpecialNeeds() {
-        AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, false, 72);
+        AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, 72);
         anna.setId(1L);
         anna.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"));
         return anna;
     }
 
     private static AppUser user(long id, String name, UserRole role) {
-        AppUser user = new AppUser(name, role, true, false, 50);
+        AppUser user = new AppUser(name, role, true, 50);
         user.setId(id);
         return user;
     }

@@ -72,17 +72,26 @@ export type UserProfile = {
   displayName: string;
   role: UserRole;
   identityVerified: boolean;
-  /** Sensitive (health data). Stored only while `specialNeedsConsent` is true (contract §3.6). */
+  /**
+   * Marked as disabled (health data): true only with the consent AND at least one declared
+   * disability (contract §3.6). Raises request priority.
+   */
   specialNeeds: boolean;
-  /** A consent record exists: special needs may be stored and shown to the accepted volunteer. */
+  /** A consent record exists: disabilities may be stored and shown to the accepted volunteer. */
   specialNeedsConsent: boolean;
   /** When the consent was given (ISO-8601), null without consent. */
   specialNeedsConsentGrantedAt: string | null;
   /**
-   * Declared kinds of disability, sorted. Stored only with the consent and only returned to the user
-   * themselves – always [] in `GET /api/users/demo`.
+   * Declared kinds of disability, sorted. Stored only with the consent; besides the user themselves only
+   * the accepted volunteer sees them (`HelpRequestFull.requesterDisabilities`). Always [] in
+   * `GET /api/users/demo`.
    */
   disabilities: DisabilityType[];
+  /**
+   * Special needs in the user's own words, extending the disabilities (e.g. "Nie słyszę pukania"), in
+   * the user's order. Same rules as `disabilities`: only with the consent, [] in `/users/demo`.
+   */
+  specialNeedNotes: string[];
   trustScore: number;
   ratingCount: number;
   /** null until the user is rated. */
@@ -109,10 +118,19 @@ export type DisabilityType = 'VISION' | 'HEARING' | 'MOBILITY' | 'COGNITIVE' | '
 
 /**
  * `UpdateDisabilitiesRequest` – `PUT /api/users/me/disabilities`, requesters with consent only,
- * replaces the list ([] clears it).
+ * replaces the list. A non-empty list marks the user as disabled, [] removes the marking.
  */
 export type UpdateDisabilitiesDto = {
   disabilities: DisabilityType[];
+};
+
+/**
+ * `UpdateSpecialNeedNotesRequest` – `PUT /api/users/me/special-need-notes`, requesters with consent
+ * only, replaces the list ([] clears it). Max 10 notes, 200 chars each; trimmed, blanks and
+ * duplicates dropped. Notes do not mark the user as disabled.
+ */
+export type UpdateSpecialNeedNotesDto = {
+  notes: string[];
 };
 
 /** `UpdateLanguagesRequest` – `PUT /api/users/me/languages`, 1–10 codes, replaces the list. */
@@ -121,8 +139,9 @@ export type UpdateLanguagesDto = {
 };
 
 /**
- * `UpdateSpecialNeedsConsentRequest` – `PUT /api/users/me/special-needs-consent` (profile switch).
- * true creates the consent record and stores the special needs; false deletes both.
+ * `UpdateSpecialNeedsConsentRequest` – `PUT /api/users/me/special-needs-consent` (profile checkbox).
+ * true creates the consent record (disabilities are declared afterwards); false deletes the record,
+ * the disabilities and the special-needs marking.
  */
 export type UpdateSpecialNeedsConsentDto = {
   consent: boolean;
@@ -135,8 +154,11 @@ export type UpdateSpecialNeedsConsentDto = {
 export type CreateUserDto = {
   displayName: string;
   role: Exclude<UserRole, 'CITY_ADMIN'>;
-  /** Only meaningful for requesters (raises request priority, see PriorityPolicy). */
-  specialNeeds: boolean;
+  /**
+   * Requesters only: consent to store and share disabilities, given at sign-up. The disabilities
+   * themselves follow via `PUT /api/users/me/disabilities`.
+   */
+  specialNeedsConsent: boolean;
   /** Optional (🔵 PROPOSED), default `['pl']`. */
   languages?: LanguageCode[];
 };
@@ -177,10 +199,17 @@ export type HelpRequestFull = {
   apartmentNumber: string | null;
   requester: UserSummary;
   /**
-   * true only when the requester has special needs AND consented to share it with the accepted
-   * volunteer; false does not say which of the two is missing. Never present in PUBLIC views.
+   * true only when the requester consented AND declared at least one disability; false does not say
+   * which of the two is missing. Never present in PUBLIC views.
    */
   requesterSpecialNeeds: boolean;
+  /**
+   * The requester's disabilities, sorted; [] unless `requesterSpecialNeeds`. Like the exact address,
+   * the volunteer gets them only from ACCEPTED on.
+   */
+  requesterDisabilities: DisabilityType[];
+  /** The requester's special needs in their own words; [] without the consent. Same visibility. */
+  requesterSpecialNeedNotes: string[];
   volunteer: UserSummary | null;
   createdAt: string;
   updatedAt: string;

@@ -402,7 +402,7 @@ class HelpRequestWorkflowServiceTest {
     }
 
     private static AppUser user(long id, UserRole role, int trustScore) {
-        AppUser user = new AppUser("User " + id, role, true, false, trustScore);
+        AppUser user = new AppUser("User " + id, role, true, trustScore);
         user.setId(id);
         return user;
     }

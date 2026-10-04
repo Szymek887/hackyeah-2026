@@ -43,13 +43,15 @@ class SpecialNeedsConsentPersistenceTest {
 
     @BeforeEach
     void requesterWithConsentAndDisabilities() {
-        AppUser user = new AppUser("Consent Test", UserRole.REQUESTER, true, false, 50);
+        AppUser user = new AppUser("Consent Test", UserRole.REQUESTER, true, 50);
         user.grantSpecialNeedsConsent(GRANTED_AT);
         user.replaceDisabilities(List.of(DisabilityType.VISION, DisabilityType.MOBILITY));
+        user.replaceSpecialNeedNotes(List.of("Nie słyszę pukania", "3. piętro bez windy"));
         userId = userRepository.saveAndFlush(user).getId();
         consentId = user.getSpecialNeedsConsent().getId();
         assertThat(consentRows(consentId)).isEqualTo(1);
         assertThat(disabilityRows()).isEqualTo(2);
+        assertThat(specialNeedsColumn()).isTrue();
     }
 
     @Test
@@ -59,8 +61,8 @@ class SpecialNeedsConsentPersistenceTest {
 
         assertThat(consentRows(consentId)).isZero();
         assertThat(disabilityRows()).isZero();
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT special_needs FROM app_users WHERE id = ?", Boolean.class, userId)).isFalse();
+        assertThat(notes()).isEmpty();
+        assertThat(specialNeedsColumn()).isFalse();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT special_needs_consent_id FROM app_users WHERE id = ?", Long.class, userId)).isNull();
     }
@@ -74,10 +76,22 @@ class SpecialNeedsConsentPersistenceTest {
         specialNeedsService.updateDisabilities(userId, List.of());
         entityManager.flush();
         assertThat(disabilityRows()).isZero();
+        // No disabilities → not marked as disabled, but the consent stays.
+        assertThat(specialNeedsColumn()).isFalse();
+        assertThat(consentRows(consentId)).isEqualTo(1);
     }
 
     @Test
-    void grantingAgainCreatesANewConsentRow() {
+    void specialNeedNotesAreStoredInOrderAndReplaced() {
+        assertThat(notes()).containsExactly("Nie słyszę pukania", "3. piętro bez windy");
+
+        specialNeedsService.updateSpecialNeedNotes(userId, List.of("Proszę dzwonić na telefon"));
+        entityManager.flush();
+        assertThat(notes()).containsExactly("Proszę dzwonić na telefon");
+    }
+
+    @Test
+    void grantingAgainCreatesANewConsentRowWithoutMarkingUserAsDisabled() {
         specialNeedsService.updateConsent(userId, false);
         entityManager.flush();
 
@@ -86,7 +100,7 @@ class SpecialNeedsConsentPersistenceTest {
         entityManager.clear();
 
         AppUser reloaded = userRepository.findById(userId).orElseThrow();
-        assertThat(reloaded.isSpecialNeeds()).isTrue();
+        assertThat(reloaded.isSpecialNeeds()).isFalse();
         assertThat(reloaded.getSpecialNeedsConsent().getId()).isNotEqualTo(consentId);
         assertThat(reloaded.getDisabilities()).isEmpty();
         assertThat(consentRows(consentId)).isZero();
@@ -97,8 +111,17 @@ class SpecialNeedsConsentPersistenceTest {
                 "SELECT disability FROM app_user_disabilities WHERE user_id = ?", String.class, userId);
     }
 
+    private List<String> notes() {
+        return jdbcTemplate.queryForList(
+                "SELECT note FROM app_user_special_need_notes WHERE user_id = ? ORDER BY position", String.class, userId);
+    }
+
     private int disabilityRows() {
         return disabilities().size();
+    }
+
+    private Boolean specialNeedsColumn() {
+        return jdbcTemplate.queryForObject("SELECT special_needs FROM app_users WHERE id = ?", Boolean.class, userId);
     }
 
     private int consentRows(long id) {

@@ -74,7 +74,24 @@ X-User-Id: {{requesterId}}
     });
 %}
 
-### Withdraw the special-needs consent (profile switch off) – deletes the consent record, specialNeeds and disabilities
+### Store special needs in the user's own words (extend the disabilities; requester with consent)
+PUT {{host}}/api/users/me/special-need-notes
+Content-Type: application/json
+Accept: application/json
+X-User-Id: {{requesterId}}
+
+{
+  "notes": ["Nie słyszę pukania – proszę zadzwonić na telefon", "Mieszkam na 3. piętrze bez windy"]
+}
+
+> {%
+    client.test("Special needs are stored in order", function () {
+        client.assert(response.status === 200, "Expected status 200");
+        client.assert(response.body.specialNeedNotes.length === 2, "Expected two notes");
+    });
+%}
+
+### Withdraw the special-needs consent (profile checkbox off) – deletes the consent record, specialNeeds, disabilities and notes
 PUT {{host}}/api/users/me/special-needs-consent
 Content-Type: application/json
 Accept: application/json
@@ -91,6 +108,7 @@ X-User-Id: {{requesterId}}
         client.assert(response.body.specialNeedsConsentGrantedAt === null, "Expected no consent date");
         client.assert(response.body.specialNeeds === false, "Expected specialNeeds deleted");
         client.assert(response.body.disabilities.length === 0, "Expected disabilities deleted");
+        client.assert(response.body.specialNeedNotes.length === 0, "Expected notes deleted");
     });
 %}
 

@@ -53,7 +53,6 @@ type SeedUser = [
   displayName: string,
   role: UserProfile['role'],
   verified: boolean,
-  specialNeeds: boolean,
   trust: number,
   languages: string[],
   disabilities?: DisabilityType[],
@@ -63,35 +62,39 @@ const SEED_CONSENT_GRANTED_AT = '2026-10-01T10:00:00Z';
 
 // Same order as the seeder, so ids match the real database (1 = Anna K. … 13 = Miasto Kraków).
 const SEED_USERS: SeedUser[] = [
-  ['Anna K.', 'REQUESTER', true, true, 72, ['pl'], ['CHRONIC']],
-  ['Marek S.', 'REQUESTER', true, false, 66, ['pl', 'en']],
-  ['Ewa P.', 'REQUESTER', false, false, 45, ['pl']],
-  ['Zofia M.', 'REQUESTER', true, true, 81, ['pl', 'de'], ['VISION']],
-  ['Jan B.', 'REQUESTER', true, false, 58, ['pl']],
-  ['Halina R.', 'REQUESTER', true, true, 77, ['pl', 'ru'], ['HEARING', 'MOBILITY']],
-  ['Piotr N.', 'REQUESTER', false, false, 40, ['pl', 'uk']],
-  ['Maria T.', 'REQUESTER', true, false, 69, ['pl', 'en']],
-  ['Kuba W.', 'VOLUNTEER', true, false, 91, ['pl', 'en', 'uk']],
-  ['Ola D.', 'VOLUNTEER', true, false, 88, ['pl', 'en', 'de']],
-  ['Bartek L.', 'VOLUNTEER', true, false, 84, ['pl', 'en']],
-  ['Nadia P.', 'VOLUNTEER', false, false, 63, ['uk', 'ru', 'pl']],
-  ['Miasto Kraków', 'CITY_ADMIN', true, false, 100, ['pl', 'en']],
+  ['Anna K.', 'REQUESTER', true, 72, ['pl'], ['CHRONIC']],
+  ['Marek S.', 'REQUESTER', true, 66, ['pl', 'en']],
+  ['Ewa P.', 'REQUESTER', false, 45, ['pl']],
+  ['Zofia M.', 'REQUESTER', true, 81, ['pl', 'de'], ['VISION']],
+  ['Jan B.', 'REQUESTER', true, 58, ['pl']],
+  ['Halina R.', 'REQUESTER', true, 77, ['pl', 'ru'], ['HEARING', 'MOBILITY']],
+  ['Piotr N.', 'REQUESTER', false, 40, ['pl', 'uk']],
+  ['Maria T.', 'REQUESTER', true, 69, ['pl', 'en']],
+  ['Kuba W.', 'VOLUNTEER', true, 91, ['pl', 'en', 'uk']],
+  ['Ola D.', 'VOLUNTEER', true, 88, ['pl', 'en', 'de']],
+  ['Bartek L.', 'VOLUNTEER', true, 84, ['pl', 'en']],
+  ['Nadia P.', 'VOLUNTEER', false, 63, ['uk', 'ru', 'pl']],
+  ['Miasto Kraków', 'CITY_ADMIN', true, 100, ['pl', 'en']],
 ];
 
 export const users: UserProfile[] = SEED_USERS.map(
-  (
-    [displayName, role, identityVerified, specialNeeds, trustScore, languages, disabilities = []],
-    index,
-  ) => ({
+  ([displayName, role, identityVerified, trustScore, languages, disabilities = []], index) => ({
     id: index + 1,
     displayName,
     role,
     identityVerified,
-    specialNeeds,
-    // As in the backend seeder: special needs are stored together with the consent given at sign-up.
-    specialNeedsConsent: specialNeeds,
-    specialNeedsConsentGrantedAt: specialNeeds ? SEED_CONSENT_GRANTED_AT : null,
+    // As in the backend seeder: consent first, then disabilities, which mark the user as disabled.
+    specialNeeds: disabilities.length > 0,
+    specialNeedsConsent: disabilities.length > 0,
+    specialNeedsConsentGrantedAt: disabilities.length > 0 ? SEED_CONSENT_GRANTED_AT : null,
     disabilities,
+    specialNeedNotes:
+      displayName === 'Halina R.'
+        ? [
+            'Nie słyszę pukania ani dzwonka – proszę zadzwonić na telefon',
+            'Mieszkam na 3. piętrze bez windy',
+          ]
+        : [],
     trustScore,
     ratingCount: 0,
     ratingAverage: null,

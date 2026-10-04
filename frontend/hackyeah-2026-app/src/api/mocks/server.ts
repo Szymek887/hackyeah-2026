@@ -37,6 +37,7 @@ import type {
   RequestStatus,
   UserProfile,
   UpdateDisabilitiesDto,
+  UpdateSpecialNeedNotesDto,
   UpdateLanguagesDto,
   UpdateSpecialNeedsConsentDto,
   UserSummary,
@@ -94,6 +95,11 @@ const routes: [ApiRequest['method'], RegExp, Handler][] = [
     'PUT',
     /^\/api\/users\/me\/disabilities$/,
     ({ req }) => updateDisabilities(currentUser(req), req.body as UpdateDisabilitiesDto),
+  ],
+  [
+    'PUT',
+    /^\/api\/users\/me\/special-need-notes$/,
+    ({ req }) => updateSpecialNeedNotes(currentUser(req), req.body as UpdateSpecialNeedNotesDto),
   ],
   ['GET', /^\/api\/help-requests\/nearby$/, ({ req }) => nearby(req.query)],
   ['POST', /^\/api\/help-requests\/along-route$/, ({ req }) => alongRoute(req.body)],
@@ -181,7 +187,7 @@ const ROLE_ORDER: UserProfile['role'][] = ['REQUESTER', 'VOLUNTEER', 'CITY_ADMIN
 const demoAccounts = () =>
   [...users]
     .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.id - b.id)
-    .map((user) => ({ ...user, disabilities: [] }));
+    .map((user) => ({ ...user, disabilities: [], specialNeedNotes: [] }));
 
 // Proposed UserController.create: new accounts start unverified with a neutral trust score.
 const NEW_USER_TRUST = 50;
@@ -197,17 +203,18 @@ function createUser(body: CreateUserDto): UserProfile {
     errors.role = 'must be REQUESTER or VOLUNTEER';
   if (Object.keys(errors).length) throw new ApiError(400, 'Request validation failed', errors);
 
-  // Sign-up consent is not built yet: declaring special needs here stands in for giving it.
-  const specialNeeds = body.role === 'REQUESTER' && Boolean(body.specialNeeds);
+  // Consent only: the user is marked as disabled once disabilities are declared (updateDisabilities).
+  const consent = body.role === 'REQUESTER' && Boolean(body.specialNeedsConsent);
   const user: UserProfile = {
     id: Math.max(...users.map((u) => u.id)) + 1,
     displayName,
     role: body.role,
     identityVerified: false,
-    specialNeeds,
-    specialNeedsConsent: specialNeeds,
-    specialNeedsConsentGrantedAt: specialNeeds ? new Date().toISOString() : null,
+    specialNeeds: false,
+    specialNeedsConsent: consent,
+    specialNeedsConsentGrantedAt: consent ? new Date().toISOString() : null,
     disabilities: [],
+    specialNeedNotes: [],
     trustScore: NEW_USER_TRUST,
     ratingCount: 0,
     ratingAverage: null,
@@ -240,8 +247,8 @@ function updateLanguages(user: UserProfile, body: UpdateLanguagesDto) {
   return user;
 }
 
-// UserController.updateSpecialNeedsConsent: requesters only. Withdrawing deletes the consent record
-// and the special needs; granting creates the record and stores the special needs again.
+// UserController.updateSpecialNeedsConsent: requesters only. Granting only creates the consent record;
+// withdrawing deletes it together with the disabilities and the special-needs marking.
 function updateSpecialNeedsConsent(user: UserProfile, body: UpdateSpecialNeedsConsentDto) {
   if (user.role !== 'REQUESTER')
     throw forbidden('Only requesters can manage special-needs consent');
@@ -250,12 +257,12 @@ function updateSpecialNeedsConsent(user: UserProfile, body: UpdateSpecialNeedsCo
   if (body.consent) {
     user.specialNeedsConsentGrantedAt ??= new Date().toISOString();
     user.specialNeedsConsent = true;
-    user.specialNeeds = true;
   } else {
     user.specialNeedsConsent = false;
     user.specialNeedsConsentGrantedAt = null;
     user.specialNeeds = false;
     user.disabilities = [];
+    user.specialNeedNotes = [];
   }
   return user;
 }
@@ -282,6 +289,28 @@ function updateDisabilities(user: UserProfile, body: UpdateDisabilitiesDto) {
   if (!user.specialNeedsConsent)
     throw conflict('Give the special-needs consent before storing disabilities');
   user.disabilities = DISABILITY_TYPES.filter((d) => disabilities.includes(d));
+  user.specialNeeds = user.disabilities.length > 0;
+  return user;
+}
+
+// SpecialNeedNotes.normalize + SpecialNeedsService.updateSpecialNeedNotes: requesters with consent.
+const MAX_NOTES = 10;
+const MAX_NOTE_LENGTH = 200;
+
+function updateSpecialNeedNotes(user: UserProfile, body: UpdateSpecialNeedNotesDto) {
+  if (user.role !== 'REQUESTER') throw forbidden('Only requesters can store special needs');
+  const notes = body?.notes;
+  if (!Array.isArray(notes) || notes.length > MAX_NOTES)
+    throw new ApiError(400, 'Request validation failed', {
+      notes: `size must be between 0 and ${MAX_NOTES}`,
+    });
+  if (notes.some((n) => typeof n !== 'string' || n.length > MAX_NOTE_LENGTH))
+    throw new ApiError(400, 'Request validation failed', {
+      'notes[]': `size must be between 0 and ${MAX_NOTE_LENGTH}`,
+    });
+  if (!user.specialNeedsConsent)
+    throw conflict('Give the special-needs consent before storing special needs');
+  user.specialNeedNotes = [...new Set(notes.map((n) => n.trim()).filter(Boolean))];
   return user;
 }
 
@@ -289,6 +318,18 @@ function updateDisabilities(user: UserProfile, body: UpdateDisabilitiesDto) {
 function sharesSpecialNeeds(userId: number) {
   const user = users.find((u) => u.id === userId);
   return Boolean(user?.specialNeeds && user.specialNeedsConsent);
+}
+
+/** AppUser.sharedSpecialNeedNotes: shared whenever the consent exists. */
+function sharedSpecialNeedNotes(userId: number): string[] {
+  const user = users.find((u) => u.id === userId);
+  return user?.specialNeedsConsent ? [...user.specialNeedNotes] : [];
+}
+
+/** AppUser.sharedDisabilities: [] unless the requester shares special needs. */
+function sharedDisabilities(userId: number): DisabilityType[] {
+  if (!sharesSpecialNeeds(userId)) return [];
+  return [...(users.find((u) => u.id === userId)?.disabilities ?? [])];
 }
 
 // ---------- Views (HelpRequestViewMapper + policies) ----------
@@ -377,6 +418,8 @@ function toFull(r: MockHelpRequest, u: UserProfile): HelpRequestFull {
     requester: summaryOf(r.requesterId)!,
     // FULL goes only to the requester and the volunteer from ACCEPTED on (canSeeFull).
     requesterSpecialNeeds: sharesSpecialNeeds(r.requesterId),
+    requesterDisabilities: sharedDisabilities(r.requesterId),
+    requesterSpecialNeedNotes: sharedSpecialNeedNotes(r.requesterId),
     volunteer: summaryOf(r.volunteerId),
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,

@@ -111,8 +111,9 @@ export function ProfileEditForm({
         </View>
       </View>
 
-      {/* Requesters may describe a disability only while they consent to it being stored (contract §3.6). */}
-      {isVolunteer || user.specialNeedsConsent ? (
+      {/* Requesters manage the consent, disabilities and needs in the profile itself (saved at once
+          on the server, contract §3.6). Volunteers keep theirs on the device. */}
+      {isVolunteer ? (
         <NeedsPicker
           disabilities={draft.disabilities}
           onDisabilitiesChange={(value) => set('disabilities', value)}
@@ -123,8 +124,8 @@ export function ProfileEditForm({
         <View style={styles.field}>
           <ThemedText type="smallBold">Niepełnosprawność i szczególne potrzeby</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Aby podać informacje o niepełnosprawności, najpierw włącz zgodę na ich przechowywanie –
-            przełącznikiem w profilu.
+            Zgodę, rodzaj niepełnosprawności i szczególne potrzeby ustawisz w profilu, w sekcji
+            „Moje potrzeby” – zapisują się od razu.
           </ThemedText>
         </View>
       )}

@@ -14,6 +14,7 @@ import { useSession } from '@/features/auth/session-context';
 import { ActiveTaskNotice } from '@/features/tasks/components/active-task-notice';
 import { useActiveVolunteerTask } from '@/features/tasks/hooks';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
+import { RequesterNeeds } from '@/features/requests/components/requester-needs';
 import {
   useAcceptOffer,
   useCancelRequest,
@@ -119,7 +120,9 @@ export function RequestDetailsScreen({ id }: { id: number }) {
             <ThemedText type="smallBold">Adres</ThemedText>
             <ThemedText>{formatAddress(request)}</ThemedText>
           </Card>
-          <Person title="Prosi o pomoc" person={request.requester} />
+          <Person title="Prosi o pomoc" person={request.requester}>
+            <RequesterNeeds request={request} />
+          </Person>
           {request.volunteer && (
             <Person
               title={request.status === 'OFFERED' ? 'Chce pomóc' : 'Pomaga'}
@@ -142,7 +145,15 @@ export function RequestDetailsScreen({ id }: { id: number }) {
   );
 }
 
-function Person({ title, person }: { title: string; person: UserSummary }) {
+function Person({
+  title,
+  person,
+  children,
+}: {
+  title: string;
+  person: UserSummary;
+  children?: React.ReactNode;
+}) {
   return (
     <Card>
       <ThemedText type="smallBold">{title}</ThemedText>
@@ -154,6 +165,7 @@ function Person({ title, person }: { title: string; person: UserSummary }) {
         {person.identityVerified ? 'Tożsamość potwierdzona' : 'Tożsamość niepotwierdzona'}, zaufanie{' '}
         {person.trustScore}%
       </ThemedText>
+      {children}
     </Card>
   );
 }

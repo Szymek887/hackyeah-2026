@@ -159,7 +159,8 @@ type UserProfileResponse = {
   specialNeeds: boolean;        // sensitive (health data), see §3.6
   specialNeedsConsent: boolean; // a consent record exists (store + share with the accepted volunteer), see §3.6
   specialNeedsConsentGrantedAt: string | null; // when it was given, null without consent
-  disabilities: DisabilityType[]; // declared kinds, sorted; only for the user themselves – [] in /users/demo (§3.6)
+  disabilities: DisabilityType[]; // declared kinds, sorted; the user and the accepted volunteer only – [] in /users/demo (§3.6)
+  specialNeedNotes: string[];     // special needs in the user's own words, user's order; same rules as disabilities (§3.6)
   trustScore: number;
   ratingCount: number;
   ratingAverage: number | null;
@@ -192,7 +193,7 @@ No disability / special-needs information ever appears in list items (§3.6).
 
 ### 3.5 `HelpRequestView` (single request) — 🟡 `CHANGE`
 
-Discriminated union on **`visibility`**. `viewerRole` and `requesterSpecialNeeds` are ✅ live; `requesterTrust` is still **[+]**.
+Discriminated union on **`visibility`**. `viewerRole`, `requesterSpecialNeeds`, `requesterDisabilities` and `requesterSpecialNeedNotes` are ✅ live; `requesterTrust` is still **[+]**.
 
 ```ts
 type HelpRequestView = FullHelpRequestResponse | PublicHelpRequestDetailsResponse;
@@ -222,7 +223,9 @@ type FullHelpRequestResponse = {
   buildingNumber: string;
   apartmentNumber: string | null;
   requester: UserSummary;
-  requesterSpecialNeeds: boolean;      // true only with the requester's consent, see §3.6
+  requesterSpecialNeeds: boolean;      // true only with the requester's consent and ≥ 1 disability, see §3.6
+  requesterDisabilities: DisabilityType[]; // sorted; [] unless requesterSpecialNeeds, see §3.6
+  requesterSpecialNeedNotes: string[];     // [] without the requester's consent, see §3.6
   volunteer: UserSummary | null;
   createdAt: string;
   updatedAt: string;
@@ -266,17 +269,18 @@ Disability is **health data** (GDPR art. 9, special category). Rules:
 | Rule | How |
 |---|---|
 | One consent covers storing **and** sharing | A **consent record** (table `special_needs_consents`, with `grantedAt`) exists while the consent is in force. Profile: `specialNeedsConsent`, `specialNeedsConsentGrantedAt`. |
-| Given at sign-up | The user consents when creating the account (🔵 sign-up flow not built yet; the seeder gives the consent to the demo users with special needs). |
-| Stored only with consent | `specialNeeds` is stored only while the consent record exists. It raises request priority (§6.6 of the backend plan). |
-| Kinds of disability | `disabilities` (`DisabilityType[]`, table `app_user_disabilities`) – set with `PUT /api/users/me/disabilities`, **only while the consent exists** (409 otherwise), requesters only. Returned **only to the user themselves** (`/users/me`); never to the volunteer (who learns only the fact) and always `[]` in the public `/users/demo`. Free-text notes stay on the device. |
-| Withdrawal deletes data | Switch off (`PUT /api/users/me/special-needs-consent` `{ "consent": false }`) **deletes the consent record, the `disabilities` rows** and sets `specialNeeds = false` (no more priority bump). The app also clears the notes kept on the device. |
-| Can be given again | Switch on (`{ "consent": true }`) creates a **new** consent record (new `grantedAt`) and stores `specialNeeds = true`; the user can describe the disability again. |
-| Only the accepted volunteer learns it | `requesterSpecialNeeds` exists **only in `FULL`** (requester always, assigned volunteer from `ACCEPTED`). `true` only when `specialNeeds` **and** a consent record exist. |
+| Step 1 – consent | Checkbox (sign-up or profile): `PUT /api/users/me/special-needs-consent` `{ "consent": true }` creates the consent record. **Consent alone does not mark the user as disabled.** The seeder gives the consent to the demo users with disabilities. |
+| Step 2 – disabilities | `disabilities` (`DisabilityType[]`, table `app_user_disabilities`) – set with `PUT /api/users/me/disabilities`, **only while the consent exists** (409 otherwise), requesters only. Free-text notes stay on the device. |
+| Step 3 – special needs (optional) | `specialNeedNotes` (`string[]`, table `app_user_special_need_notes`, ordered) – the user's own words extending the disabilities, e.g. „Nie słyszę pukania – proszę zadzwonić na telefon”. Set with `PUT /api/users/me/special-need-notes`, same guards as disabilities (requesters only, 409 without consent). They do **not** mark the user as disabled. |
+| Marked as disabled = consent + ≥ 1 disability | `specialNeeds` is `true` exactly when the consent exists **and** at least one disability is declared; `[]` sets it back to `false`. It raises request priority (§6.6 of the backend plan). On startup, rows left over from the old rule (flag without disabilities / consent) are cleared. |
+| Withdrawal deletes data | Unchecking (`{ "consent": false }`) **deletes the consent record, the `disabilities` and `specialNeedNotes` rows** and sets `specialNeeds = false` (no more priority bump). The app asks for confirmation first and also clears the notes kept on the device. |
+| Can be given again | `{ "consent": true }` creates a **new** consent record (new `grantedAt`); the user then declares the disabilities again. |
+| Only the accepted volunteer learns it | `requesterSpecialNeeds`, `requesterDisabilities` and `requesterSpecialNeedNotes` exist **only in `FULL`** (requester always, assigned volunteer from `ACCEPTED` – same rule as the exact address). The first two are filled only when `specialNeeds` **and** a consent record exist; the notes whenever the consent exists. |
 | Never public | Not in list items, `PUBLIC` details (also for a volunteer in `OFFERED`), `UserSummary`, analytics. Covered by the "no leak" test. |
-| No inference from a refusal | `false` means "no special needs **or** no consent" – the volunteer cannot tell which. |
+| No inference from a refusal | `false` / `[]` means "no disabilities **or** no consent" – the volunteer cannot tell which. |
 | Live | Withdrawing hides it immediately, also on already accepted requests. |
 
-UI: every **requester** sees the switch on the profile (also after withdrawing, to give the consent again), with a plain-language status below it. Without the consent the profile shows no disability details and the edit form does not offer to enter them. The volunteer's task screen shows a neutral note (e.g. „Osoba zgłaszająca prosi o uwzględnienie szczególnych potrzeb”) when `requesterSpecialNeeds` is `true` – no diagnosis.
+UI: every **requester** sees the consent checkbox on the profile (also after withdrawing, to give it again); once checked, the kinds of disability and a list editor for special needs appear right below it and are saved immediately, with a plain-language status (consent without disabilities = not marked). Sign-up shows the same checkbox, and the disability picker only after it is checked. The accepted volunteer sees the kinds as badges and the needs as a list on the request details and the active task screen.
 
 > Known limitation of the mock login (accepted, presented in the pitch): `GET /api/users/demo` is public and returns `UserProfileResponse`, i.e. also `specialNeeds` / `specialNeedsConsent`. A real deployment needs real authentication and a separate public account DTO.
 
@@ -320,18 +324,18 @@ Public. Creates a new account for the mock login; the client then sends its id a
 
 Request (`CreateUserRequest`):
 ```json
-{ "displayName": "Tomek Z.", "role": "VOLUNTEER", "specialNeeds": false, "languages": ["pl", "en"] }
+{ "displayName": "Tomek Z.", "role": "VOLUNTEER", "specialNeedsConsent": false, "languages": ["pl", "en"] }
 ```
 - `displayName` – required, trimmed, 1–60 chars.
 - `role` – `REQUESTER` or `VOLUNTEER` (`CITY_ADMIN` → 400).
-- `specialNeeds` – optional, default `false`; stored only for `REQUESTER` (ignored for volunteers).
+- `specialNeedsConsent` – optional, default `false`; `REQUESTER` only (ignored for volunteers). Creates the consent record; disabilities follow via `PUT /api/users/me/disabilities`.
 - `languages` – optional, same rules as `PUT /api/users/me/languages`, default `["pl"]`.
 
 → `201 UserProfileResponse` (+ `Location: /api/users/{id}`), with `identityVerified = false`, `trustScore = 50`, no ratings, 0 city points. The new account appears in `GET /api/users/demo`.
 400 `Request validation failed` with `errors.displayName` / `errors.role`.
 
 #### `PUT /api/users/me/special-needs-consent` — ✅ `LIVE`
-Auth required, **requesters only** (others → 403). Grants or withdraws the consent to store the caller's disability and share the fact with the accepted volunteer (§3.6). Takes effect immediately. Idempotent.
+Auth required, **requesters only** (others → 403). Grants or withdraws the consent to store the caller's disabilities and share them with the accepted volunteer (§3.6). Takes effect immediately. Idempotent.
 
 Request (`UpdateSpecialNeedsConsentRequest`):
 ```json
@@ -339,9 +343,22 @@ Request (`UpdateSpecialNeedsConsentRequest`):
 ```
 | Field | Rules |
 |---|---|
-| `consent` | required boolean. `false` deletes the consent record and sets `specialNeeds = false`; `true` creates a new consent record and sets `specialNeeds = true`. |
+| `consent` | required boolean. `false` deletes the consent record and the disabilities and sets `specialNeeds = false`; `true` creates a new consent record (`specialNeeds` stays `false` until disabilities are declared). |
 
 → `200 UserProfileResponse` (with `specialNeeds`, `specialNeedsConsent`, `specialNeedsConsentGrantedAt`, `disabilities` updated). 400 `errors.consent` when missing, 403 for volunteers and city admins.
+
+#### `PUT /api/users/me/special-need-notes` — ✅ `LIVE`
+Auth required, **requesters only** (others → 403), **only with the special-needs consent** (otherwise 409). Replaces the special needs described in the user's own words (§3.6).
+
+```json
+{ "notes": ["Nie słyszę pukania – proszę zadzwonić na telefon", "Mieszkam na 3. piętrze bez windy"] }
+```
+
+| Field | Rules |
+|---|---|
+| `notes` | required, 0–10 strings, each ≤ 200 chars. Trimmed; blank ones and duplicates dropped; order kept. `[]` clears the list. Does not change `specialNeeds`. |
+
+→ `200 UserProfileResponse` with `specialNeedNotes`. Seeded: Halina R. has two notes.
 
 #### `PUT /api/users/me/disabilities` — ✅ `LIVE`
 Auth required, **requesters only** (others → 403), **only with the special-needs consent** (otherwise 409). Replaces the declared kinds of disability (profile edit, sign-up right after `POST /api/users`).
@@ -352,7 +369,7 @@ Request (`UpdateDisabilitiesRequest`):
 ```
 | Field | Rules |
 |---|---|
-| `disabilities` | required, 0–6 `DisabilityType` values; duplicates ignored; `[]` clears the list. Unknown value → 400. |
+| `disabilities` | required, 0–6 `DisabilityType` values; duplicates ignored. A non-empty list sets `specialNeeds = true`, `[]` clears the list and sets it to `false`. Unknown value → 400. |
 
 → `200 UserProfileResponse` with `disabilities` sorted (`VISION, HEARING, MOBILITY, COGNITIVE, CHRONIC, OTHER` order). Seeded demo users: Anna K. `CHRONIC`, Zofia M. `VISION`, Halina R. `HEARING, MOBILITY`.
 
@@ -661,6 +678,8 @@ Decide, then update this file (and remove the line):
 
 | Date | Change | By |
 |---|---|---|
+| 2026-10-04 | Special needs in the user's own words stored on the backend (§3.6): `specialNeedNotes` on the profile, `requesterSpecialNeedNotes` in `FULL`, new `PUT /api/users/me/special-need-notes` (requesters with consent only); deleted with the consent. Additive. | Dev 2 |
+| 2026-10-04 | **Breaking (§3.3, §3.6, §4.2):** two-step flow – consent no longer sets `specialNeeds`; only declared disabilities do (consent + ≥ 1 disability). New `requesterDisabilities` in `FULL` (accepted volunteer sees the kinds, like the exact address). `POST /api/users` body: `specialNeeds` → `specialNeedsConsent`. Frontend updated in the same PR. | Dev 2 |
 | 2026-10-04 | Kinds of disability stored on the backend (§3.6): `disabilities` on the profile (only for the user themselves, `[]` in `/users/demo`), new `PUT /api/users/me/disabilities` (requesters with consent only, 409 without consent); withdrawing the consent also deletes them. Additive. | Dev 2 |
 | 2026-10-04 | **Breaking (§3.3, §3.6, §4.2):** consent is now a record covering storing and sharing. Profile `shareSpecialNeeds` → `specialNeedsConsent` + `specialNeedsConsentGrantedAt`; consent body `{ "shareWithVolunteer" }` → `{ "consent" }`; requesters only (403 otherwise). Withdrawing deletes the consent record and `specialNeeds`; granting creates a new record and stores `specialNeeds`. Seeded users with special needs have a consent. Frontend updated in the same PR. | Dev 2 |
 | 2026-10-03 | Special needs shared only with consent (§3.6): `shareSpecialNeeds` on the profile, new `PUT /api/users/me/special-needs-consent`, `requesterSpecialNeeds` in `FULL` only (live, additive). Dropped proposals: `accessibilitySupport` (list, details, create) and the `category` override on create – the category stays AI-only. | Dev 2 |

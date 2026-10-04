@@ -265,7 +265,7 @@ class HelpRequestWorkflowControllerTest {
     }
 
     private static AppUser user(long id, String name, UserRole role) {
-        AppUser user = new AppUser(name, role, true, false, 50);
+        AppUser user = new AppUser(name, role, true, 50);
         user.setId(id);
         return user;
     }

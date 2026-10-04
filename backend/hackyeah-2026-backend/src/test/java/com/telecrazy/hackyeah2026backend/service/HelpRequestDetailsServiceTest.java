@@ -11,6 +11,7 @@ import com.telecrazy.hackyeah2026backend.api.FullHelpRequestResponse;
 import com.telecrazy.hackyeah2026backend.api.HelpRequestView;
 import com.telecrazy.hackyeah2026backend.api.PublicHelpRequestDetailsResponse;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
@@ -26,6 +27,7 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -307,8 +309,12 @@ class HelpRequestDetailsServiceTest {
     }
 
     private static AppUser user(long id, UserRole role, boolean specialNeeds) {
-        AppUser user = new AppUser("User " + id, role, true, specialNeeds, 50);
+        AppUser user = new AppUser("User " + id, role, true, 50);
         user.setId(id);
+        if (specialNeeds) {
+            user.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"));
+            user.replaceDisabilities(List.of(DisabilityType.MOBILITY));
+        }
         return user;
     }
 

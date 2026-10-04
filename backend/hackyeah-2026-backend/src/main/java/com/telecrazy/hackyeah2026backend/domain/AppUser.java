@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,8 +23,10 @@ import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -48,9 +51,9 @@ public class AppUser {
     private boolean identityVerified;
 
     /**
-     * Sensitive (health data). Stored only while {@link #specialNeedsConsent} exists: granting the consent
-     * sets it, withdrawing clears it. Used for the priority bump and, via the consent, shown to the
-     * accepted volunteer.
+     * Sensitive (health data): the user is marked as having a disability. Derived state, kept in sync by
+     * {@link #replaceDisabilities} and {@link #withdrawSpecialNeedsConsent}: {@code true} only while the
+     * consent exists <em>and</em> at least one disability is declared. Used for the priority bump.
      */
     @Column(nullable = false)
     private boolean specialNeeds;
@@ -64,7 +67,10 @@ public class AppUser {
     @Setter(AccessLevel.NONE)
     private SpecialNeedsConsent specialNeedsConsent;
 
-    /** Declared kinds of disability. Kept only while the consent exists; never shown to other users. */
+    /**
+     * Declared kinds of disability. Kept only while the consent exists; shown only to the user and to the
+     * volunteer whose help they accepted (see {@link #sharedDisabilities()}).
+     */
     @ElementCollection
     @CollectionTable(name = "app_user_disabilities", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
@@ -72,6 +78,19 @@ public class AppUser {
     @BatchSize(size = 50)
     @Setter(AccessLevel.NONE)
     private Set<DisabilityType> disabilities = new HashSet<>();
+
+    /**
+     * Special needs in the user's own words, extending the disabilities (e.g. "Nie słyszę pukania –
+     * proszę dzwonić na telefon"). Same rules: kept only while the consent exists, shown only to the user
+     * and to the volunteer whose help they accepted. See {@link SpecialNeedNotes}.
+     */
+    @ElementCollection
+    @CollectionTable(name = "app_user_special_need_notes", joinColumns = @JoinColumn(name = "user_id"))
+    @OrderColumn(name = "position")
+    @Column(name = "note", nullable = false, length = SpecialNeedNotes.MAX_LENGTH)
+    @BatchSize(size = 50)
+    @Setter(AccessLevel.NONE)
+    private List<String> specialNeedNotes = new ArrayList<>();
 
     @Column(nullable = false)
     private int trustScore;
@@ -98,11 +117,11 @@ public class AppUser {
     @Setter(AccessLevel.NONE)
     private Set<String> languages = new HashSet<>();
 
-    public AppUser(String displayName, UserRole role, boolean identityVerified, boolean specialNeeds, int trustScore) {
+    /** Special needs are not set here: they require the consent and declared disabilities. */
+    public AppUser(String displayName, UserRole role, boolean identityVerified, int trustScore) {
         this.displayName = displayName;
         this.role = role;
         this.identityVerified = identityVerified;
-        this.specialNeeds = specialNeeds;
         this.trustScore = trustScore;
     }
 
@@ -118,24 +137,43 @@ public class AppUser {
         languages.addAll(normalized);
     }
 
-    /** Creates the consent record (if missing) and stores that the user has special needs. Idempotent. */
+    /**
+     * Creates the consent record (if missing). Does not mark the user as disabled by itself – that happens
+     * only once disabilities are declared, see {@link #replaceDisabilities}. Idempotent.
+     */
     public void grantSpecialNeedsConsent(Instant now) {
         if (specialNeedsConsent == null) {
             specialNeedsConsent = new SpecialNeedsConsent(now);
         }
-        specialNeeds = true;
     }
 
-    /** Deletes the consent record and the special-needs information itself, incl. disabilities. Idempotent. */
+    /**
+     * Deletes the consent record and the special-needs information itself, incl. disabilities and notes.
+     * Idempotent.
+     */
     public void withdrawSpecialNeedsConsent() {
         specialNeedsConsent = null;
         specialNeeds = false;
         disabilities.clear();
+        specialNeedNotes.clear();
     }
 
     /**
-     * Replaces the declared disabilities. Allowed only while the consent exists – without it no
-     * disability information may be stored.
+     * Replaces the special-need notes; they are normalized by {@link SpecialNeedNotes}. Allowed only while the
+     * consent exists. Notes do not mark the user as disabled – only disabilities do.
+     */
+    public void replaceSpecialNeedNotes(Collection<String> notes) {
+        if (!hasSpecialNeedsConsent()) {
+            throw new IllegalStateException("Special needs can be stored only with special-needs consent");
+        }
+        List<String> normalized = SpecialNeedNotes.normalize(notes);
+        specialNeedNotes.clear();
+        specialNeedNotes.addAll(normalized);
+    }
+
+    /**
+     * Replaces the declared disabilities and marks the user as disabled exactly when the list is not empty.
+     * Allowed only while the consent exists – without it no disability information may be stored.
      */
     public void replaceDisabilities(Collection<DisabilityType> types) {
         if (!hasSpecialNeedsConsent()) {
@@ -143,6 +181,7 @@ public class AppUser {
         }
         disabilities.clear();
         disabilities.addAll(types);
+        specialNeeds = !disabilities.isEmpty();
     }
 
     public boolean hasSpecialNeedsConsent() {
@@ -155,6 +194,22 @@ public class AppUser {
      */
     public boolean sharesSpecialNeeds() {
         return specialNeeds && hasSpecialNeedsConsent();
+    }
+
+    /**
+     * Disabilities the accepted volunteer may see, sorted; empty unless {@link #sharesSpecialNeeds()}.
+     * Callers must check that the viewer is allowed to see full request details.
+     */
+    public List<DisabilityType> sharedDisabilities() {
+        return sharesSpecialNeeds() ? disabilities.stream().sorted().toList() : List.of();
+    }
+
+    /**
+     * Special-need notes the accepted volunteer may see: shared whenever the consent exists, since the consent
+     * covers publishing them. Callers must check that the viewer may see full request details.
+     */
+    public List<String> sharedSpecialNeedNotes() {
+        return hasSpecialNeedsConsent() ? List.copyOf(specialNeedNotes) : List.of();
     }
 
     public void addRating(int stars) {

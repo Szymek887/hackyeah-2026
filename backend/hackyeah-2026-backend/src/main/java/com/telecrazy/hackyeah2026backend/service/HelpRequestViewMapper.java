@@ -51,6 +51,8 @@ public class HelpRequestViewMapper {
                 UserSummary.from(request.getRequester()),
                 // FULL is shown only to the requester and to the volunteer from ACCEPTED on, see the policy
                 request.getRequester().sharesSpecialNeeds(),
+                request.getRequester().sharedDisabilities(),
+                request.getRequester().sharedSpecialNeedNotes(),
                 UserSummary.from(request.getVolunteer()),
                 MedicineRequestPolicy.requesterInstructions(request),
                 MedicineRequestPolicy.volunteerInstructions(request),

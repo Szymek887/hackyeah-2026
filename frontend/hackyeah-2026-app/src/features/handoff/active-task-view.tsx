@@ -20,6 +20,7 @@ import { Spacing } from '@/constants/theme';
 import { useCompleteRequest, useHandoffToken } from '@/features/handoff/hooks';
 import { QrCodeCard } from '@/features/handoff/qr-code-card';
 import { CategoryBadge, PriorityBadge } from '@/features/requests/components/request-badges';
+import { RequesterNeeds } from '@/features/requests/components/requester-needs';
 import { requestKeys, useRequest } from '@/features/requests/hooks';
 import { formatAddress, isFull, mapsQuery } from '@/features/requests/view-helpers';
 import { useTheme } from '@/hooks/use-theme';
@@ -184,6 +185,7 @@ export function ActiveTaskView({ requestId }: ActiveTaskViewProps) {
             </ThemedText>
           </View>
         </View>
+        {full && <RequesterNeeds request={full} />}
       </ThemedView>
 
       {/* Address & Privacy Card */}

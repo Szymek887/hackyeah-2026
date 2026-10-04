@@ -5,10 +5,12 @@ import { ApiError, errorMessage } from '@/api/errors';
 import type { CreateUserDto } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
+import { CheckboxRow } from '@/components/ui/checkbox-row';
 import { Input } from '@/components/ui/input';
 import { Spacing } from '@/constants/theme';
 import type { DisabilityType } from '@/features/accessibility/accessibility-settings';
 import { NeedsPicker } from '@/features/accessibility/components/needs-picker';
+import { SpecialNeedNotesEditor } from '@/features/accessibility/components/special-need-notes-editor';
 import { useAuth } from '@/features/auth/session-context';
 
 const DISPLAY_NAME_MAX = 60;
@@ -17,11 +19,16 @@ const DISPLAY_NAME_MAX = 60;
 export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
   const { signUp } = useAuth();
   const [displayName, setDisplayName] = useState('');
+  const [consent, setConsent] = useState(false);
   const [disabilities, setDisabilities] = useState<DisabilityType[]>([]);
   const [needsNotes, setNeedsNotes] = useState('');
+  const [specialNeedNotes, setSpecialNeedNotes] = useState<string[]>([]);
   const [nameError, setNameError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const isRequester = role === 'REQUESTER';
+  // Requesters may describe a disability only after consenting to it being stored (contract §3.6).
+  const showNeeds = !isRequester || consent;
 
   const handleSubmit = async () => {
     const name = displayName.trim();
@@ -33,11 +40,12 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
     setError(null);
     setPending(true);
     try {
-      const notes = needsNotes.trim();
-      const specialNeeds = disabilities.length > 0 || notes.length > 0;
       await signUp(
-        { displayName: name, role, specialNeeds: role === 'REQUESTER' && specialNeeds },
-        { disabilities, accessibilityNotes: notes },
+        { displayName: name, role, specialNeedsConsent: isRequester && consent },
+        showNeeds
+          ? { disabilities, accessibilityNotes: isRequester ? '' : needsNotes.trim() }
+          : { disabilities: [], accessibilityNotes: '' },
+        isRequester && consent ? specialNeedNotes : [],
       );
       // Route guard in app/_layout.tsx switches to the app automatically.
     } catch (err) {
@@ -68,12 +76,32 @@ export function SignUpForm({ role }: { role: CreateUserDto['role'] }) {
         error={nameError}
       />
 
-      <NeedsPicker
-        disabilities={disabilities}
-        onDisabilitiesChange={setDisabilities}
-        notes={needsNotes}
-        onNotesChange={setNeedsNotes}
-      />
+      {isRequester && (
+        <CheckboxRow
+          label="Zgadzam się na przechowywanie i udostępnianie informacji o mojej niepełnosprawności (opcjonalnie)"
+          description="Zobaczy je tylko wolontariusz, którego pomoc zaakceptujesz. Zgodę możesz wycofać w profilu – wtedy usuniemy te informacje."
+          checked={consent}
+          onChange={setConsent}
+        />
+      )}
+
+      {showNeeds && (
+        <NeedsPicker
+          disabilities={disabilities}
+          onDisabilitiesChange={setDisabilities}
+          // Volunteers keep a note on the device; requesters list needs stored on the server below.
+          notes={isRequester ? undefined : needsNotes}
+          onNotesChange={isRequester ? undefined : setNeedsNotes}
+        />
+      )}
+
+      {isRequester && consent && (
+        <SpecialNeedNotesEditor
+          notes={specialNeedNotes}
+          onChange={setSpecialNeedNotes}
+          disabilities={disabilities}
+        />
+      )}
 
       {error && (
         <ThemedText type="small" themeColor="danger" accessibilityRole="alert">
