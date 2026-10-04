@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { updateMyLanguages } from '@/api/auth';
+import { updateMyDisabilities, updateMyLanguages } from '@/api/auth';
 import { errorMessage } from '@/api/errors';
 import type { LanguageCode } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -18,7 +18,7 @@ import { ProfileStats } from '@/features/profile/components/profile-stats';
 import type { ProfileDetails } from '@/features/profile/profile-details';
 import { enterScreen, layoutTransition } from '@/lib/motion';
 
-const sameLanguages = (a: LanguageCode[], b: LanguageCode[]) =>
+const sameItems = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 export function ProfileScreen() {
@@ -27,12 +27,22 @@ export function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Requesters' disabilities live on the backend (with consent, contract §3.6); others keep them locally.
+  const storesDisabilitiesOnServer = user.role === 'REQUESTER' && user.specialNeedsConsent;
+  const shownDetails: ProfileDetails = storesDisabilitiesOnServer
+    ? { ...profileDetails, disabilities: user.disabilities }
+    : profileDetails;
+
   const handleSave = async (details: ProfileDetails, languages: LanguageCode[]) => {
     setSaveError(null);
-    if (!sameLanguages(languages, user.languages)) {
+    const languagesChanged = !sameItems(languages, user.languages);
+    const disabilitiesChanged =
+      storesDisabilitiesOnServer && !sameItems(details.disabilities, user.disabilities);
+    if (languagesChanged || disabilitiesChanged) {
       setSaving(true);
       try {
-        await updateMyLanguages({ languages });
+        if (languagesChanged) await updateMyLanguages({ languages });
+        if (disabilitiesChanged) await updateMyDisabilities({ disabilities: details.disabilities });
         await refreshUser();
       } catch (err) {
         setSaveError(errorMessage(err));
@@ -73,7 +83,7 @@ export function ProfileScreen() {
         {editing ? (
           <ProfileEditForm
             user={user}
-            profile={profileDetails}
+            profile={shownDetails}
             saving={saving}
             error={saveError}
             onCancel={() => {
@@ -83,7 +93,7 @@ export function ProfileScreen() {
             onSave={handleSave}
           />
         ) : (
-          <ProfileAbout user={user} profile={profileDetails} />
+          <ProfileAbout user={user} profile={shownDetails} />
         )}
       </Animated.View>
 

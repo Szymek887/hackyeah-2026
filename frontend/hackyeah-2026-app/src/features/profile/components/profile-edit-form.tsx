@@ -111,12 +111,23 @@ export function ProfileEditForm({
         </View>
       </View>
 
-      <NeedsPicker
-        disabilities={draft.disabilities}
-        onDisabilitiesChange={(value) => set('disabilities', value)}
-        notes={draft.accessibilityNotes}
-        onNotesChange={(text) => set('accessibilityNotes', text)}
-      />
+      {/* Requesters may describe a disability only while they consent to it being stored (contract §3.6). */}
+      {isVolunteer || user.specialNeedsConsent ? (
+        <NeedsPicker
+          disabilities={draft.disabilities}
+          onDisabilitiesChange={(value) => set('disabilities', value)}
+          notes={draft.accessibilityNotes}
+          onNotesChange={(text) => set('accessibilityNotes', text)}
+        />
+      ) : (
+        <View style={styles.field}>
+          <ThemedText type="smallBold">Niepełnosprawność i szczególne potrzeby</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Aby podać informacje o niepełnosprawności, najpierw włącz zgodę na ich przechowywanie –
+            przełącznikiem w profilu.
+          </ThemedText>
+        </View>
+      )}
 
       <Input
         label="Dzielnica"

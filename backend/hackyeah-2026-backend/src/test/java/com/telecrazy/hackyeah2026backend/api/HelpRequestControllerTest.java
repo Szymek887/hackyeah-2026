@@ -6,6 +6,7 @@ import com.telecrazy.hackyeah2026backend.ai.RequestClassificationService;
 import com.telecrazy.hackyeah2026backend.ai.RiskFlag;
 import com.telecrazy.hackyeah2026backend.config.WebConfig;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
@@ -156,27 +157,31 @@ class HelpRequestControllerTest {
     }
 
     @Test
-    void assignedVolunteerLearnsAboutSpecialNeedsOnlyWithConsent() throws Exception {
-        requester.setSpecialNeeds(true);
+    void assignedVolunteerLearnsAboutSpecialNeedsOnlyWhileConsentExists() throws Exception {
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
+        requester.replaceDisabilities(List.of(DisabilityType.CHRONIC));
         HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
         request.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
 
-        mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
+        String body = mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visibility").value("FULL"))
-                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(true))
+                .andReturn().getResponse().getContentAsString();
+        // Only the fact is shared – never the kind of disability.
+        assertThat(body).doesNotContain("CHRONIC").doesNotContainIgnoringCase("disabilit");
 
-        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+        requester.withdrawSpecialNeedsConsent();
 
         mockMvc.perform(get("/api/help-requests/10").header("X-User-Id", "4"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requesterSpecialNeeds").value(true));
+                .andExpect(jsonPath("$.requesterSpecialNeeds").value(false));
     }
 
     @Test
-    void consentWithoutSpecialNeedsRevealsNothing() throws Exception {
-        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+    void specialNeedsWithoutConsentRecordRevealNothing() throws Exception {
+        requester.setSpecialNeeds(true); // e.g. data from before consent records existed
         HelpRequest request = storedRequest(HelpRequestStatus.ACCEPTED);
         request.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(request));
@@ -187,8 +192,7 @@ class HelpRequestControllerTest {
 
     @Test
     void specialNeedsNeverReachPublicViewsOrVolunteerBeforeAcceptance() throws Exception {
-        requester.setSpecialNeeds(true);
-        requester.updateSpecialNeedsConsent(true, Instant.parse("2026-10-03T12:00:00Z"));
+        requester.grantSpecialNeedsConsent(Instant.parse("2026-10-03T12:00:00Z"));
         HelpRequest offered = storedRequest(HelpRequestStatus.OFFERED);
         offered.setVolunteer(volunteer);
         given(helpRequestRepository.findById(10L)).willReturn(Optional.of(offered));

@@ -1,6 +1,7 @@
 import { apiRequest } from '@/api/client';
 import type {
   CreateUserDto,
+  UpdateDisabilitiesDto,
   UpdateLanguagesDto,
   UpdateSpecialNeedsConsentDto,
   UserProfile,
@@ -27,8 +28,16 @@ export const updateMyLanguages = (dto: UpdateLanguagesDto) =>
   apiRequest<UserProfile>('/api/users/me/languages', { method: 'PUT', body: dto });
 
 /**
- * `PUT /api/users/me/special-needs-consent` – gives or withdraws consent to tell the accepted
- * volunteer about the caller's special needs. Takes effect immediately. → 200 UserProfile.
+ * `PUT /api/users/me/special-needs-consent` – requesters only. `consent: false` deletes the consent
+ * record and the special-needs information; `true` creates the record and stores it again.
+ * Takes effect immediately. → 200 UserProfile.
  */
 export const updateSpecialNeedsConsent = (dto: UpdateSpecialNeedsConsentDto) =>
   apiRequest<UserProfile>('/api/users/me/special-needs-consent', { method: 'PUT', body: dto });
+
+/**
+ * `PUT /api/users/me/disabilities` – requesters with the special-needs consent only (409 without it).
+ * Replaces the declared kinds of disability. `userId` is needed right after sign-up. → 200 UserProfile.
+ */
+export const updateMyDisabilities = (dto: UpdateDisabilitiesDto, userId?: number) =>
+  apiRequest<UserProfile>('/api/users/me/disabilities', { method: 'PUT', body: dto, userId });

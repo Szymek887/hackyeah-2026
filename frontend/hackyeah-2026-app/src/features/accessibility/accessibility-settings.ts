@@ -1,3 +1,5 @@
+import type { DisabilityType } from '@/api/types';
+
 /**
  * Display preferences that make the app easier to read and use. They follow only from the age
  * group – there are no manual contrast / color switches. Client-only and per device: the age group
@@ -96,7 +98,8 @@ export function settingsForAgeGroup(ageGroup: AgeGroup): AccessibilitySettings {
 
 // ---------- Disabilities ----------
 
-export type DisabilityType = 'VISION' | 'HEARING' | 'MOBILITY' | 'COGNITIVE' | 'CHRONIC' | 'OTHER';
+// The kinds are stored on the backend (with consent), so the type comes from the wire types.
+export type { DisabilityType };
 
 export const Disabilities: { value: DisabilityType; label: string; hint: string }[] = [
   { value: 'VISION', label: 'Wzrok', hint: 'np. słabo widzę, czytam z lupą' },

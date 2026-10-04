@@ -16,7 +16,9 @@ import { useTheme } from '@/hooks/use-theme';
 export function ProfileAbout({ user, profile }: { user: UserProfile; profile: ProfileDetails }) {
   const theme = useTheme();
   const isVolunteer = user.role === 'VOLUNTEER';
-  const canShareSpecialNeeds = user.role === 'REQUESTER' && user.specialNeeds;
+  const isRequester = user.role === 'REQUESTER';
+  // Without the consent nothing about a requester's disability is kept (contract §3.6).
+  const showDisabilityDetails = !isRequester || user.specialNeedsConsent;
 
   return (
     <>
@@ -55,33 +57,42 @@ export function ProfileAbout({ user, profile }: { user: UserProfile; profile: Pr
 
         <View style={styles.field}>
           <ThemedText type="smallBold">Niepełnosprawność i szczególne potrzeby</ThemedText>
-          {profile.disabilities.length > 0 && (
-            <View style={styles.badges}>
-              {profile.disabilities.map((d) => (
-                <Badge
-                  key={d}
-                  label={DisabilityLabels[d]}
-                  color={theme.accent}
-                  backgroundColor={theme.accentSoft}
-                />
-              ))}
-            </View>
+          {showDisabilityDetails ? (
+            <>
+              {profile.disabilities.length > 0 && (
+                <View style={styles.badges}>
+                  {profile.disabilities.map((d) => (
+                    <Badge
+                      key={d}
+                      label={DisabilityLabels[d]}
+                      color={theme.accent}
+                      backgroundColor={theme.accentSoft}
+                    />
+                  ))}
+                </View>
+              )}
+              <Value
+                text={profile.accessibilityNotes}
+                empty={
+                  user.specialNeeds || profile.disabilities.length > 0
+                    ? 'Opisz, na co wolontariusz powinien zwrócić uwagę.'
+                    : 'Brak szczególnych potrzeb.'
+                }
+              />
+              <ThemedText type="caption" themeColor="textSecondary">
+                Te szczegóły widzisz tylko Ty.
+              </ThemedText>
+            </>
+          ) : (
+            <Value
+              text=""
+              empty="Brak zgody – nie przechowujemy informacji o niepełnosprawności."
+            />
           )}
-          <Value
-            text={profile.accessibilityNotes}
-            empty={
-              user.specialNeeds || profile.disabilities.length > 0
-                ? 'Opisz, na co wolontariusz powinien zwrócić uwagę.'
-                : 'Brak szczególnych potrzeb.'
-            }
-          />
-          <ThemedText type="caption" themeColor="textSecondary">
-            Te szczegóły widzisz tylko Ty.
-          </ThemedText>
         </View>
 
-        {/* Consent only matters for requesters the backend knows have special needs (contract §3.6). */}
-        {canShareSpecialNeeds && (
+        {/* Every requester sees the switch, so a withdrawn consent can be given again. */}
+        {isRequester && (
           <View style={styles.consent}>
             <SpecialNeedsConsent />
           </View>

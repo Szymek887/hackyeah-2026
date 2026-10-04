@@ -2,6 +2,7 @@ package com.telecrazy.hackyeah2026backend.config;
 
 import com.telecrazy.hackyeah2026backend.api.UserController;
 import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
+import com.telecrazy.hackyeah2026backend.service.SpecialNeedsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -23,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Uses the default {@code app.cors.allowed-origin-patterns} from application.properties.
  */
 @WebMvcTest(UserController.class)
-@Import({WebConfig.class, ClockConfig.class})
+@Import({WebConfig.class, ClockConfig.class, SpecialNeedsService.class})
 class CorsConfigTest {
 
     @Autowired

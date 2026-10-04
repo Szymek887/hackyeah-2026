@@ -3,6 +3,7 @@ package com.telecrazy.hackyeah2026backend.config;
 import com.telecrazy.hackyeah2026backend.ai.MedicineRedaction;
 import com.telecrazy.hackyeah2026backend.ai.RequestClassification;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.HelpCategory;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequest;
 import com.telecrazy.hackyeah2026backend.domain.HelpRequestStatus;
@@ -16,6 +17,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Instant;
 import java.util.List;
 
 @Configuration
@@ -32,12 +34,18 @@ public class DatabaseSeeder {
 
             GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), WGS84);
 
-            AppUser anna = userRepository.save(user("Anna K.", UserRole.REQUESTER, true, true, 72, "pl"));
+            AppUser anna = userRepository.save(withDisabilities(
+                    user("Anna K.", UserRole.REQUESTER, true, true, 72, "pl"),
+                    DisabilityType.CHRONIC));
             AppUser marek = userRepository.save(user("Marek S.", UserRole.REQUESTER, true, false, 66, "pl", "en"));
             AppUser ewa = userRepository.save(user("Ewa P.", UserRole.REQUESTER, false, false, 45, "pl"));
-            AppUser zofia = userRepository.save(user("Zofia M.", UserRole.REQUESTER, true, true, 81, "pl", "de"));
+            AppUser zofia = userRepository.save(withDisabilities(
+                    user("Zofia M.", UserRole.REQUESTER, true, true, 81, "pl", "de"),
+                    DisabilityType.VISION));
             AppUser jan = userRepository.save(user("Jan B.", UserRole.REQUESTER, true, false, 58, "pl"));
-            AppUser halina = userRepository.save(user("Halina R.", UserRole.REQUESTER, true, true, 77, "pl", "ru"));
+            AppUser halina = userRepository.save(withDisabilities(
+                    user("Halina R.", UserRole.REQUESTER, true, true, 77, "pl", "ru"),
+                    DisabilityType.MOBILITY, DisabilityType.HEARING));
             AppUser piotr = userRepository.save(user("Piotr N.", UserRole.REQUESTER, false, false, 40, "pl", "uk"));
             AppUser maria = userRepository.save(user("Maria T.", UserRole.REQUESTER, true, false, 69, "pl", "en"));
 
@@ -146,8 +154,18 @@ public class DatabaseSeeder {
             int trustScore,
             String... languages
     ) {
-        AppUser user = new AppUser(displayName, role, identityVerified, specialNeeds, trustScore);
+        AppUser user = new AppUser(displayName, role, identityVerified, false, trustScore);
         user.replaceLanguages(List.of(languages));
+        if (specialNeeds) {
+            // Simulates the consent given at sign-up: special needs are stored only with a consent record.
+            user.grantSpecialNeedsConsent(Instant.now());
+        }
+        return user;
+    }
+
+    /** Declared at sign-up together with the consent (see {@link #user}). */
+    private AppUser withDisabilities(AppUser user, DisabilityType... types) {
+        user.replaceDisabilities(List.of(types));
         return user;
     }
 

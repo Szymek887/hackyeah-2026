@@ -3,8 +3,10 @@ package com.telecrazy.hackyeah2026backend.api;
 import com.telecrazy.hackyeah2026backend.config.ClockConfig;
 import com.telecrazy.hackyeah2026backend.config.WebConfig;
 import com.telecrazy.hackyeah2026backend.domain.AppUser;
+import com.telecrazy.hackyeah2026backend.domain.DisabilityType;
 import com.telecrazy.hackyeah2026backend.domain.UserRole;
 import com.telecrazy.hackyeah2026backend.repository.AppUserRepository;
+import com.telecrazy.hackyeah2026backend.service.SpecialNeedsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -12,12 +14,15 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -29,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import({WebConfig.class, ClockConfig.class})
+@Import({WebConfig.class, ClockConfig.class, SpecialNeedsService.class})
 class UserControllerTest {
 
     @Autowired
@@ -126,37 +131,134 @@ class UserControllerTest {
     }
 
     @Test
-    void specialNeedsConsentIsOffByDefault() throws Exception {
+    void profileShowsConsentRecord() throws Exception {
         given(userRepository.findById(1L)).willReturn(Optional.of(requesterWithSpecialNeeds()));
 
         mockMvc.perform(get("/api/users/me").header("X-User-Id", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.specialNeeds").value(true))
-                .andExpect(jsonPath("$.shareSpecialNeeds").value(false));
+                .andExpect(jsonPath("$.specialNeedsConsent").value(true))
+                .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").value("2026-10-01T10:00:00Z"));
     }
 
     @Test
-    void specialNeedsConsentCanBeGivenAndWithdrawn() throws Exception {
+    void withdrawingConsentDeletesConsentAndSpecialNeeds() throws Exception {
         AppUser anna = requesterWithSpecialNeeds();
         given(userRepository.findById(1L)).willReturn(Optional.of(anna));
         given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
 
-        mockMvc.perform(put("/api/users/me/special-needs-consent")
+        putConsent(false)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialNeedsConsent").value(false))
+                .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").value(nullValue()))
+                .andExpect(jsonPath("$.specialNeeds").value(false));
+        assertThat(anna.getSpecialNeedsConsent()).isNull();
+        assertThat(anna.isSpecialNeeds()).isFalse();
+    }
+
+    @Test
+    void grantingConsentAgainRestoresRecordAndSpecialNeeds() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.withdrawSpecialNeedsConsent();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        putConsent(true)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.specialNeedsConsent").value(true))
+                .andExpect(jsonPath("$.specialNeedsConsentGrantedAt").isNotEmpty())
+                .andExpect(jsonPath("$.specialNeeds").value(true));
+        assertThat(anna.sharesSpecialNeeds()).isTrue();
+    }
+
+    @Test
+    void disabilitiesAreStoredWithConsentAndReturnedSorted() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
                         .header("X-User-Id", "1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"shareWithVolunteer\": true}"))
+                        .content("{\"disabilities\": [\"VISION\", \"CHRONIC\", \"VISION\"]}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.shareSpecialNeeds").value(true));
-        assertThat(anna.sharesSpecialNeeds()).isTrue();
-        assertThat(anna.getSpecialNeedsConsentUpdatedAt()).isNotNull();
+                .andExpect(jsonPath("$.disabilities").value(contains("VISION", "CHRONIC")));
+        assertThat(anna.getDisabilities()).containsExactlyInAnyOrder(DisabilityType.VISION, DisabilityType.CHRONIC);
+    }
+
+    @Test
+    void disabilitiesRequireConsent() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.withdrawSpecialNeedsConsent();
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"VISION\"]}"))
+                .andExpect(status().isConflict());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    void onlyRequestersStoreDisabilities() throws Exception {
+        given(userRepository.findById(9L)).willReturn(Optional.of(user(9L, "Kuba W.", UserRole.VOLUNTEER)));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "9")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"VISION\"]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unknownDisabilityIsRejected() throws Exception {
+        given(userRepository.findById(1L)).willReturn(Optional.of(requesterWithSpecialNeeds()));
+
+        mockMvc.perform(put("/api/users/me/disabilities")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"disabilities\": [\"TELEPATHY\"]}"))
+                .andExpect(status().isBadRequest());
+        then(userRepository).should(never()).save(any());
+    }
+
+    @Test
+    void withdrawingConsentAlsoDeletesDisabilities() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.MOBILITY));
+        given(userRepository.findById(1L)).willReturn(Optional.of(anna));
+        given(userRepository.save(any(AppUser.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        putConsent(false)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disabilities").isEmpty());
+        assertThat(anna.getDisabilities()).isEmpty();
+    }
+
+    @Test
+    void demoListNeverExposesDisabilities() throws Exception {
+        AppUser anna = requesterWithSpecialNeeds();
+        anna.replaceDisabilities(List.of(DisabilityType.CHRONIC));
+        given(userRepository.findAll()).willReturn(List.of(anna));
+
+        String body = mockMvc.perform(get("/api/users/demo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].disabilities").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("CHRONIC");
+    }
+
+    @Test
+    void onlyRequestersManageSpecialNeedsConsent() throws Exception {
+        given(userRepository.findById(9L)).willReturn(Optional.of(user(9L, "Kuba W.", UserRole.VOLUNTEER)));
 
         mockMvc.perform(put("/api/users/me/special-needs-consent")
-                        .header("X-User-Id", "1")
+                        .header("X-User-Id", "9")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"shareWithVolunteer\": false}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.shareSpecialNeeds").value(false));
-        assertThat(anna.sharesSpecialNeeds()).isFalse();
+                        .content("{\"consent\": true}"))
+                .andExpect(status().isForbidden());
+        then(userRepository).should(never()).save(any());
     }
 
     @Test
@@ -168,8 +270,15 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.shareWithVolunteer").exists());
+                .andExpect(jsonPath("$.errors.consent").exists());
         then(userRepository).should(never()).save(any());
+    }
+
+    private ResultActions putConsent(boolean consent) throws Exception {
+        return mockMvc.perform(put("/api/users/me/special-needs-consent")
+                .header("X-User-Id", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"consent\": " + consent + "}"));
     }
 
     @Test
@@ -197,9 +306,11 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.detail").value("Unknown user 999"));
     }
 
+    /** As seeded: special needs stored together with the consent given at sign-up. */
     private static AppUser requesterWithSpecialNeeds() {
-        AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, true, 72);
+        AppUser anna = new AppUser("Anna K.", UserRole.REQUESTER, true, false, 72);
         anna.setId(1L);
+        anna.grantSpecialNeedsConsent(Instant.parse("2026-10-01T10:00:00Z"));
         return anna;
     }
 
