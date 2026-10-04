@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Classifies help requests with a local LLM served by Ollama.
+ * Classifies help requests with an LLM served by OpenRouter.
  * Output from the model is validated and normalized; anything outside the allowed values is rejected or clamped.
  */
 @Component
@@ -47,26 +47,27 @@ public class LlmRequestClassifier {
                             Map.of("type", "string", "enum", names(RiskFlag.values()))),
                     "mentionsMedication", Map.of("type", "boolean")
             ),
-            "required", List.of("category", "priority", "tags", "riskFlags", "mentionsMedication")
+            "required", List.of("category", "priority", "tags", "riskFlags", "mentionsMedication"),
+            "additionalProperties", false
     );
 
-    private final OllamaClient ollamaClient;
+    private final OpenRouterClient openRouterClient;
     private final JsonMapper jsonMapper;
     private final String systemPrompt;
 
     public LlmRequestClassifier(
-            OllamaClient ollamaClient,
+            OpenRouterClient openRouterClient,
             JsonMapper jsonMapper,
             @Value("classpath:prompts/classify-request.txt") Resource systemPrompt
     ) {
-        this.ollamaClient = ollamaClient;
+        this.openRouterClient = openRouterClient;
         this.jsonMapper = jsonMapper;
         this.systemPrompt = read(systemPrompt);
     }
 
     public RequestClassification classify(ClassificationInput input) {
         String userMessage = "Title: " + input.title() + "\nDescription: " + input.description();
-        String content = ollamaClient.chat(systemPrompt, userMessage, RESPONSE_SCHEMA);
+        String content = openRouterClient.chat(systemPrompt, userMessage, RESPONSE_SCHEMA);
         return normalize(jsonMapper.readValue(content, LlmOutput.class));
     }
 

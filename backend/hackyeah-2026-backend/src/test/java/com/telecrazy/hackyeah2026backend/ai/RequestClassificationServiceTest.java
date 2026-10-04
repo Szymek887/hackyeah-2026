@@ -69,7 +69,7 @@ class RequestClassificationServiceTest {
 
     private RequestClassificationService service(boolean enabled) {
         AiProperties properties = new AiProperties(
-                enabled, "http://localhost:11434", "qwen2.5:7b", Duration.ofSeconds(1), "30m");
+                enabled, "http://localhost", "key", List.of("test"), Duration.ofSeconds(1));
         return new RequestClassificationService(properties, llm, keywords);
     }
 }
